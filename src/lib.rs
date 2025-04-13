@@ -1,4 +1,27 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod app;
-pub use app::TemplateApp;
+// TODO: remove
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
+// mod app;
+pub mod app;
+pub mod app_config;
+pub mod audio;
+pub mod generator;
+pub mod math;
+pub mod model;
+pub mod pos;
+pub mod rect;
+pub mod sample;
+pub mod util;
+pub mod view;
+pub mod wav;
+
+// Code used only for test builds/configs
+#[cfg(test)]
+pub mod test_utils;
+
+pub use app::App;
+pub use app_config::AppConfig;
+pub use pos::Pos;
