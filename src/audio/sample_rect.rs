@@ -6,6 +6,7 @@ use crate::audio;
 #[derive(Debug, Clone, Default, Copy, PartialEq)]
 pub struct SampleRect {
     /// X range in i64
+    /// TODO: maybe better to use floats/doubles, removes the need for keeping a 'pixel offset'
     pub ix_rng: audio::SampleIxRange,
     /// Y range if f32 (choosing f32 for simplicity, maybe make generic later)
     pub val_rng: audio::SampleValueRange,
@@ -15,7 +16,7 @@ impl SampleRect {
     /// Rectangle contains the whole buffer
     pub fn from_buffer(buffer: &audio::Buffer<f32>) -> Self {
         Self {
-            ix_rng: audio::SampleIxRange::new(0, buffer.nr_samples() as i64),
+            ix_rng: audio::SampleIxRange::new(0.0, buffer.nr_samples() as audio::SampleIx),
             val_rng: audio::SampleValueRange::from_buffer(&buffer),
         }
     }

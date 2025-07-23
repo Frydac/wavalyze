@@ -1,3 +1,81 @@
+## maybe use 2d transformation matrices?
+  * scale
+    * x
+      * factor = pixels per sample
+  * translate
+    * x
+      * after scale so we translate with nr of pixels
+
+  * operations on scale/translate x
+    * shift left/right
+      * adjust translate x
+    * make selection
+      * need to be able to invert from pixels coordinates to sample coordinates
+        * so invert translate
+        * invert scale
+    * zoom in/out around mouse position
+        * need to adjust both translate and scale
+        * example
+          * scale = 2
+          * translate = 0
+          * -1 -1 | 0 0 1 1 2 2 | 3 3
+        
+
+
+## shift
+
+  * given:
+    * a sample rect, we only use the sample index range
+    * a pixel offset
+    * a zoom level
+    * a shift in pixels
+  * we want to shift the sample rect by the shift in pixels
+  * the zoom level is the number of pixels per sample
+  * the pixel offset is the number of pixels to shift the sample rect by
+
+
+## Drawing samples
+
+* when we are drawing single samples, we want to be able to shift by pixels, possibly less than samples
+  * so we want to store:
+    * which sample is at the 0 position, to align different tracks
+    * the zoom level (pixels per sample)
+        * above 2 parameters give us a 'sample' coordinate system
+    * shift in pixels wrt to 0 position
+      * could be very large when zoomed in on a large file
+      * alternatively shift in samples + offset in pixels
+    * the screen rect (pixels available for drawing)
+  * these give use the ability to position the visible samples in the view buffer
+    * sample @ 0 pos + zoom level:
+      * pixel position of samples in the 'sample' coordinate system
+    * shift in pixels gives us a transformation from 'sample' to 'pixel' coordinate system
+      * also use the screen width to know how many pixels and samples to draw
+    * we can do the above 2 in one go i think
+    * the actual screen rect gives us a transformation from 'pixel' to 'screen' coordinate system
+
+e.g.
+  pixels_per_sample = 10
+  sample_at_zero = 10 (relative shift)
+  shift_in_pixels = 15
+  screen rect = width = 100
+
+  sample ix 1 = (1 - 10) * 10 + 15 = pixel ix -85
+  sample ix 2 = (2 - 10) * 10 + 15 = pixel ix -75
+
+
+
+
+
+## hovering
+
+view.update
+  * each track ui
+    * hovering.ui
+      * 
+
+
+
+
 ## Reduce data for drawing
 
 A monitor is upto 4k pixels wide, a 1 min audio file @ 48kHz = 60 * 48000 = 2.880.000 samples.

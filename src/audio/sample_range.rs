@@ -4,7 +4,7 @@ use crate::audio;
 ///
 /// Half open interval of sample indices `[start, end)`
 ///
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Copy, PartialEq)]
 pub struct SampleIxRange {
     start: SampleIx,
     end: SampleIx,
@@ -16,8 +16,16 @@ impl SampleIxRange {
         Self { start, end }
     }
 
-    pub fn len(&self) -> SampleIx {
-        self.end - self.start
+    pub fn len(&self) -> usize {
+        (self.end - self.start).abs() as usize
+    }
+
+    // Lenght of the positive part of the range, i.e. when start and end are negative, this len is
+    // 0.
+    pub fn positive_len(&self) -> usize {
+        let end = self.end.max(0.0);
+        let start = self.start.max(0.0);
+        (end - start) as usize
     }
 
     pub fn start(&self) -> SampleIx {

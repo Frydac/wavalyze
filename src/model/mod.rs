@@ -41,7 +41,8 @@ impl Model {
 
         // For each channel create a model::track
         for (ix, ch) in file.buffer.borrow().channels().enumerate() {
-            let name = format!("{} Channel {}", file.basename(), ix);
+            // let name = format!("{} - ch {}", file.basename(), ix);
+            let name = format!("{} - ch {}", file.file_path, ix);
             let track = model::track::Track::new(Rc::clone(&file.buffer), ix, &name)?;
             self.tracks.push(track);
         }

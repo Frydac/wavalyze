@@ -14,6 +14,9 @@ pub struct View {
     tracks: HashMap<util::Id, Track>,
 
     // test_frame: egui::Frame,
+
+    // TODO: store in model
+    scroll_speed: f32,
 }
 
 impl View {
@@ -21,6 +24,7 @@ impl View {
         Self {
             model,
             tracks: HashMap::new(),
+            scroll_speed: 10.0,
             // test_frame: egui::Frame::default(),
             // test_frame: Frame::default()
             //     .stroke(Stroke::new(1.0, Color32::BLACK))
@@ -39,16 +43,21 @@ impl View {
         }
     }
 
-    pub fn run(&mut self) {
-        // do what main does now?
-        // no we want that in app,
-        // view should have ui
-        todo!()
-    }
-
     pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.top_panel_menu_bar(ctx);
         self.side_panel(ctx);
+
+        // TODO: place holder
+        egui::TopBottomPanel::bottom("bottom_panel")
+            .resizable(false)
+            .min_height(0.0)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("Bottom Panel");
+                });
+            });
+
+        // NOTE: central_panel should always come last
         self.central_panel(ctx);
     }
 
@@ -138,39 +147,35 @@ impl View {
         });
     }
 
-    fn top_panel_tool_bar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("top_panel_tool_bar").show(ctx, |ui| {
+    fn top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        // egui::TopBottomPanel::top("top_panel_tool_bar").show(ctx, |ui| {
+            ui.horizontal_top(|ui| {
+                // ui.heading("Top Panel Tool Bar");
+                let _ = ui.button("Test");
+                let _ = ui.button("Button");
+                ui.add(egui::DragValue::new(&mut self.scroll_speed).speed(1.0));
+
+                if ui.button("⏴ ").clicked() {
+                    let _ = self.model.borrow_mut().tracks.shift_x(-self.scroll_speed);
+                }
+                if ui.button("⏵ ").clicked() {
+                    let _  = self.model.borrow_mut().tracks.shift_x(self.scroll_speed);
+                }
+            });
+
 
             // egui::Frame::new().inner_margin(egui::Margin::same(5)).show(ui, |ui| {
             // });
 
-        });
+        // });
     }
 
     fn central_panel(&mut self, ctx: &egui::Context) {
-        // egui::TopBottomPanel::top("top_panel")
-        //     .resizable(true)
-        //     .min_height(32.0)
-        //     .show(ctx, |ui| {
-        //         egui::ScrollArea::vertical().show(ui, |ui| {
-        //             ui.vertical_centered(|ui| {
-        //                 ui.heading("Expandable Upper Panel");
-        //             });
-        //             // lorem_ipsum(ui);
-        //         });
-        //     });
-
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.heading("Central Panel.");
-            });
-
-            // NOTE: pixels per point is set to 1, but lines are 2 pixels wide afaik
-            // ctx.set_pixels_per_point(1.0);
-            // println!("{}: {}", "ctx.pixels_per_point()", ctx.pixels_per_point());
-            // if ctx.native_pixels_per_point().is_some(){
-            //     println!("{}: {}", "ctx.native_pixels_per_point()", ctx.native_pixels_per_point().unwrap());
-            // }
+            self.top_panel_tool_bar(ui, ctx);
+            // ui.vertical_centered(|ui| {
+            //     ui.heading("Central Panel.");
+            // });
 
             {
                 // Slider samples per pixel
@@ -230,39 +235,22 @@ impl View {
                         // track_order member.
                         let track_id = model.tracks.track_order[i];
                         ui.allocate_ui([width_track, height_track].into(), |ui| {
+                            // We want to detect if any track is hovered, so reset the current
+                            model.tracks.tracks_hover_info.current = None;
+
                             let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
-                            view_track.ui2(ui, &mut *model);
-                            // view_track.ui(ui, model_track);
+                            // this ui will notify the model of the current hover info
+                            view_track.ui(ui, &mut *model);
                         });
                     }
-
-                    // for track_id in model.tracks.track_order.clone().iter() {
-                    //     ui.allocate_ui([width_track, height_track].into(), |ui| {
-                    //         let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
-                    //         view_track.ui2(ui, &mut *model);
-                    //         // view_track.ui(ui, model_track);
-                    //     });
-                    // }
-                    // for model_track in model.tracks.iter_mut() {
-                    //     ui.allocate_ui([width_track, height_track].into(), |ui| {
-                    //         let view_track = &mut self.tracks.get_mut(&model_track.id()).unwrap();
-                    //         view_track.ui(ui, model_track);
-                    //     });
-                    // }
-                }
-                {
+                    // No track is hovered, unhover all tracks
+                    if model.tracks.tracks_hover_info.current.is_none() {
+                        model.tracks.unhover();
+                    }
                 }
             }
         });
 
-        egui::TopBottomPanel::bottom("bottom_panel")
-            .resizable(false)
-            .min_height(0.0)
-            .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Bottom Panel");
-                });
-            });
     }
 }
 

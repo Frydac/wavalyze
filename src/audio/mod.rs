@@ -8,7 +8,8 @@ pub mod sample_range;
 pub mod sample_rect;
 pub mod util;
 
-pub type SampleIx = i64;
+// pub type SampleIx = i64;
+pub type SampleIx = f64;
 
 // TODO: Is this what we want to do to keep duplication down in the namespace?
 use crate::audio;

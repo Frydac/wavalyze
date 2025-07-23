@@ -10,7 +10,7 @@ pub fn read_wav_file_to_float(path: &str) -> Result<audio::Buffer<f32>> {
     let spec = reader.spec();
     dbg!(spec);
 
-    let debug_take = Some(10);
+    let debug_take = Some(100);
     // let debug_take = None;
 
     // read float or int samples into float interleaved vector

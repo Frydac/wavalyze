@@ -1,5 +1,6 @@
-use crate::{audio, model, rect};
+use crate::{audio, model, pos, rect};
 use anyhow::anyhow;
+use anyhow::Result;
 use egui::ahash::HashMap;
 use std::ops::Deref;
 
@@ -7,6 +8,17 @@ use super::SampleIx;
 // use anyhow::Result;
 
 pub type TrackId = crate::util::Id;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct TrackHoverInfo {
+    pub track_id: TrackId,
+    pub screen_pos: pos::Pos,
+}
+
+#[derive(Default, Debug, PartialEq, Clone)]
+pub struct TracksHoverInfo {
+    pub current: Option<TrackHoverInfo>,
+}
 
 // We want to be able to refer to tracks by id, and they have to be in a specific order (i.e. the
 // order of the tracks in the gui)
@@ -18,6 +30,8 @@ pub struct Tracks {
     // * zoom level x direction
     // * track x position (each track maps an audio buffer to its x position)
     pub samples_per_pixel: Option<f32>,
+
+    pub tracks_hover_info: TracksHoverInfo,
 }
 
 impl Tracks {
@@ -116,6 +130,79 @@ impl Tracks {
 }
 
 impl Tracks {
+    pub fn shift_x(&mut self, dx_pixels: f32) -> Result<()> {
+        for track in self.tracks.values_mut() {
+            track.shift_sample_rect_x(dx_pixels)?;
+        }
+        Ok(())
+    }
+
+    /// * `center_screen_x` - The x position of the center of the zoom
+    /// * `zoom_delta` - The amount to zoom in or out
+    pub fn zoom_x(&mut self, center_screen_x: f32, zoom_delta: f32) -> Result<()> {
+        for track in self.tracks.values_mut() {
+            track.zoom_x(center_screen_x, zoom_delta)?;
+        }
+        Ok(())
+    }
+}
+
+// impl Tracks {
+// TOOD: lol, doesn't belong here
+// pub fn ui(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
+//     // do hover interaction (and possibly other) on all tracks, so if no track is hovered, we
+//     // can unhover all tracks after the loop
+//     // depending on the interaction, update all the model tracks, and update the view tracks
+//     //
+//     // But that doens't work due to immediate mode, must draw when doing interaction
+//     // So, the tracks above where the mouse is will not have the current mouse position, but
+//     // the last one. We'll see if this is a problem.
+//     let height_track = ui.available_height() / self.tracks.len() as f32;
+//     let width_track = ui.available_width();
+//     // for i in 0..self.tracks.len() {
+//     //     let track_id = self.track_order[i];
+//     //     ui.allocate_ui([width_track, height_track].into(), |ui| {
+//     //         let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
+//     //         view_track.ui(ui, model);
+//     //     });
+//     // }
+
+//     // set current_hover_info to None
+//     // user previous_hover_info for each track
+//     // call ui for each track
+//     //    each track reports it's hover info
+//     //      if one is hovered the current_hover_info reflects that
+//     //          immediately update previous_hover_info?
+//     //      if no track is hovered, current_hover_info is None at the end of the loop
+//     //  after loop, previous_hover_info is set to current_hover_info
+
+//     self.tracks_hover_info.previous = self.tracks_hover_info.current;
+//     self.tracks_hover_info.current = None;
+
+//     for i in 0..self.tracks.len() {
+//         let track_id = self.track_order[i];
+//         let track = self.tracks.get_mut(&track_id).unwrap();
+//         if let Some(info) = self.tracks_hover_info.previous {
+//             track.set_hover_info(info.screen_pos);
+//         }
+
+//         ui.allocate_ui([width_track, height_track].into(), |ui| {
+//             let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
+//             // view_track.ui(ui, model);
+//         });
+
+//         if let Some(info) = self.tracks_hover_info.current {
+//             self.tracks_hover_info.previous = Some(info);
+//         }
+//         //     let test = self.tracks_hover_info.clone().previous.clone();
+//         // if let Some(info) = self.tracks_hover_info.previous.clone() {
+//         //     track.set_hover_info(info.screen_pos);
+//         // }
+//         // track.ui(ui, model);
+//     }
+// }
+// }
+impl Tracks {
     // probably want to add some kind of y coordinate for selecting a rectangle
     pub fn select_start(&mut self, id: TrackId, sample: SampleIx) -> anyhow::Result<()> {
         todo!()
@@ -125,11 +212,16 @@ impl Tracks {
     }
 
     // hover over a sample, state is retained until unhover is called
-    pub fn hover(&mut self, id: TrackId, sample: SampleIx) {
-        todo!()
+    pub fn hover(&mut self, id: TrackId, screen_pos: pos::Pos) {
+        self.tracks_hover_info.current = Some(TrackHoverInfo { track_id: id, screen_pos });
+        for track in self.tracks.values_mut() {
+            track.set_hover_info(screen_pos);
+        }
     }
-    pub fn unhover(&mut self, id: TrackId) {
-        todo!()
+    pub fn unhover(&mut self) {
+        for track in self.tracks.values_mut() {
+            track.unhover();
+        }
     }
 }
 impl Deref for Tracks {
@@ -172,67 +264,3 @@ impl<'a> Iterator for TracksIterMut<'a> {
         }
     }
 }
-
-// pub struct TracksIterMut<'a> {
-//     map: &'a mut HashMap<TrackId, model::track::Track>,
-//     order: &'a [u64], // Borrow `track_order` directly
-//     index: usize,     // Track the current position manually
-// }
-
-// impl<'a> Iterator for TracksIterMut<'a> {
-//     type Item = &'a mut model::track::Track;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self.index >= self.order.len() {
-//             return None;
-//         }
-//         let id = self.order[self.index]; // Get the track ID
-//         self.index += 1; // Move to the next track
-
-//         // SAFETY: We use split_at_mut to create two separate slices,
-//         // ensuring no aliasing occurs while borrowing mutably.
-//         unsafe {
-//             let map = &mut *(self.map as *mut _);
-//             map.get_mut(&id)
-//         }
-//     }
-// }
-
-// pub struct TracksIterMut<'a> {
-//     map: &'a mut HashMap<TrackId, model::track::Track>,
-//     order: std::vec::IntoIter<u64>, // Owning iterator to avoid borrow conflicts
-// }
-
-// impl<'a> Iterator for TracksIterMut<'a> {
-//     type Item = &'a mut model::track::Track;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         let id = self.order.next()?; // Get the next track ID
-//         self.map.get_mut(&id) // Get a mutable reference to the track
-//     }
-// }
-// pub struct TracksIterMut<'a> {
-//     map: *mut HashMap<TrackId, model::track::Track>,
-//     order: std::slice::Iter<'a, u64>,
-// }
-
-// impl<'a> Iterator for TracksIterMut<'a> {
-//     type Item = &'a mut model::track::Track;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         let id = self.order.next()?;
-//         unsafe { (*self.map).get_mut(id) }
-//     }
-// }
-
-// pub struct TracksIterMut<'a> {
-//     map: &'a mut HashMap<TrackId, model::track::Track>,
-//     order: std::slice::IterMut<'a, u64>,
-// }
-
-// impl<'a> Iterator for TracksIterMut<'a> {
-//     type Item = &'a mut model::track::Track;
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.order.next().map(|id| self.map.get_mut(id).unwrap())
-//     }
-// }

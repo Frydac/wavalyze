@@ -1,7 +1,7 @@
 // Don't want my model to depend on egui to much, so we create a 'boundary'/'proxy' for egui::Pos2
 use egui;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pos {
     pub x: f32,
     pub y: f32,
