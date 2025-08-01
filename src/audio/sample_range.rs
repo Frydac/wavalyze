@@ -16,8 +16,14 @@ impl SampleIxRange {
         Self { start, end }
     }
 
-    pub fn len(&self) -> usize {
-        (self.end - self.start).abs() as usize
+    // Adjusts the end to match the new width, the start is not changed
+    pub fn resize(&mut self, width: SampleIx) -> &Self {
+        self.end = self.start + width;
+        self
+    }
+
+    pub fn len(&self) -> SampleIx {
+        (self.end - self.start).abs()
     }
 
     // Lenght of the positive part of the range, i.e. when start and end are negative, this len is
@@ -37,7 +43,7 @@ impl SampleIxRange {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.len() == 0.0
     }
 
     pub fn contains(&self, ix: SampleIx) -> bool {
@@ -55,12 +61,12 @@ impl SampleIxRange {
 
     /// Zoom nr of samples around center_ix
     pub fn zoom(&mut self, nr_of_samples: SampleIx, center_ix: SampleIx) {
-        if self.is_empty() {
-            return;
-        }
+        if self.is_empty() { return; }
+        let center_ix = center_ix.clamp(self.start, self.end);
         let nr_samples_to_center = center_ix - self.start;
         let ratio_start_to_center = nr_samples_to_center as f32 / self.len() as f32;
-        let shift_start = (ratio_start_to_center * nr_of_samples as f32).round() as SampleIx;
+        // let shift_start = (ratio_start_to_center * nr_of_samples as f32).round() as SampleIx;
+        let shift_start = (ratio_start_to_center * nr_of_samples as f32) as SampleIx;
         let shift_end = nr_of_samples - shift_start;
         self.start -= shift_start;
         self.end += shift_end;

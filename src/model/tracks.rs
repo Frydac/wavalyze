@@ -212,10 +212,10 @@ impl Tracks {
     }
 
     // hover over a sample, state is retained until unhover is called
-    pub fn hover(&mut self, id: TrackId, screen_pos: pos::Pos) {
+    pub fn update_hover_info(&mut self, id: TrackId, screen_pos: pos::Pos) {
         self.tracks_hover_info.current = Some(TrackHoverInfo { track_id: id, screen_pos });
         for track in self.tracks.values_mut() {
-            track.set_hover_info(screen_pos);
+            track.update_hover_info(screen_pos);
         }
     }
     pub fn unhover(&mut self) {

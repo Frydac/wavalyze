@@ -54,14 +54,23 @@ impl Track {
 
         match model_track.view_buffer() {
             model::ViewBuffer::SingleSamples(buffer_pos) => {
-                for pos_sample in buffer_pos {
+                for (ix, pos_sample) in buffer_pos.iter().enumerate() {
                     let pos_sample: egui::Pos2 = pos_sample.into();
                     let pos_sample_mid = egui::pos2(pos_sample.x, 0.0);
                     let pos_sample_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(pos_sample));
                     let pos_sample_mid_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(pos_sample_mid));
 
                     painter.line_segment([pos_sample_mid_screen, pos_sample_screen], stroke_line);
-                    painter.circle_filled(pos_sample_screen, 1.5, line_color);
+                    let circle_size = 1.5;
+                    let circle_color = line_color;
+                    // if let Some(hover_info) = model_track.hover_info() {
+                        // if ix == 5 {
+                        //     circle_size = 3.0;
+                        //     circle_color = egui::Color32::LIGHT_GREEN;
+                        // }
+                        // if hover_info.samples.contains
+                    // }
+                    painter.circle_filled(pos_sample_screen, circle_size, circle_color);
                 }
             }
             model::ViewBuffer::OneLine(buffer_pos) => {
@@ -105,7 +114,7 @@ impl Track {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
-        // Track title
+        // Track title above the waveform view
         egui::Frame::default()
             .inner_margin(egui::Margin::same(5.0))
             .outer_margin(egui::Margin::symmetric(0.0, 5.0))
@@ -120,6 +129,7 @@ impl Track {
 
             // This gets the absolute position of the canvas
             let canvas_rect = ui.min_rect(); // TODO: don't know for sure what min_rect means in this context
+                                             // dbg!(canvas_rect);
 
             // update model track with current screen rect
             model
@@ -129,6 +139,7 @@ impl Track {
                 .set_screen_rect(canvas_rect.into())
                 .unwrap();
 
+            // Draw/interact all the things
             self.ui_samples(ui, model);
             self.ui_middle_line(ui, model);
             self.mouse_hover_info.ui(ui, model, self.id);
@@ -173,7 +184,11 @@ impl Default for MouseHover {
 }
 
 impl MouseHover {
-    fn sample_info_rect_ui(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
+    fn ui_sample_info_floating_rect(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
+        if hover_info.samples.is_empty() {
+            return;
+        }
+
         let canvas_rect = ui.min_rect();
         // Draw HoverInfor (TODO extract)
         let rect = egui::Rect::from_min_max(
@@ -184,14 +199,10 @@ impl MouseHover {
         );
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
             egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
-                // ui.label(format!("index: {}", model_track.hover_info().));
-                let mut min_ix = i32::MAX;
-                let mut max_ix = i32::MIN;
+                // min/max sample value under mouse pointer
                 let mut min_sample = Option::<(i32, f32)>::None;
                 let mut max_sample = Option::<(i32, f32)>::None;
                 for (ix, sample) in hover_info.samples.iter() {
-                    min_ix = min_ix.min(*ix);
-                    max_ix = max_ix.max(*ix);
                     min_sample = min_sample.or(Some((*ix, *sample)));
                     max_sample = max_sample.or(Some((*ix, *sample)));
                     if let Some(min_sample) = &mut min_sample {
@@ -206,16 +217,38 @@ impl MouseHover {
                     }
                 }
 
+                // min/max sample index
+                let min_ix = hover_info.samples.first().unwrap().0;
+                let max_ix = hover_info.samples.last().unwrap().0;
+
                 if min_ix == max_ix {
                     ui.label(format!("index: {}", min_ix));
                     ui.label(format!("value: {}", min_sample.unwrap().1));
                 } else {
-                    ui.label(format!("index:    [{}, {}]", min_ix, max_ix));
-                    ui.label(format!("min value: {}", min_sample.unwrap().1));
-                    ui.label(format!("max value: {}", max_sample.unwrap().1));
+                    // ui.label(format!("index:    [{}, {}]", min_ix, max_ix));
+                    // ui.label(format!("min value: {}", min_sample.unwrap().1));
+                    // ui.label(format!("max value: {}", max_sample.unwrap().1));
+                    ui.label(format!("min: {:>3}: {}", min_ix, min_sample.unwrap().1));
+                    ui.label(format!("max: {:>3}: {}", max_ix, max_sample.unwrap().1));
                 }
             });
         });
+    }
+
+    fn ui_mouse_pos_vline(&mut self, ui: &mut egui::Ui, hover_info: &track::HoverInfo, canvas_rect: &egui::Rect) {
+        let painter = ui.painter();
+        let x = hover_info.screen_pos.x;
+        let vline_start = painter.round_pos_to_pixel_center((x, canvas_rect.top()).into());
+        let vline_end = painter.round_pos_to_pixel_center((x, canvas_rect.bottom()).into());
+        ui.painter().line_segment([vline_start, vline_end], self.stroke_vline);
+    }
+
+    fn ui_mouse_pos_hline(&mut self, ui: &mut egui::Ui, hover_info: &track::HoverInfo, canvas_rect: &egui::Rect) {
+        let painter = ui.painter();
+        let y = hover_info.screen_pos.y;
+        let hline_start = painter.round_pos_to_pixel_center((canvas_rect.left(), y).into());
+        let hline_end = painter.round_pos_to_pixel_center((canvas_rect.right(), y).into());
+        ui.painter().line_segment([hline_start, hline_end], self.stroke_vline);
     }
 
     // fn ui(&mut self, ui: &mut egui::Ui, model_track: &mut model::track::Track) {
@@ -223,62 +256,53 @@ impl MouseHover {
         // TODO: make sure ui.min_rect is indeed the rect we want to use for this?
         let canvas_rect = ui.min_rect();
 
-        let response = ui
-            .interact(canvas_rect, ui.unique_id(), egui::Sense::hover())
+        let hover_response = ui
+            .interact(canvas_rect, egui::Id::new(track_id), egui::Sense::hover())
             .on_hover_cursor(egui::CursorIcon::None);
 
-        // <shift> + <scroll> to scroll the view/camera
-        if response.hovered() {
-            ui.ctx().input(|i| {
-                if i.modifiers.shift {
-                    let scroll = i.raw_scroll_delta;
-                    // dbg!(scroll);
-                    if scroll.x != 0.0 {
-                        model.tracks.shift_x(scroll.x).unwrap();
+        if hover_response.hovered() && hover_response.contains_pointer() {
+            // NOTE:: even when hovered and contains_pointer, sometimes there is not hover
+            // position..
+            if let Some(pos) = ui.ctx().pointer_hover_pos() {
+
+                model.tracks.update_hover_info(track_id, (&pos).into());
+
+                ui.ctx().input(|i| {
+                    if i.modifiers.shift {
+                        let scroll = i.raw_scroll_delta;
+                        // dbg!(scroll);
+                        if scroll.x != 0.0 {
+                            model.tracks.shift_x(scroll.x).unwrap();
+                        }
+                    } else if i.modifiers.ctrl {
+                        let scroll = i.raw_scroll_delta;
+                        // println!("ctrl-scroll: {}", scroll);
+                        if scroll.y != 0.0 {
+                            model.tracks.zoom_x(pos.x, scroll.y * 2.0).unwrap();
+                        }
                     }
-                }
-            });
-        }
-
-        // println!("response.contains_pointer(): {}", response.contains_pointer());
-        {
-            // let mut pos_ = None;
-            if response.contains_pointer() {
-                // println!("track {} contains_pointer: true", track_id);
-                // self.contains_pointer = true;
-                let Some(pos) = ui.ctx().pointer_hover_pos() else {
-                    return; // I think this should never happen?
-                };
-
-                model.tracks.hover(track_id, (&pos).into());
+                });
+            } else {
+                println!("track {} hovered but no pointer hover pos", track_id);
             }
+        } else {
+            // println!("track {} not hovered", track_id);
         }
 
         let model_track = model.tracks.track_mut(track_id).unwrap();
         if let Some(hover_info) = model_track.hover_info() {
             // if let Some(hover_info) = model.tracks.tracks_hover_info.previous {
 
+            // Draw vertical line/sample info where mouse pointer is for all tracks, when mouse is
+            // over any track
             if canvas_rect.x_range().contains(hover_info.screen_pos.x) {
-                // if canvas_rect.contains((&hover_info.screen_pos).into()) {
-                let vline_start = ui
-                    .painter()
-                    .round_pos_to_pixel_center(egui::pos2(hover_info.screen_pos.x, canvas_rect.top()));
-                let vline_end = ui
-                    .painter()
-                    .round_pos_to_pixel_center(egui::pos2(hover_info.screen_pos.x, canvas_rect.bottom()));
-                ui.painter().line_segment([vline_start, vline_end], self.stroke_vline);
+                self.ui_mouse_pos_vline(ui, hover_info, &canvas_rect);
+                self.ui_sample_info_floating_rect(ui, track_id, hover_info);
 
-                self.sample_info_rect_ui(ui, track_id, hover_info);
-            }
-
-            if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
-                let hline_start = ui
-                    .painter()
-                    .round_pos_to_pixel_center(egui::pos2(canvas_rect.left(), hover_info.screen_pos.y));
-                let hline_end = ui
-                    .painter()
-                    .round_pos_to_pixel_center(egui::pos2(canvas_rect.right(), hover_info.screen_pos.y));
-                ui.painter().line_segment([hline_start, hline_end], self.stroke_vline);
+                // Draw horizontal line where mouse pointer is for only the track the mouse is over
+                if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
+                    self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
+                }
             }
         }
     }

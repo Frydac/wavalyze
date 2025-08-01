@@ -82,7 +82,7 @@ impl DerefMut for File {
 mod tests {
     #[test]
     fn test_wav_file() {
-        let file = crate::wav::file::File::from_wav("test.wav").unwrap();
+        let file = crate::wav::file::File::from_wav("/home/emile/repos/rust/wavalyze/data/sine_16_signed_48000_1.wav").unwrap();
         println!("{:#?}", file);
     }
 }

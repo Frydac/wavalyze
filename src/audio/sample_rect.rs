@@ -33,4 +33,10 @@ impl SampleRect {
         self.ix_rng.zoom(nr_samples, center);
         self
     }
+
+    // Adjusts the end to match the new width, the start is not changed
+    pub fn resize_ix_rng(&mut self, width: audio::SampleIx) -> &Self {
+        self.ix_rng.resize(width);
+        self
+    }
 }

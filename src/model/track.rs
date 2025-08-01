@@ -37,6 +37,7 @@ pub struct Track {
     pub name: String,
 
     /// The rectangle of samples that are currently visible
+    /// indeces into the buffer
     sample_rect: audio::SampleRect,
 
     // x range is pixel width starting at 0.0
@@ -57,22 +58,19 @@ pub struct Track {
     /// The final transformation to absolute screen coordinates is done in the view::Track
     view_buffer: model::ViewBuffer,
 
-    // TODO: zoom y direction
-    // offset_x
-    // offset_y
     hover_info: Option<HoverInfo>,
 
     hover_info2: Option<HoverInfo2>,
-
     // when there are more pixels than samples, we want to offset the sample rect
     // this is the distance in pixels from pixel 0 of the view rect to the pixel where the first
     // sample should be drawn
-    pixel_offset: f32,
+    // pixel_offset: f32,
 }
 
 #[derive(Debug, Clone)]
 pub struct HoverInfo {
-    pub screen_pos: pos::Pos,     // absolute screen position in pixel coordiantes
+    /// absolute (mouse) screen position in pixel coordinates
+    pub screen_pos: pos::Pos,
     pub samples: Vec<(i32, f32)>, // sample ixs and values for the samples that are rendedred on
     // the given screen_pos, or is closest to the screen_pos
     pub contains_pointer: bool,
@@ -83,6 +81,25 @@ pub struct HoverInfo2 {
     pub sample_ix: SampleIx,
     // When mouse is over this track, we also have an y coordinate
     pub view_buffer_y: Option<f32>,
+}
+
+impl Track {
+    // TODO: find better way to name/use/abstract this 'zoom' functionality
+
+    // Assumes zero based in and output ranges
+    // good for size/width or normalized values
+    pub fn sample_ix_to_view_x(&self, sample_ix: SampleIx) -> f32 {
+        let samples_per_pixel = self.samples_per_pixel.expect("zoom level not set");
+        return sample_ix as f32 / samples_per_pixel;
+    }
+    pub fn view_x_to_sample_ix(&self, view_x: f32) -> SampleIx {
+        let samples_per_pixel = self.samples_per_pixel.expect("zoom level not set");
+        return (view_x * samples_per_pixel) as SampleIx;
+    }
+
+    // TODO: make convert with actual sample index (with current sample rect view) and screen coordinates
+    // probaly need an sample offset too, as we want to be able to move tracks around relatively to
+    // each other
 }
 
 impl Track {
@@ -108,7 +125,7 @@ impl Track {
             hover_info2: None,
 
             sample_rect: audio::SampleRect::default(),
-            pixel_offset: 0.0,
+            // pixel_offset: 0.0,
         };
 
         // We don't have the screen_rect yet from the GUI, so we can't yet calculate the
@@ -133,7 +150,7 @@ impl Track {
 
     // Assumes view_rect is correctly set, maybe just pass to function?
     // @param screen_pos Absolute mouse position within the screen_rect
-    pub fn set_hover_info(&mut self, screen_pos: pos::Pos) {
+    pub fn update_hover_info(&mut self, screen_pos: pos::Pos) {
         if !self.screen_rect.contains_x(screen_pos) {
             return;
         }
@@ -144,7 +161,14 @@ impl Track {
         // relative position
         let pixel_x0 = (screen_pos.x - self.screen_rect.min.x) as i32;
         // sample(s) near/on the pixel
-        let sample_ix_range = sample_x_range(pixel_x0, samples_per_pixel);
+        dbg!(pixel_x0);
+        dbg!(samples_per_pixel);
+        let mut sample_ix_range = sample_x_range(pixel_x0, samples_per_pixel);
+        dbg!(&sample_ix_range);
+        // dbg!(self.sample_rect);
+        sample_ix_range.start += self.sample_rect.ix_rng.start();
+        sample_ix_range.end += self.sample_rect.ix_rng.start();
+        // dbg!(&sample_ix_range);
 
         let mut hover_info = HoverInfo {
             screen_pos,
@@ -153,11 +177,11 @@ impl Track {
         };
         let buffer = self.buffer.borrow();
         let channel = &buffer[self.channel_ix];
-        for sample_ix in sample_ix_range {
-            // sample_ix might be out of range here, the mouse pointer is not always contained
-            // properly it seems
-            let sample_val = channel.at(sample_ix.into()).unwrap_or(&0.0);
-            hover_info.samples.push((sample_ix, *sample_val))
+        let start = sample_ix_range.start.ceil() as usize;
+        let end = sample_ix_range.end.ceil() as usize;
+        for sample_ix in start..end {
+            let sample_val = channel.at(sample_ix.try_into().unwrap()).unwrap_or(&0.0);
+            hover_info.samples.push((sample_ix.try_into().unwrap(), *sample_val))
         }
         self.hover_info = Some(hover_info)
     }
@@ -198,12 +222,31 @@ impl Track {
     }
 }
 
+fn distance_to_next_integer(x: audio::SampleIx) -> audio::SampleIx {
+    if x.fract() == 0.0 {
+        0.0
+    } else if x > 0.0 {
+        1.0 - x.fract()
+    } else {
+        x.fract().abs()
+    }
+}
+
 /// functions to do with position/transformation of samples
 impl Track {
     pub fn set_screen_rect(&mut self, screen_rect: rect::Rect) -> Result<()> {
         // Only update_view_buffer if we have to
         if self.screen_rect != screen_rect {
             self.screen_rect = screen_rect;
+
+            if self.samples_per_pixel.is_some() {
+                // sample rect end should be adjusted so it corresponds tot the screen rect and current
+                // zoom level
+                // TODO: maybe better in update_view_buffer, the if test above is breaking the abstraction
+                let screen_rect_width = screen_rect.width();
+                let sample_rect_width = self.view_x_to_sample_ix(screen_rect_width);
+                self.sample_rect.resize_ix_rng(sample_rect_width);
+            }
             self.update_view_buffer()?;
         }
         Ok(())
@@ -245,24 +288,37 @@ impl Track {
 
         let nr_samples = self.sample_rect.ix_rng.positive_len() as usize;
         assert!(nr_samples > 0, "We should have non-zero sample_rect width due to guard clause");
-        // if nr_samples == 0 {
-        //     self.view_buffer.clear();
-        //     return Ok(());
-        // }
         let screen_pixel_width = self.screen_rect.width();
         // self.samples_per_pixel = nr_samples as f32 / screen_pixel_width;
 
         let audio_buffer = self.buffer.borrow();
+
         // We want to calculate positions for sample_ixs in the sample_rect. However, the
         // sample_rect might have negative ix (it is before the audio). In that case we just start
         // in the beginning, i.e. no skip.
-        let skip_nr_samples = self.sample_rect.ix_rng.start().max(0.0) as usize;
-        let mut extra_offset = 0.0;
-        if self.sample_rect.ix_rng.start() < 0.0 {
-            extra_offset = self.sample_rect.ix_rng.start().abs() as f32 / *samples_per_pixel as f32;
+        let skip_nr_samples = self.sample_rect.ix_rng.start().max(0.0).ceil() as usize;
+        // dbg!(self.sample_rect.ix_rng.start());
+        // dbg!(skip_nr_samples);
+        let mut fractional_offset = 0.0;
+        if *samples_per_pixel <= 0.5 {
+            // 0.3 -> 0.7
+            // -0.3 -> 0.3
+            let distance_to_next_integer = distance_to_next_integer(self.sample_rect.ix_rng.start());
+            fractional_offset = distance_to_next_integer / *samples_per_pixel as audio::SampleIx;
         }
-        dbg!(extra_offset);
+        // NOTE: 'integer' offset
+        let mut first_sample_offset = 0.0;
+        if self.sample_rect.ix_rng.start() < 0.0 {
+            first_sample_offset = self.sample_rect.ix_rng.start().ceil().abs() as f32 / *samples_per_pixel as f32;
+        }
+        let pixels_per_sample = 1.0 / *samples_per_pixel;
+        // dbg!(*samples_per_pixel);
+        // dbg!(pixels_per_sample);
+        // dbg!(self.sample_rect.ix_rng.start());
+        // dbg!(first_sample_offset);
 
+        // TODO: probably want to store this to easily revert when e.g. 'clicking'
+        let total_offset = first_sample_offset + fractional_offset as f32;
 
         // Iter over x adjusted positions for all samples that fall into the nr_pixels to fill
         let sample_pos_iter = audio_buffer[self.channel_ix]
@@ -271,7 +327,7 @@ impl Track {
             .take(nr_samples)
             .enumerate()
             .map(|(sample_ix, sample)| {
-                let pixel_x = (sample_ix as f32 / *samples_per_pixel).floor() + self.pixel_offset + extra_offset;
+                let pixel_x = (sample_ix as f32 / *samples_per_pixel).floor() + total_offset;
                 let pixel_offset = 0.5; // to get them at the middle of pixel columns, vertical
                                         // lines then draw exactly on the pixel
                 pos::Pos::new(pixel_x + pixel_offset, *sample)
@@ -321,14 +377,6 @@ impl Track {
     }
 
     // move sample rect by dx_pixels
-    // positive:
-    // * move sample rect to the right?
-    //   * this moves the 'camera' to the right over the samples
-    //   * samples appear to move to the left
-    // * offset is from the first sample in the sample rect
-    //   * sample is on pixel 0 -> offset is 0
-    //   * sample is on pixel 1 -> offset is 1
-    //   * distance from pixel 0 to pixel where first sample is drawn
     pub fn shift_sample_rect_x(&mut self, dx_pixels: f32) -> Result<()> {
         if dx_pixels == 0.0 {
             return Ok(());
@@ -336,83 +384,51 @@ impl Track {
         let Some(samples_per_pixel) = self.samples_per_pixel else {
             return Ok(());
         };
-
-        let dx_samples = dx_pixels * samples_per_pixel;
-        let mut dx_samples_rounded = dx_samples.round();
-        println!();
-        dbg!(dx_pixels);
-        dbg!(samples_per_pixel);
-        dbg!(dx_samples);
-        dbg!(dx_samples_rounded);
-        dbg!(self.sample_rect);
-        dbg!(self.pixel_offset);
-        if samples_per_pixel < 0.5 {
-            if dx_samples < 1.0 {
-                let nr_pixels_per_sample = 1.0 / samples_per_pixel;
-                dbg!(nr_pixels_per_sample);
-                let new_pixel_offset = self.pixel_offset - dx_pixels;
-                dbg!(new_pixel_offset);
-                if new_pixel_offset < 0.0 {
-                    dx_samples_rounded += 1.0;
-                    // self.pixel_offset = (new_pixel_offset.abs() % nr_pixels_per_sample) * new_pixel_offset.signum();
-                    self.pixel_offset = nr_pixels_per_sample - new_pixel_offset.abs();
-                    // in this case we need to shift more than 1 sample and update pixel offset
-                } else if new_pixel_offset >= nr_pixels_per_sample {
-                    dx_samples_rounded -= 1.0;
-                    self.pixel_offset = new_pixel_offset % nr_pixels_per_sample;
-                    // in this case we need to shift more than 1 sample and update pixel offset
-                } else {
-                    self.pixel_offset = new_pixel_offset;
-                }
-                // self.pixel_offset += pi
-            }
-        } else {
-            self.pixel_offset = 0.0;
-        }
-
-
-        // let dx_samples_rounded = dx_samples.round();
-        // when less than 1 sample we need to offset the pixels still, store it in some way
-        // we know the pixel offset
-
-        // TODO: might need to make it bigger when negative samples are present. If it the screen
-        // is wider than the nr samples were shown. Maybe in update_view_buffer we should check?
-        self.sample_rect.shift_x(dx_samples_rounded as audio::SampleIx);
-        dbg!(self.sample_rect);
-        dbg!(self.pixel_offset);
+        let dx_samples = self.view_x_to_sample_ix(dx_pixels);
+        self.sample_rect.shift_x(dx_samples);
         self.update_view_buffer()
     }
 
     /// * `center_screen_x` - The x position of the center of the zoom
-    /// * `zoom_delta` - The amount to zoom in or out
-    pub fn zoom_x(&mut self, center_screen_x: f32, zoom_delta: f32) -> Result<()> {
-        // TODO: zooming in and out
+    /// * `dx_samples` - The amount of pixels we add or remove. Positive -> zoom out, negative -> zoom in
+    pub fn zoom_x(&mut self, center_screen_x: f32, dx_pixels: f32) -> Result<()> {
+        // center normalized to x=[0,width]
+        let center_view_x = center_screen_x - self.screen_rect.min.x;
+        // center as sample ix
+        let center_sample_ix = self.view_x_to_sample_ix(center_view_x) + self.sample_rect.ix_rng.start();
 
-        // find sample_ix float for center_screen_x
-        // need fraction too, when zoomed in
-        // aslo, need to have relateive x i think
-        // let center_sample_ix_rng = sample_x_range(center_screen_x, self.samples_per_pixel.unwrap());
+        // println!("\n\n\n\n");
+        // dbg!(center_screen_x);
+        // dbg!(center_view_x);
+        // dbg!(center_sample_ix);
 
-        // find ratio of sample_ix to start/end of sample_rect
-        //  -> no, ratio in pixels better when zoomed in a lot
-        // zoom_delta is nr of pixels, get nr of samples = total zoom
-        // move front by front ratio * nr of samples
-        // move back by back ratio * nr of samples
-        // convert front float to pixel offset
+        // nr of samples to zoom
+        let dx_samples = self.view_x_to_sample_ix(dx_pixels);
+        // dbg!(dx_pixels);
+        // dbg!(dx_samples);
 
+        // update sample rect sample index range
+        // dbg!(self.sample_rect);
+        self.sample_rect.zoom_x(dx_samples, center_sample_ix);
+        // dbg!(self.sample_rect);
 
-        return Ok(());
+        // recalculate samples per pixel based on new sample rect
+        // dbg!(self.samples_per_pixel);
+        self.samples_per_pixel = Some(self.sample_rect.ix_rng.len() as f32 / self.screen_rect.width());
+        // dbg!(self.samples_per_pixel);
+
+        self.update_view_buffer()
     }
 }
 
 /// Which sample index is closest to, or which sample indices are rendered at a screen pixel x
-/// position (given 0 is the start pixel x)
-pub fn sample_x_range(screen_x: i32, samples_per_pixel: f32) -> std::ops::Range<i32> {
+/// position (given 0 is the start pixel x, result is also relative to sample_ix 0)
+pub fn sample_x_range(screen_x: i32, samples_per_pixel: f32) -> std::ops::Range<audio::SampleIx> {
     // dbg!(screen_x);
-    let mut first_sample_ix = (screen_x as f32 * samples_per_pixel).ceil() as i32;
+    let mut first_sample_ix = (screen_x as f32 * samples_per_pixel).ceil() as audio::SampleIx;
     // dbg!(first_sample_ix);
     // one past the last sample ix
-    let mut last_sample_ix = ((screen_x as f32 + 1.0) * samples_per_pixel).floor() as i32;
+    let mut last_sample_ix = ((screen_x as f32 + 1.0) * samples_per_pixel).floor() as audio::SampleIx;
     // dbg!(last_sample_ix);
 
     // due to float chenanigans, the start and end may be off by (at least?) one
@@ -423,26 +439,26 @@ pub fn sample_x_range(screen_x: i32, samples_per_pixel: f32) -> std::ops::Range<
     // but: 15 * 2.4 = 36 (exactly)
     // this means that 36 would be returned for screen_x = 15
     while (first_sample_ix as f32 / samples_per_pixel).floor() >= screen_x as f32 {
-        first_sample_ix -= 1;
+        first_sample_ix -= 1.0;
     }
     while (first_sample_ix as f32 / samples_per_pixel).floor() < screen_x as f32 {
-        first_sample_ix += 1;
+        first_sample_ix += 1.0;
     }
     while (last_sample_ix as f32 / samples_per_pixel).floor() <= screen_x as f32 {
-        last_sample_ix += 1;
+        last_sample_ix += 1.0;
     }
     while (last_sample_ix as f32 / samples_per_pixel).floor() > screen_x as f32 {
-        last_sample_ix -= 1;
+        last_sample_ix -= 1.0;
     }
 
     // This means that there are more pixels than samples, we take the sample that is closest to
     // the pixel. NOTE that this prevents a bijection, as from sample to pixel we round down
     if first_sample_ix >= last_sample_ix {
-        let closest = (screen_x as f32 * samples_per_pixel).round() as i32;
-        return closest..closest + 1;
+        let closest = (screen_x as f32 * samples_per_pixel).round() as audio::SampleIx;
+        return closest..closest + 1.0;
     }
 
-    first_sample_ix..last_sample_ix + 1
+    first_sample_ix..last_sample_ix + 1.0
 }
 
 #[cfg(test)]
