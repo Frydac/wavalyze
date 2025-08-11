@@ -28,7 +28,7 @@ pub struct Track {
     id: u64,
 
     // Contains all the 'original' audio samples
-    buffer: Rc<RefCell<audio::Buffer<f32>>>,
+    pub buffer: Rc<RefCell<audio::Buffer<f32>>>,
     // channel ix in the buffer associated with this track
     channel_ix: usize,
 
@@ -38,7 +38,7 @@ pub struct Track {
 
     /// The rectangle of samples that are currently visible
     /// indeces into the buffer
-    sample_rect: audio::SampleRect,
+    pub sample_rect: audio::SampleRect,
 
     // x range is pixel width starting at 0.0
     // y range is sample_rect sample range coordinates I think
@@ -46,12 +46,12 @@ pub struct Track {
 
     /// The pixel rectangle with absolute screen coordinates that should display self.sample_rect of
     /// samples
-    screen_rect: rect::Rect,
+    pub screen_rect: rect::Rect,
 
     /// Zoom level in x direction
     ///
     /// * Doesn't change when updating the screen_rect to keep the zoom stable
-    samples_per_pixel: Option<f32>,
+    pub samples_per_pixel: Option<f32>,
 
     /// Contains all the samples as pixel positions relative to top_left (0,0), currently to be
     /// rendered by the track::View
@@ -161,10 +161,10 @@ impl Track {
         // relative position
         let pixel_x0 = (screen_pos.x - self.screen_rect.min.x) as i32;
         // sample(s) near/on the pixel
-        dbg!(pixel_x0);
-        dbg!(samples_per_pixel);
+        // dbg!(pixel_x0);
+        // dbg!(samples_per_pixel);
         let mut sample_ix_range = sample_x_range(pixel_x0, samples_per_pixel);
-        dbg!(&sample_ix_range);
+        // dbg!(&sample_ix_range);
         // dbg!(self.sample_rect);
         sample_ix_range.start += self.sample_rect.ix_rng.start();
         sample_ix_range.end += self.sample_rect.ix_rng.start();

@@ -1,3 +1,31 @@
+## TODO
+* rulers
+  * sample index/time
+  * sample value
+* zoom sample value, y-axis
+* zoom rectangle
+
+* selection
+  * when clicked
+  * when dragged
+
+* info panel
+  * tab?
+
+* diff 2 tracks
+  * at least start with cli options to select 2 tracks from 1 or 2 files
+  * super position tracks with 2 colors in some way
+    * when hovering, show diff value too
+  * 
+
+* steal ideas from Audacity/Audition :D
+
+* should use 1 zoom level for all tracks?
+  * now we zoom/shift independently, float calculations could diverge?
+  * handy for sample index ruler
+
+
+
 ## maybe use 2d transformation matrices?
   * scale
     * x

@@ -55,6 +55,26 @@ impl Rect {
     pub fn contains(self, pos: Pos) -> bool {
         return self.contains_x(pos) && self.contains_y(pos);
     }
+
+    pub fn top(&self) -> f32 {
+        self.min.y
+    }
+
+    pub fn bottom(&self) -> f32 {
+        self.max.y
+    }
+
+    pub fn left(&self) -> f32 {
+        self.min.x
+    }
+
+    pub fn right(&self) -> f32 {
+        self.max.x
+    }
+
+    pub fn center(&self) -> Pos {
+        Pos::new(self.left() + self.width() / 2.0, self.top() + self.height() / 2.0)
+    }
 }
 
 // Conversion traits from and to egui::Rect

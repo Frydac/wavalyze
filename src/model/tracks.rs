@@ -95,29 +95,29 @@ impl Tracks {
 }
 
 impl Tracks {
-    pub fn set_screen_rect(&mut self, id: TrackId, screen_rect: rect::Rect) -> anyhow::Result<()> {
-        let track = self.track_mut(id).ok_or(anyhow!(format!("Track with id {} not found", id)))?;
+    // pub fn set_screen_rect(&mut self, id: TrackId, screen_rect: rect::Rect) -> anyhow::Result<()> {
+    //     let track = self.track_mut(id).ok_or(anyhow!(format!("Track with id {} not found", id)))?;
 
-        // If the zoom level hasn't been set in a track, this call will trigger setting default
-        // zoom: the track needs to screen width to calculate the view buffer
-        track.set_screen_rect(screen_rect)?;
+    //     // If the zoom level hasn't been set in a track, this call will trigger setting default
+    //     // zoom: the track needs to screen width to calculate the view buffer
+    //     track.set_screen_rect(screen_rect)?;
 
-        // We expect this to be true
-        if let Some(spp) = track.samples_per_pixel() {
-            // If this is the first time set_view_rect is called for any track, we get the
-            // 'default' zoom level (zoom level that shows whole buffer on given screen width),
-            // from that track and store it
-            if self.samples_per_pixel.is_none() {
-                self.samples_per_pixel = Some(spp);
+    //     // We expect this to be true?
+    //     if let Some(spp) = track.samples_per_pixel() {
+    //         // If this is the first time set_view_rect is called for any track, we get the
+    //         // 'default' zoom level (zoom level that shows whole buffer on given screen width),
+    //         // from that track and store it
+    //         if self.samples_per_pixel.is_none() {
+    //             self.samples_per_pixel = Some(spp);
 
-                // Initialize all other tracks with the same zoom level
-                for track in self.tracks.iter_mut() {
-                    track.1.set_samples_per_pixel(spp);
-                }
-            }
-        }
-        Ok(())
-    }
+    //             // Initialize all other tracks with the same zoom level
+    //             for track in self.tracks.iter_mut() {
+    //                 track.1.set_samples_per_pixel(spp);
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub fn set_sample_rect(&mut self, id: TrackId, sample_rect: audio::SampleRect) -> anyhow::Result<()> {
         let track = self.track_mut(id).ok_or(anyhow!(format!("Track with id {} not found", id)))?;

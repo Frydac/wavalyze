@@ -48,8 +48,9 @@ impl Track {
         let screen_rect = ui.min_rect();
         let to_screen = egui::emath::RectTransform::from_to(track_view_rect.clone().into(), screen_rect);
         let to_view = to_screen.inverse();
-        let line_color = egui::Color32::LIGHT_RED;
-        let stroke_line = egui::Stroke::new(1.0, line_color.with_alpha(128));
+        let line_color = egui::Color32::LIGHT_RED.linear_multiply(0.7).with_alpha(255);
+        // let line_color = egui::Color32::from_rgb(128, 64, 64);
+        let stroke_line = egui::Stroke::new(1.0, line_color);
         let painter = ui.painter_at(screen_rect);
 
         match model_track.view_buffer() {
@@ -93,20 +94,23 @@ impl Track {
                 for [min, max] in buffer_pos_min_max {
                     let min = egui::pos2(min.x, min.y);
                     let max = egui::pos2(max.x, max.y);
-                    // let min = painter.round_pos_to_pixel_center(to_screen.transform_pos(min));
-                    // let max = painter.round_pos_to_pixel_center(to_screen.transform_pos(max));
-                    // let min = to_screen.transform_pos(min) + egui::Vec2::new(0.5, 0.0);
-                    // let max = to_screen.transform_pos(max) + egui::Vec2::new(0.5, 0.0);
-                    let min = to_screen.transform_pos(min);
-                    let max = to_screen.transform_pos(max);
-                    painter.line_segment([min, max], stroke_line);
-                    if prev_max_y < min.y {
-                        painter.line_segment([egui::pos2(min.x, prev_max_y), min], stroke_line);
-                    } else if prev_min_y > max.y {
-                        painter.line_segment([egui::pos2(max.x, prev_min_y), max], stroke_line);
+
+                    // NOTE: swapping min and max, as the Y-axis is inverted in egui
+                    let max_screen = to_screen.transform_pos(min);
+                    let min_screen = to_screen.transform_pos(max);
+
+                    // draw line between samples on the same pixel column
+                    painter.line_segment([min_screen, max_screen], stroke_line);
+                    // Fill any gaps between samples on subsequent pixel columns
+                    // TODO: we might be drawing lines next to each other where not necessary,
+                    // probably need to adjust prev_min_y and prev_max_y to account for this
+                    if prev_max_y < min_screen.y {
+                        painter.line_segment([egui::pos2(min_screen.x, prev_max_y), min_screen], stroke_line);
+                    } else if prev_min_y > max_screen.y {
+                        painter.line_segment([max_screen, egui::pos2(max_screen.x, prev_min_y)], stroke_line);
                     }
-                    prev_max_y = max.y;
-                    prev_min_y = min.y;
+                    prev_max_y = max_screen.y;
+                    prev_min_y = min_screen.y;
                 }
             }
         }
@@ -126,6 +130,7 @@ impl Track {
         // Frame that contains the waveform drawing
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
             ui.set_min_size(ui.available_size());
+            ui.set_max_width(ui.available_width());
 
             // This gets the absolute position of the canvas
             let canvas_rect = ui.min_rect(); // TODO: don't know for sure what min_rect means in this context
@@ -140,11 +145,51 @@ impl Track {
                 .unwrap();
 
             // Draw/interact all the things
+            self.ui_start_end(ui, model);
             self.ui_samples(ui, model);
             self.ui_middle_line(ui, model);
             self.mouse_hover_info.ui(ui, model, self.id);
             // self.mouse_select.ui(ui);
         });
+    }
+
+    fn ui_start_end(&self, ui: &mut egui::Ui, model: &model::Model) {
+        let model_track = model.tracks.track(self.id).unwrap();
+        let view_rect = model_track.view_rect();
+        let screen_rect = model_track.screen_rect;
+        let to_screen = egui::emath::RectTransform::from_to(view_rect.clone().into(), screen_rect.clone().into());
+        // let color = egui::Color32::from_rgba_unmultiplied(200, 200, 200, 10);
+        let color = egui::Color32::from_rgb(100, 100, 100);
+        let stroke = egui::Stroke::new(1.0, color);
+
+        // start
+        if model_track.sample_rect.ix_rng.contains(0.0) {
+            let view_x0 = model_track.sample_ix_to_view_x(-model_track.sample_rect.ix_rng.start());
+            // dbg!(-model_track.sample_rect.ix_rng.start());
+            // dbg!(view_x0);
+            let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
+            screen_x0.x = screen_x0.x.ceil() - 0.5;
+            // dbg!(screen_x0);
+            let padding = 10.0;
+            let min = egui::pos2(screen_x0.x, screen_rect.top() + padding);
+            let max = egui::pos2(screen_x0.x, screen_rect.bottom() - padding);
+            ui.painter().line_segment([min, max], stroke);
+        }
+
+        // end
+        let last_sample_ix = (model_track.buffer.borrow().nr_samples() - 1) as crate::audio::SampleIx;
+        if model_track.sample_rect.ix_rng.contains(last_sample_ix) {
+            let view_x0 = model_track.sample_ix_to_view_x(last_sample_ix - model_track.sample_rect.ix_rng.start());
+            // dbg!(-model_track.sample_rect.ix_rng.start());
+            // dbg!(view_x0);
+            let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
+            screen_x0.x = screen_x0.x.ceil() - 0.5;
+            // dbg!(screen_x0);
+            let padding = 10.0;
+            let min = egui::pos2(screen_x0.x, screen_rect.top() + padding);
+            let max = egui::pos2(screen_x0.x, screen_rect.bottom() - padding);
+            ui.painter().line_segment([min, max], stroke);
+        }
     }
 
     // fn ui_middle_line(&self, ui: &mut egui::Ui, model_track: &model::track::Track, to_screen: &egui::emath::RectTransform) {
@@ -191,12 +236,21 @@ impl MouseHover {
 
         let canvas_rect = ui.min_rect();
         // Draw HoverInfor (TODO extract)
-        let rect = egui::Rect::from_min_max(
-            // TODO: position left of line when at right side of window
-            egui::pos2(hover_info.screen_pos.x, canvas_rect.top()),
-            // TODO: calculate width somehow?
-            egui::pos2(hover_info.screen_pos.x + 200.0, canvas_rect.bottom()),
-        );
+        let width = 120.0;
+        let left_x = if  hover_info.screen_pos.x > canvas_rect.right() - width {
+            hover_info.screen_pos.x - width
+        } else {
+            hover_info.screen_pos.x
+        };
+        let rect = egui::Rect::from_min_max(egui::pos2(left_x, canvas_rect.top()), egui::pos2(left_x + width, canvas_rect.bottom()));
+        // let rect = egui::Rect::from_min_max(
+        //     // TODO: position left of line when at right side of window
+        //     // TODO: calculate width somehow?
+        //     egui::pos2(hover_info.screen_pos.x, canvas_rect.top()),
+        //     egui::pos2(hover_info.screen_pos.x + 200.0, canvas_rect.bottom()),
+        //     // egui::pos2(hover_info.screen_pos.x, canvas_rect.top()),
+        //     // egui::pos2(hover_info.screen_pos.x + 200.0, canvas_rect.bottom()),
+        // );
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
             egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
                 // min/max sample value under mouse pointer
