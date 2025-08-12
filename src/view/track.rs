@@ -229,6 +229,71 @@ impl Default for MouseHover {
 }
 
 impl MouseHover {
+    fn ui_sample_info_floating_rect2(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
+        if hover_info.samples.is_empty() {
+            return;
+        }
+
+        let canvas_rect = ui.min_rect();
+        // Draw HoverInfor (TODO extract)
+        let width = 120.0;
+        let left_x = if hover_info.screen_pos.x > canvas_rect.right() - width {
+            hover_info.screen_pos.x - width
+        } else {
+            hover_info.screen_pos.x
+        };
+        let rect = egui::Rect::from_min_max(
+            egui::pos2(left_x, canvas_rect.top()),
+            egui::pos2(left_x + width, canvas_rect.bottom()),
+        );
+        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+            egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
+                // min/max sample value under mouse pointer
+                let mut min_sample = Option::<(i32, f32)>::None;
+                let mut max_sample = Option::<(i32, f32)>::None;
+                for (ix, sample) in hover_info.samples.iter() {
+                    min_sample = min_sample.or(Some((*ix, *sample)));
+                    max_sample = max_sample.or(Some((*ix, *sample)));
+                    if let Some(min_sample) = &mut min_sample {
+                        if min_sample.1 > *sample {
+                            min_sample.1 = *sample;
+                        }
+                    }
+                    if let Some(max_sample) = &mut max_sample {
+                        if max_sample.1 < *sample {
+                            max_sample.1 = *sample;
+                        }
+                    }
+                }
+
+                // min/max sample index
+                let min_ix = hover_info.samples.first().unwrap().0;
+                let max_ix = hover_info.samples.last().unwrap().0;
+
+                // if min_ix == max_ix {
+                //     ui.label(format!("index: {}", min_ix));
+                //     ui.label(format!("value: {}", min_sample.unwrap().1));
+                // } else {
+                //     // ui.label(format!("index:    [{}, {}]", min_ix, max_ix));
+                //     // ui.label(format!("min value: {}", min_sample.unwrap().1));
+                //     // ui.label(format!("max value: {}", max_sample.unwrap().1));
+                //     ui.label(format!("min: {:>3}: {}", min_ix, min_sample.unwrap().1));
+                //     ui.label(format!("max: {:>3}: {}", max_ix, max_sample.unwrap().1));
+                // }
+
+                let mut grid = KeyValueGrid::new(track_id);
+                if min_ix == max_ix {
+                    grid.row("index:", format!("{}", min_ix));
+                    grid.row("value:", format!("{}", min_sample.unwrap().1));
+                } else {
+                    grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
+                    grid.row("min value:", format!("{}", min_sample.unwrap().1));
+                    grid.row("max value:", format!("{}", max_sample.unwrap().1));
+                }
+                grid.show(ui);
+            });
+        });
+    }
     fn ui_sample_info_floating_rect(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
         if hover_info.samples.is_empty() {
             return;
@@ -243,44 +308,47 @@ impl MouseHover {
         //     hover_info.screen_pos.x
         // };
         let left_x = hover_info.screen_pos.x;
-        egui::Area::new(ui.id().with(track_id).with("popup"))
+        egui::Window::new("")
+            .id(ui.id().with(track_id).with("popup"))
             .fixed_pos(egui::pos2(left_x, canvas_rect.top()))
+            .resizable(false)
+            .collapsible(false)
+            .title_bar(false)
+            .frame(egui::Frame::popup(ui.style()).outer_margin(10.0))
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
-                    ui.set_max_width(width);
-                    // min/max sample value under mouse pointer
-                    let mut min_sample = Option::<(i32, f32)>::None;
-                    let mut max_sample = Option::<(i32, f32)>::None;
-                    for (ix, sample) in hover_info.samples.iter() {
-                        min_sample = min_sample.or(Some((*ix, *sample)));
-                        max_sample = max_sample.or(Some((*ix, *sample)));
-                        if let Some(min_sample) = &mut min_sample {
-                            if min_sample.1 > *sample {
-                                min_sample.1 = *sample;
-                            }
-                        }
-                        if let Some(max_sample) = &mut max_sample {
-                            if max_sample.1 < *sample {
-                                max_sample.1 = *sample;
-                            }
+                ui.set_max_width(width);
+                // min/max sample value under mouse pointer
+                let mut min_sample = Option::<(i32, f32)>::None;
+                let mut max_sample = Option::<(i32, f32)>::None;
+                for (ix, sample) in hover_info.samples.iter() {
+                    min_sample = min_sample.or(Some((*ix, *sample)));
+                    max_sample = max_sample.or(Some((*ix, *sample)));
+                    if let Some(min_sample) = &mut min_sample {
+                        if min_sample.1 > *sample {
+                            min_sample.1 = *sample;
                         }
                     }
-
-                    // min/max sample index
-                    let min_ix = hover_info.samples.first().unwrap().0;
-                    let max_ix = hover_info.samples.last().unwrap().0;
-
-                    let mut grid = KeyValueGrid::new("sample_info_grid");
-                    if min_ix == max_ix {
-                        grid.row("index:", format!("{}", min_ix));
-                        grid.row("value:", format!("{}", min_sample.unwrap().1));
-                    } else {
-                        grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
-                        grid.row("min value:", format!("{}", min_sample.unwrap().1));
-                        grid.row("max value:", format!("{}", max_sample.unwrap().1));
+                    if let Some(max_sample) = &mut max_sample {
+                        if max_sample.1 < *sample {
+                            max_sample.1 = *sample;
+                        }
                     }
-                    grid.show(ui);
-                });
+                }
+
+                // min/max sample index
+                let min_ix = hover_info.samples.first().unwrap().0;
+                let max_ix = hover_info.samples.last().unwrap().0;
+
+                // let mut grid = KeyValueGrid::new("sample_info_grid");
+                // if min_ix == max_ix {
+                //     grid.row("index:", format!("{}", min_ix));
+                //     grid.row("value:", format!("{}", min_sample.unwrap().1));
+                // } else {
+                //     grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
+                //     grid.row("min value:", format!("{}", min_sample.unwrap().1));
+                //     grid.row("max value:", format!("{}", max_sample.unwrap().1));
+                // }
+                // grid.show(ui);
             });
     }
 
@@ -350,7 +418,7 @@ impl MouseHover {
                 if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
                     self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
                 }
-                self.ui_sample_info_floating_rect(ui, track_id, hover_info);
+                self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
             }
         }
     }

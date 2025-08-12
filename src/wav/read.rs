@@ -11,14 +11,14 @@ pub fn read_wav_file_to_float(path: &str) -> Result<audio::Buffer<f32>> {
     dbg!(spec);
 
     // let debug_take = Some(100);
-    let debug_take = None;
+    let debug_take = usize::MAX;
+    // let debug_take = None;
 
     // read float or int samples into float interleaved vector
     let interleaved_samples: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => {
             let iter = reader.samples::<f32>();
-            let take_count = debug_take.unwrap_or(iter.len());
-            let iter = iter.take(take_count);
+            let iter = iter.take(debug_take);
             iter.map(|s| s.unwrap()).collect()
         }
         hound::SampleFormat::Int => {
@@ -28,8 +28,7 @@ pub fn read_wav_file_to_float(path: &str) -> Result<audio::Buffer<f32>> {
                 spec.bits_per_sample
             );
             let iter = reader.samples::<i32>();
-            let take_count = debug_take.unwrap_or(iter.len());
-            let iter = iter.take(take_count);
+            let iter = iter.take(debug_take);
             iter.map(|s| s.unwrap() as f32).collect()
         }
     };
