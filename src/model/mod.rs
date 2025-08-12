@@ -36,8 +36,8 @@ impl Model {
         // Read file into float buffer
         let file = crate::wav::file::File::from_wav(path)?;
 
-        println!("{}: {}", "file.basename()", file.basename());
-        println!("{}: {}", "file.nr_channels()", file.nr_channels());
+        println!("file.basename(): {}", file.basename());
+        println!("file.nr_channels(): {}", file.nr_channels());
 
         // For each channel create a model::track
         for (ix, ch) in file.buffer.borrow().channels().enumerate() {

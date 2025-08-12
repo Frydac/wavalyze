@@ -17,7 +17,7 @@ mod tests {
     fn test_db_to_gain() {
         let db = 3.0;
         let act_gain = db_to_gain(db);
-        let exp_gain = 1.4125375446227544;
+        let exp_gain = 1.4125376;
         assert!(compare::near_relative(act_gain, exp_gain, 0.001));
 
         let db = f32::NEG_INFINITY;

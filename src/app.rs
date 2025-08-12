@@ -43,7 +43,10 @@ impl App {
                 .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
         }
 
-        println!("{}: {}", "app after adding files model.borrow().tracks.len()", model.borrow().tracks.len());
+        println!(
+            "app after adding files model.borrow().tracks.len(): {}",
+            model.borrow().tracks.len()
+        );
 
         App {
             model: model.clone(),

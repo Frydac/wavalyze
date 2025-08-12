@@ -110,7 +110,7 @@ impl One for i16 {
 
 // pub fn min_max_float<T>() -> (T, T)
 // where
-//     
+//
 // {
 //     (T::from(-1.0), T::from(1.0))
 // }

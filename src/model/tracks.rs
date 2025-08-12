@@ -1,4 +1,4 @@
-use crate::{audio, model, pos, rect};
+use crate::{audio, model, pos};
 use anyhow::anyhow;
 use anyhow::Result;
 use egui::ahash::HashMap;

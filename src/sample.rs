@@ -1,6 +1,5 @@
 // TODO: I think this can be removed, most functionalyt moved to audio
 
-
 #[derive(Debug, Default, Clone)]
 #[allow(dead_code)]
 pub struct SampleRange {
@@ -8,8 +7,7 @@ pub struct SampleRange {
     pub size: usize,
 }
 
-
-// Ideas: 
+// Ideas:
 //   * Maybe better named AudioBuffer ? (borrowed from JUCE)
 //   * to provide an iterator over the channels, and then an iterator over the samples, we probably
 //     need to create a Channel type maybe that implements Iterator over samples
@@ -28,7 +26,7 @@ pub struct Samples<T> {
 
     pub sample_rate: u32,
     pub bit_depth: u16,
-    pub sample_type: SampleType
+    pub sample_type: SampleType,
 }
 
 impl Samples<f32> {
@@ -38,13 +36,13 @@ impl Samples<f32> {
             spec: WavSpec::default(),
             sample_rate: 0,
             bit_depth: 0,
-            sample_type: SampleType::Float
+            sample_type: SampleType::Float,
         }
     }
     pub fn nr_channels(&self) -> usize {
         self.data.len()
     }
-    
+
     pub fn channels(&self) -> impl Iterator<Item = &Vec<f32>> {
         self.data.iter()
     }
@@ -99,12 +97,13 @@ pub struct WavSpec {
     pub nr_channels: u16,
     pub sample_rate: u32,
     pub bit_depth: u16,
-    pub sample_type: SampleType
+    pub sample_type: SampleType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[allow(dead_code)]
 pub enum SampleType {
-    #[default] Float,
-    Int
+    #[default]
+    Float,
+    Int,
 }

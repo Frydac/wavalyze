@@ -169,7 +169,7 @@ impl BufferBuilder {
 
         // Some restrictions/invariants
         if sample_type == SampleType::Float {
-            if self.bit_depth == None {
+            if self.bit_depth.is_none() {
                 bit_depth = Some(32);
             }
             ensure!(
@@ -204,6 +204,12 @@ impl BufferBuilder {
     }
 }
 
+impl Default for BufferBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod tests {
     #[test]
     fn test_buffer_builder_and_index() {
@@ -221,9 +227,9 @@ mod tests {
         // dbg!(&ab);
 
         ab[1][1] = 1.0;
-        println!("5.2 {}: {:5.2}", "ab", ab);
-        println!("5.  {}: {:5.}", "ab", ab);
-        println!(" .2 {}: {:.2}", "ab", ab);
-        println!("    {}: {}", "ab", ab);
+        println!("5.2 ab: {:5.2}", ab);
+        println!("5.  ab: {:5.}", ab);
+        println!(" .2 ab: {:.2}", ab);
+        println!("    ab: {}", ab);
     }
 }

@@ -27,6 +27,10 @@ impl ViewBuffer {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn clear(&mut self) {
         match self {
             ViewBuffer::SingleSamples(v) => v.clear(),

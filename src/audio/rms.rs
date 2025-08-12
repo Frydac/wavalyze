@@ -11,4 +11,3 @@ pub fn rms(samples: &[f32]) -> f32 {
 pub fn rms_db(samples: &[f32]) -> f32 {
     audio::db::gain_to_db(rms(samples))
 }
-

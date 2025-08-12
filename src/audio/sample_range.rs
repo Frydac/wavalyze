@@ -61,7 +61,9 @@ impl SampleIxRange {
 
     /// Zoom nr of samples around center_ix
     pub fn zoom(&mut self, nr_of_samples: SampleIx, center_ix: SampleIx) {
-        if self.is_empty() { return; }
+        if self.is_empty() {
+            return;
+        }
         let center_ix = center_ix.clamp(self.start, self.end);
         let nr_samples_to_center = center_ix - self.start;
         let ratio_start_to_center = nr_samples_to_center as f32 / self.len() as f32;
@@ -88,10 +90,10 @@ impl SampleValueRange {
     }
 
     pub fn from_sample_type(sample_type: audio::SampleType, bit_depth: u32) -> Self {
-        assert!(bit_depth <= 24);
         match sample_type {
             audio::SampleType::Float => Self { min: -1.0, max: 1.0 },
             audio::SampleType::Int => {
+                assert!(bit_depth <= 24);
                 let max = 1i32 << (bit_depth - 1);
                 Self {
                     min: -max as f32,

@@ -1,5 +1,4 @@
 #![warn(clippy::all, rust_2018_idioms)]
-
 // TODO: remove
 #![allow(dead_code)]
 #![allow(unused_variables)]

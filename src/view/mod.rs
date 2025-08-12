@@ -1,3 +1,4 @@
+pub mod grid;
 pub mod track;
 use std::collections::HashMap;
 
@@ -59,7 +60,7 @@ impl View {
                         let model = self.model.borrow();
 
                         for track in model.tracks.iter() {
-                            ui.label(format!("{}", track.name));
+                            ui.label(&track.name);
                             if let Some(spp) = track.samples_per_pixel {
                                 ui.label(format!("samples/pixel: {}", spp));
                                 let pixels_per_sample = 1.0 / spp;
@@ -181,7 +182,7 @@ impl View {
 
                     let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
                     // this ui will notify the model of the current hover info
-                    view_track.ui(ui, &mut *model);
+                    view_track.ui(ui, &mut model);
                 });
             }
             // No track is hovered, unhover all tracks

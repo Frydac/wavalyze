@@ -1,2 +1,2 @@
 pub mod sine;
-pub use sine::Sine as Sine;
+pub use sine::Sine;

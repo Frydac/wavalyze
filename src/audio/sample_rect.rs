@@ -17,7 +17,7 @@ impl SampleRect {
     pub fn from_buffer(buffer: &audio::Buffer<f32>) -> Self {
         Self {
             ix_rng: audio::SampleIxRange::new(0.0, buffer.nr_samples() as audio::SampleIx),
-            val_rng: audio::SampleValueRange::from_buffer(&buffer),
+            val_rng: audio::SampleValueRange::from_buffer(buffer),
         }
     }
     pub fn is_empty(&self) -> bool {

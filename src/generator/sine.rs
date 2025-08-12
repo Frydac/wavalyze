@@ -19,11 +19,7 @@ impl Sine {
     }
 
     /// Create a generator with the sine's period in samples.
-    pub fn new_with_sample_period(
-        period_nr_samples: usize,
-        amplitude: f32,
-        sample_rate: u32,
-    ) -> Self {
+    pub fn new_with_sample_period(period_nr_samples: usize, amplitude: f32, sample_rate: u32) -> Self {
         let frequency = sample_rate as f32 / period_nr_samples as f32;
         Self {
             frequency,

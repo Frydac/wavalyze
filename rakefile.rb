@@ -27,8 +27,20 @@ task :create_test_data do
         {
             bit_depth: 16,
             sample_type: SampleType::SIGNED,
-            sample_rate: 96_000,
-            nr_channels: 2,
+            sample_rate: 44_100,
+            nr_channels: 10,
+        },
+        {
+            bit_depth: 32,
+            sample_type: SampleType::FLOAT,
+            sample_rate: 48_000,
+            nr_channels: 5,
+        },
+        {
+            bit_depth: 16,
+            sample_type: SampleType::SIGNED,
+            sample_rate: 44_100,
+            nr_channels: 10,
         }
     ].each do |kwargs|
         fn = data_dir(file: "sine_#{kwargs[:bit_depth]}_#{kwargs[:sample_type]}_#{kwargs[:sample_rate]}_#{kwargs[:nr_channels]}.wav")

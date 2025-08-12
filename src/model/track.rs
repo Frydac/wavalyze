@@ -71,9 +71,33 @@ pub struct Track {
 pub struct HoverInfo {
     /// absolute (mouse) screen position in pixel coordinates
     pub screen_pos: pos::Pos,
+    // TODO: store time range and sample buffer
     pub samples: Vec<(i32, f32)>, // sample ixs and values for the samples that are rendedred on
+    pub sample_type: audio::sample::SampleType,
+    pub bit_depth: u32,
     // the given screen_pos, or is closest to the screen_pos
     pub contains_pointer: bool,
+    // Key value pairs of what is displayed
+    pub list_data: Vec<(String, String)>,
+}
+
+impl HoverInfo {
+    pub fn new(
+        screen_pos: pos::Pos,
+        contains_pointer: bool,
+        samples: Vec<(i32, f32)>,
+        sample_type: audio::sample::SampleType,
+        bit_depth: u32,
+    ) -> HoverInfo {
+        HoverInfo {
+            screen_pos,
+            samples,
+            contains_pointer,
+            list_data: vec![],
+            sample_type,
+            bit_depth,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -90,11 +114,11 @@ impl Track {
     // good for size/width or normalized values
     pub fn sample_ix_to_view_x(&self, sample_ix: SampleIx) -> f32 {
         let samples_per_pixel = self.samples_per_pixel.expect("zoom level not set");
-        return sample_ix as f32 / samples_per_pixel;
+        sample_ix as f32 / samples_per_pixel
     }
     pub fn view_x_to_sample_ix(&self, view_x: f32) -> SampleIx {
         let samples_per_pixel = self.samples_per_pixel.expect("zoom level not set");
-        return (view_x * samples_per_pixel) as SampleIx;
+        (view_x * samples_per_pixel) as SampleIx
     }
 
     // TODO: make convert with actual sample index (with current sample rect view) and screen coordinates
@@ -174,6 +198,9 @@ impl Track {
             screen_pos,
             samples: vec![],
             contains_pointer: self.screen_rect.contains(screen_pos),
+            list_data: vec![],
+            sample_type: self.buffer.borrow().sample_type,
+            bit_depth: self.buffer.borrow().bit_depth,
         };
         let buffer = self.buffer.borrow();
         let channel = &buffer[self.channel_ix];
@@ -286,7 +313,7 @@ impl Track {
             "We should have non-zero screen_rect width due to guard clause"
         );
 
-        let nr_samples = self.sample_rect.ix_rng.positive_len() as usize;
+        let nr_samples = self.sample_rect.ix_rng.positive_len();
         assert!(nr_samples > 0, "We should have non-zero sample_rect width due to guard clause");
         let screen_pixel_width = self.screen_rect.width();
         // self.samples_per_pixel = nr_samples as f32 / screen_pixel_width;
@@ -309,7 +336,7 @@ impl Track {
         // NOTE: 'integer' offset
         let mut first_sample_offset = 0.0;
         if self.sample_rect.ix_rng.start() < 0.0 {
-            first_sample_offset = self.sample_rect.ix_rng.start().ceil().abs() as f32 / *samples_per_pixel as f32;
+            first_sample_offset = self.sample_rect.ix_rng.start().ceil().abs() as f32 / *samples_per_pixel;
         }
         let pixels_per_sample = 1.0 / *samples_per_pixel;
         // dbg!(*samples_per_pixel);
@@ -524,7 +551,7 @@ mod tests {
                     // dbg!(screen_x);
                     let sample_ix_rng = sample_x_range(screen_x, samples_per_pixel);
                     // dbg!(&sample_ix_rng);
-                    assert!(sample_ix_rng.contains(&sample_x));
+                    assert!(sample_ix_rng.contains(&(sample_x as f64)));
                 }
             }
         }

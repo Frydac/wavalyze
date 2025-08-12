@@ -56,8 +56,7 @@ impl File {
         self.buffer.borrow().nr_samples()
     }
     pub fn sample_type(&self) -> audio::sample::SampleType {
-        // TODO: why clone here necessary? Because not primitive? doesn't implment Copy trait?
-        self.buffer.borrow().sample_type.clone()
+        self.buffer.borrow().sample_type
     }
 
     pub fn basename(&self) -> String {

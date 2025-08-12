@@ -11,4 +11,3 @@ pub fn get_input_data_dir() -> path::PathBuf {
     let project_dir = get_project_dir();
     project_dir.join("data")
 }
-
