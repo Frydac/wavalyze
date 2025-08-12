@@ -234,21 +234,27 @@ impl MouseHover {
             return;
         }
 
+        // Use the track_id to create a unique ID for each popup instance.
+        let popup_id = ui.id().with(track_id).with("sample_info_popup");
+        let last_size: Option<egui::Vec2> = ui.ctx().memory_mut(|m| m.data.get_persisted::<egui::Vec2>(popup_id));
+
         let canvas_rect = ui.min_rect();
-        // Draw HoverInfor (TODO extract)
-        let width = 120.0;
-        let left_x = if hover_info.screen_pos.x > canvas_rect.right() - width {
-            hover_info.screen_pos.x - width
-        } else {
-            hover_info.screen_pos.x
-        };
-        let rect = egui::Rect::from_min_max(
-            egui::pos2(left_x, canvas_rect.top()),
-            egui::pos2(left_x + width, canvas_rect.bottom()),
-        );
-        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+
+        // Default position is to the right of the cursor.
+        let mut popup_pos = egui::pos2(hover_info.screen_pos.x, canvas_rect.top());
+
+        // If we have the size from the last frame, use it to check for screen overflow.
+        if let Some(size) = last_size {
+            if hover_info.screen_pos.x + size.x > canvas_rect.right() {
+                // It would overflow, so place it to the left of the cursor instead.
+                popup_pos.x = hover_info.screen_pos.x - size.x;
+            }
+        }
+
+        // Use an egui::Area to place the popup at the calculated position.
+        let area_response = egui::Area::new(popup_id).fixed_pos(popup_pos).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
-                // min/max sample value under mouse pointer
+                // --- The content of the popup remains the same ---
                 let mut min_sample = Option::<(i32, f32)>::None;
                 let mut max_sample = Option::<(i32, f32)>::None;
                 for (ix, sample) in hover_info.samples.iter() {
@@ -266,20 +272,8 @@ impl MouseHover {
                     }
                 }
 
-                // min/max sample index
                 let min_ix = hover_info.samples.first().unwrap().0;
                 let max_ix = hover_info.samples.last().unwrap().0;
-
-                // if min_ix == max_ix {
-                //     ui.label(format!("index: {}", min_ix));
-                //     ui.label(format!("value: {}", min_sample.unwrap().1));
-                // } else {
-                //     // ui.label(format!("index:    [{}, {}]", min_ix, max_ix));
-                //     // ui.label(format!("min value: {}", min_sample.unwrap().1));
-                //     // ui.label(format!("max value: {}", max_sample.unwrap().1));
-                //     ui.label(format!("min: {:>3}: {}", min_ix, min_sample.unwrap().1));
-                //     ui.label(format!("max: {:>3}: {}", max_ix, max_sample.unwrap().1));
-                // }
 
                 let mut grid = KeyValueGrid::new(track_id);
                 if min_ix == max_ix {
@@ -293,6 +287,10 @@ impl MouseHover {
                 grid.show(ui);
             });
         });
+
+        // Store the size of the popup for the next frame.
+        ui.ctx()
+            .memory_mut(|m| m.data.insert_persisted(popup_id, area_response.response.rect.size()));
     }
     fn ui_sample_info_floating_rect(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
         if hover_info.samples.is_empty() {
