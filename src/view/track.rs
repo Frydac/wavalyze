@@ -241,57 +241,62 @@ impl MouseHover {
         let canvas_rect = ui.min_rect();
 
         // Default position is to the right of the cursor.
-        let mut popup_pos = egui::pos2(hover_info.screen_pos.x, canvas_rect.top());
+        let offset_x = 10.0; // Small offset from the mouse pointer
+        let mut popup_pos = egui::pos2(hover_info.screen_pos.x + offset_x, canvas_rect.top());
 
         // If we have the size from the last frame, use it to check for screen overflow.
         if let Some(size) = last_size {
-            if hover_info.screen_pos.x + size.x > canvas_rect.right() {
+            if hover_info.screen_pos.x + offset_x + size.x > canvas_rect.right() {
                 // It would overflow, so place it to the left of the cursor instead.
-                popup_pos.x = hover_info.screen_pos.x - size.x;
+                popup_pos.x = hover_info.screen_pos.x - size.x - offset_x;
             }
         }
 
         // Use an egui::Area to place the popup at the calculated position.
-        let area_response = egui::Area::new(popup_id).fixed_pos(popup_pos).show(ui.ctx(), |ui| {
-            egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
-                // --- The content of the popup remains the same ---
-                let mut min_sample = Option::<(i32, f32)>::None;
-                let mut max_sample = Option::<(i32, f32)>::None;
-                for (ix, sample) in hover_info.samples.iter() {
-                    min_sample = min_sample.or(Some((*ix, *sample)));
-                    max_sample = max_sample.or(Some((*ix, *sample)));
-                    if let Some(min_sample) = &mut min_sample {
-                        if min_sample.1 > *sample {
-                            min_sample.1 = *sample;
+        let area_response = egui::Area::new(popup_id)
+            .fixed_pos(popup_pos)
+            .interactable(false) // Add this line
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
+                    // --- The content of the popup remains the same ---
+                    let mut min_sample = Option::<(i32, f32)>::None;
+                    let mut max_sample = Option::<(i32, f32)>::None;
+                    for (ix, sample) in hover_info.samples.iter() {
+                        min_sample = min_sample.or(Some((*ix, *sample)));
+                        max_sample = max_sample.or(Some((*ix, *sample)));
+                        if let Some(min_sample) = &mut min_sample {
+                            if min_sample.1 > *sample {
+                                min_sample.1 = *sample;
+                            }
+                        }
+                        if let Some(max_sample) = &mut max_sample {
+                            if max_sample.1 < *sample {
+                                max_sample.1 = *sample;
+                            }
                         }
                     }
-                    if let Some(max_sample) = &mut max_sample {
-                        if max_sample.1 < *sample {
-                            max_sample.1 = *sample;
-                        }
+
+                    let min_ix = hover_info.samples.first().unwrap().0;
+                    let max_ix = hover_info.samples.last().unwrap().0;
+
+                    let mut grid = KeyValueGrid::new(track_id);
+                    if min_ix == max_ix {
+                        grid.row("index:", format!("{}", min_ix));
+                        grid.row("value:", format!("{}", min_sample.unwrap().1));
+                    } else {
+                        grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
+                        grid.row("min value:", format!("{}", min_sample.unwrap().1));
+                        grid.row("max value:", format!("{}", max_sample.unwrap().1));
                     }
-                }
-
-                let min_ix = hover_info.samples.first().unwrap().0;
-                let max_ix = hover_info.samples.last().unwrap().0;
-
-                let mut grid = KeyValueGrid::new(track_id);
-                if min_ix == max_ix {
-                    grid.row("index:", format!("{}", min_ix));
-                    grid.row("value:", format!("{}", min_sample.unwrap().1));
-                } else {
-                    grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
-                    grid.row("min value:", format!("{}", min_sample.unwrap().1));
-                    grid.row("max value:", format!("{}", max_sample.unwrap().1));
-                }
-                grid.show(ui);
+                    grid.show(ui);
+                });
             });
-        });
 
         // Store the size of the popup for the next frame.
         ui.ctx()
             .memory_mut(|m| m.data.insert_persisted(popup_id, area_response.response.rect.size()));
     }
+
     fn ui_sample_info_floating_rect(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
         if hover_info.samples.is_empty() {
             return;
@@ -375,6 +380,17 @@ impl MouseHover {
             .interact(canvas_rect, egui::Id::new(track_id), egui::Sense::hover())
             .on_hover_cursor(egui::CursorIcon::None);
 
+        // --- Logging for debugging flickering ---
+        if track_id == 1 {
+            dbg!(
+                track_id,
+                hover_response.hovered(),
+                hover_response.contains_pointer(),
+                hover_response.rect
+            );
+        }
+        // --- End logging ---
+
         if hover_response.hovered() && hover_response.contains_pointer() {
             // NOTE:: even when hovered and contains_pointer, sometimes there is not hover
             // position..
@@ -404,7 +420,17 @@ impl MouseHover {
         }
 
         let model_track = model.tracks.track_mut(track_id).unwrap();
+        // --- Logging for debugging flickering ---
+        if track_id == 1 {
+            dbg!(track_id, model_track.hover_info().is_some());
+        }
+        // --- End logging ---
+
         if let Some(hover_info) = model_track.hover_info() {
+            // --- Logging for debugging flickering ---
+            // dbg!(track_id, hover_info.samples.is_empty());
+            // --- End logging ---
+
             // if let Some(hover_info) = model.tracks.tracks_hover_info.previous {
 
             // Draw vertical line/sample info where mouse pointer is for all tracks, when mouse is
