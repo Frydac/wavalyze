@@ -39,6 +39,88 @@ impl Track {
         }
     }
 
+    pub fn ui(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
+        self.ui_track_header(ui, model);
+        self.ui_waveform(ui, model);
+    }
+
+    pub fn ui_track_header(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
+        // Track title above the waveform view
+        egui::Frame::default()
+            .inner_margin(egui::Margin::same(5.0))
+            .outer_margin(egui::Margin::symmetric(0.0, 5.0))
+            .stroke(ui.style().visuals.window_stroke())
+            .show(ui, |ui| {
+                ui.label(&self.name);
+            });
+    }
+
+    pub fn ui_waveform(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
+        // Frame that contains the waveform drawing
+        egui::Frame::canvas(ui.style()).show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
+            ui.set_max_width(ui.available_width());
+
+            // This gets the absolute position of the canvas
+            let canvas_rect = ui.min_rect(); // TODO: don't know for sure what min_rect means in this context
+                                             // dbg!(canvas_rect);
+
+            // update model track with current screen rect
+            model
+                .tracks
+                .track_mut(self.id)
+                .unwrap()
+                .set_screen_rect(canvas_rect.into())
+                .unwrap();
+
+            // Draw/interact all the things
+            self.ui_start_end(ui, model);
+            self.ui_samples(ui, model);
+            self.ui_middle_line(ui, model);
+            self.mouse_hover_info.ui(ui, model, self.id);
+            // self.mouse_select.ui(ui);
+        });
+    }
+
+    fn ui_start_end(&self, ui: &mut egui::Ui, model: &model::Model) {
+        let model_track = model.tracks.track(self.id).unwrap();
+        let view_rect = model_track.view_rect();
+        let screen_rect = model_track.screen_rect;
+        let to_screen = egui::emath::RectTransform::from_to((*view_rect).into(), screen_rect.into());
+        // let color = egui::Color32::from_rgba_unmultiplied(200, 200, 200, 10);
+        let color = egui::Color32::from_rgb(100, 100, 100);
+        let stroke = egui::Stroke::new(1.0, color);
+
+        // start
+        if model_track.sample_rect.ix_rng.contains(0.0) {
+            let view_x0 = model_track.sample_ix_to_view_x(-model_track.sample_rect.ix_rng.start());
+            // dbg!(-model_track.sample_rect.ix_rng.start());
+            // dbg!(view_x0);
+            let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
+            screen_x0.x = screen_x0.x.ceil() - 0.5;
+            // dbg!(screen_x0);
+            let padding = 10.0;
+            let min = egui::pos2(screen_x0.x, screen_rect.top() + padding);
+            let max = egui::pos2(screen_x0.x, screen_rect.bottom() - padding);
+            ui.painter().line_segment([min, max], stroke);
+        }
+
+        // end
+        let last_sample_ix = (model_track.buffer.borrow().nr_samples() - 1) as crate::audio::SampleIx;
+        if model_track.sample_rect.ix_rng.contains(last_sample_ix) {
+            let view_x0 = model_track.sample_ix_to_view_x(last_sample_ix - model_track.sample_rect.ix_rng.start());
+            // dbg!(-model_track.sample_rect.ix_rng.start());
+            // dbg!(view_x0);
+            let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
+            screen_x0.x = screen_x0.x.ceil() - 0.5;
+            // dbg!(screen_x0);
+            let padding = 10.0;
+            let min = egui::pos2(screen_x0.x, screen_rect.top() + padding);
+            let max = egui::pos2(screen_x0.x, screen_rect.bottom() - padding);
+            ui.painter().line_segment([min, max], stroke);
+        }
+    }
+
     // TODO: highlight selected/hovered sample(s)
     pub fn ui_samples(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
         let model_track = model.tracks.track_mut(self.id).unwrap();
@@ -115,81 +197,6 @@ impl Track {
             }
         }
         // });
-    }
-
-    pub fn ui(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
-        // Track title above the waveform view
-        egui::Frame::default()
-            .inner_margin(egui::Margin::same(5.0))
-            .outer_margin(egui::Margin::symmetric(0.0, 5.0))
-            .stroke(ui.style().visuals.window_stroke())
-            .show(ui, |ui| {
-                ui.label(&self.name);
-            });
-
-        // Frame that contains the waveform drawing
-        egui::Frame::canvas(ui.style()).show(ui, |ui| {
-            ui.set_min_size(ui.available_size());
-            ui.set_max_width(ui.available_width());
-
-            // This gets the absolute position of the canvas
-            let canvas_rect = ui.min_rect(); // TODO: don't know for sure what min_rect means in this context
-                                             // dbg!(canvas_rect);
-
-            // update model track with current screen rect
-            model
-                .tracks
-                .track_mut(self.id)
-                .unwrap()
-                .set_screen_rect(canvas_rect.into())
-                .unwrap();
-
-            // Draw/interact all the things
-            self.ui_start_end(ui, model);
-            self.ui_samples(ui, model);
-            self.ui_middle_line(ui, model);
-            self.mouse_hover_info.ui(ui, model, self.id);
-            // self.mouse_select.ui(ui);
-        });
-    }
-
-    fn ui_start_end(&self, ui: &mut egui::Ui, model: &model::Model) {
-        let model_track = model.tracks.track(self.id).unwrap();
-        let view_rect = model_track.view_rect();
-        let screen_rect = model_track.screen_rect;
-        let to_screen = egui::emath::RectTransform::from_to((*view_rect).into(), screen_rect.into());
-        // let color = egui::Color32::from_rgba_unmultiplied(200, 200, 200, 10);
-        let color = egui::Color32::from_rgb(100, 100, 100);
-        let stroke = egui::Stroke::new(1.0, color);
-
-        // start
-        if model_track.sample_rect.ix_rng.contains(0.0) {
-            let view_x0 = model_track.sample_ix_to_view_x(-model_track.sample_rect.ix_rng.start());
-            // dbg!(-model_track.sample_rect.ix_rng.start());
-            // dbg!(view_x0);
-            let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
-            screen_x0.x = screen_x0.x.ceil() - 0.5;
-            // dbg!(screen_x0);
-            let padding = 10.0;
-            let min = egui::pos2(screen_x0.x, screen_rect.top() + padding);
-            let max = egui::pos2(screen_x0.x, screen_rect.bottom() - padding);
-            ui.painter().line_segment([min, max], stroke);
-        }
-
-        // end
-        let last_sample_ix = (model_track.buffer.borrow().nr_samples() - 1) as crate::audio::SampleIx;
-        if model_track.sample_rect.ix_rng.contains(last_sample_ix) {
-            let view_x0 = model_track.sample_ix_to_view_x(last_sample_ix - model_track.sample_rect.ix_rng.start());
-            // dbg!(-model_track.sample_rect.ix_rng.start());
-            // dbg!(view_x0);
-            let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
-            screen_x0.x = screen_x0.x.ceil() - 0.5;
-            // dbg!(screen_x0);
-            let padding = 10.0;
-            let min = egui::pos2(screen_x0.x, screen_rect.top() + padding);
-            let max = egui::pos2(screen_x0.x, screen_rect.bottom() - padding);
-            ui.painter().line_segment([min, max], stroke);
-        }
     }
 
     // fn ui_middle_line(&self, ui: &mut egui::Ui, model_track: &model::track::Track, to_screen: &egui::emath::RectTransform) {
@@ -373,59 +380,33 @@ impl MouseHover {
 
     // fn ui(&mut self, ui: &mut egui::Ui, model_track: &mut model::track::Track) {
     fn ui(&mut self, ui: &mut egui::Ui, model: &mut model::Model, track_id: Id) {
-        // TODO: make sure ui.min_rect is indeed the rect we want to use for this?
         let canvas_rect = ui.min_rect();
 
         let hover_response = ui
             .interact(canvas_rect, egui::Id::new(track_id), egui::Sense::hover())
             .on_hover_cursor(egui::CursorIcon::None);
 
-        // --- Logging for debugging flickering ---
-        if track_id == 1 {
-            dbg!(
-                track_id,
-                hover_response.hovered(),
-                hover_response.contains_pointer(),
-                hover_response.rect
-            );
-        }
-        // --- End logging ---
-
-        if hover_response.hovered() && hover_response.contains_pointer() {
-            // NOTE:: even when hovered and contains_pointer, sometimes there is not hover
-            // position..
-            if let Some(pos) = ui.ctx().pointer_hover_pos() {
+        // NOTE: we don't check hovered or contains_pointer as the popup seems to overtake the
+        // mouse event and when moving fast, the mouse can be over the popup, causing flickering of
+        // the popup.
+        if let Some(pos) = ui.ctx().pointer_hover_pos() {
+            if canvas_rect.contains(pos) {
                 model.tracks.update_hover_info(track_id, (&pos).into());
 
                 ui.ctx().input(|i| {
-                    if i.modifiers.shift {
-                        let scroll = i.raw_scroll_delta;
-                        // dbg!(scroll);
-                        if scroll.x != 0.0 {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.x != 0.0 {
+                        if i.modifiers.shift {
                             model.tracks.shift_x(scroll.x).unwrap();
-                        }
-                    } else if i.modifiers.ctrl {
-                        let scroll = i.raw_scroll_delta;
-                        // println!("ctrl-scroll: {}", scroll);
-                        if scroll.y != 0.0 {
-                            model.tracks.zoom_x(pos.x, scroll.y * 2.0).unwrap();
+                        } else if i.modifiers.ctrl {
+                            model.tracks.zoom_x(pos.x, scroll.y * model.config.zoom_x_factor).unwrap();
                         }
                     }
                 });
-            } else {
-                println!("track {} hovered but no pointer hover pos", track_id);
             }
-        } else {
-            // println!("track {} not hovered", track_id);
         }
 
         let model_track = model.tracks.track_mut(track_id).unwrap();
-        // --- Logging for debugging flickering ---
-        if track_id == 1 {
-            dbg!(track_id, model_track.hover_info().is_some());
-        }
-        // --- End logging ---
-
         if let Some(hover_info) = model_track.hover_info() {
             // --- Logging for debugging flickering ---
             // dbg!(track_id, hover_info.samples.is_empty());
