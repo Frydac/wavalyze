@@ -34,12 +34,24 @@ impl SampleIxRange {
         (end - start) as usize
     }
 
+    pub fn first(&self) -> SampleIx {
+        self.start
+    }
+
+    pub fn last(&self) -> SampleIx {
+        self.end - 1.0
+    }
+
     pub fn start(&self) -> SampleIx {
         self.start
     }
 
     pub fn end(&self) -> SampleIx {
         self.end
+    }
+
+    pub fn width(&self) -> SampleIx {
+        self.end - self.start
     }
 
     pub fn is_empty(&self) -> bool {
@@ -53,6 +65,20 @@ impl SampleIxRange {
     pub fn shift(&mut self, offset: SampleIx) {
         self.start += offset;
         self.end += offset;
+    }
+
+    pub fn include(&mut self, ix: SampleIx) {
+        if ix < self.start {
+            self.start = ix;
+        }
+        if ix >= self.end {
+            self.end = ix + 1.0;
+        }
+    }
+
+    pub fn include_range(&mut self, range: Self) {
+        self.include(range.start);
+        self.include(range.end);
     }
 
     pub fn with_shift(&self, offset: SampleIx) -> Self {
@@ -72,6 +98,10 @@ impl SampleIxRange {
         let shift_end = nr_of_samples - shift_start;
         self.start -= shift_start;
         self.end += shift_end;
+        // Make sure we keep the invariant, it can happen I think due to float rounding
+        if self.start > self.end {
+            self.start = self.end;
+        }
     }
 }
 

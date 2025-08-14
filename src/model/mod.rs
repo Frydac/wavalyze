@@ -1,13 +1,13 @@
+pub mod config;
 pub mod track;
 pub mod tracks;
 pub mod view_buffer;
-pub mod config;
 
 use crate::model;
+pub use model::config::Config;
 pub use model::track::Track;
 pub use model::tracks::Tracks;
 pub use model::view_buffer::ViewBuffer;
-pub use model::config::Config;
 
 // NOTE: move all under this?
 

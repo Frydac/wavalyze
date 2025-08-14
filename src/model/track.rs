@@ -32,16 +32,16 @@ pub struct Track {
     // channel ix in the buffer associated with this track
     channel_ix: usize,
 
-    // probably need more metadata for the track
-    //
+    // TODO: we want some kind of metadata struct
     pub name: String,
 
-    /// The rectangle of samples that are currently visible
-    /// indeces into the buffer
+    /// The rectangle of samples indices that are currently visible,
+    /// indices into self.buffer.
     pub sample_rect: audio::SampleRect,
 
     // x range is pixel width starting at 0.0
     // y range is sample_rect sample range coordinates I think
+    // NOTE: not really needed, we can just use screen_rect and 'normalize' it, they should be very similar
     pub view_rect: rect::Rect,
 
     /// The pixel rectangle with absolute screen coordinates that should display self.sample_rect of
@@ -121,6 +121,25 @@ impl Track {
         (view_x * samples_per_pixel) as SampleIx
     }
 
+    pub fn sample_ix_to_screen_x(&self, sample_ix: SampleIx) -> Option<f32> {
+        if !self.sample_rect.ix_rng.contains(sample_ix) {
+            return None;
+        }
+        self.samples_per_pixel?;
+        let sample_ix_offset = sample_ix - self.sample_rect.ix_rng.start();
+        let view_x_offset = self.sample_ix_to_view_x(sample_ix_offset);
+        let screen_x = view_x_offset + self.screen_rect.min.x;
+        Some(screen_x)
+    }
+
+    pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<SampleIx> {
+        // if !self.screen_rect.contains_x(screen_x) {
+        // return None;
+        // }
+        let view_x_offset = screen_x - self.screen_rect.min.x;
+        None
+    }
+
     // TODO: make convert with actual sample index (with current sample rect view) and screen coordinates
     // probaly need an sample offset too, as we want to be able to move tracks around relatively to
     // each other
@@ -174,8 +193,9 @@ impl Track {
 
     // Assumes view_rect is correctly set, maybe just pass to function?
     // @param screen_pos Absolute mouse position within the screen_rect
+    // TODO: review/redo, not accurate, probably needs more data in some way
     pub fn update_hover_info(&mut self, screen_pos: pos::Pos) {
-        if !self.screen_rect.contains_x(screen_pos) {
+        if !self.screen_rect.contains_x(screen_pos.x) {
             return;
         }
 
@@ -210,15 +230,11 @@ impl Track {
             let sample_val = channel.at(sample_ix.try_into().unwrap()).unwrap_or(&0.0);
             hover_info.samples.push((sample_ix.try_into().unwrap(), *sample_val))
         }
-        self.hover_info = Some(hover_info)
+        self.hover_info = Some(hover_info);
     }
 
     pub fn hover_info(&self) -> Option<&HoverInfo> {
         self.hover_info.as_ref()
-    }
-
-    pub fn clear_hover_info(&mut self) {
-        self.hover_info = None;
     }
 
     pub fn view_buffer(&self) -> &model::ViewBuffer {

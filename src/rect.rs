@@ -46,14 +46,18 @@ impl Rect {
         self
     }
 
-    pub fn contains_x(self, pos: Pos) -> bool {
-        self.min.x <= pos.x && pos.x <= self.max.x
+    pub fn contains_x_pos(self, pos: Pos) -> bool {
+        self.contains_x(pos.x)
     }
-    pub fn contains_y(self, pos: Pos) -> bool {
+    pub fn contains_x(self, x: f32) -> bool {
+        self.min.x <= x && x <= self.max.x
+    }
+
+    pub fn contains_y_pos(self, pos: Pos) -> bool {
         self.min.y <= pos.y && pos.y <= self.max.y
     }
     pub fn contains(self, pos: Pos) -> bool {
-        self.contains_x(pos) && self.contains_y(pos)
+        self.contains_x_pos(pos) && self.contains_y_pos(pos)
     }
 
     pub fn top(&self) -> f32 {

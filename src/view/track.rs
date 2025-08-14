@@ -48,7 +48,13 @@ impl Track {
         // Track title above the waveform view
         egui::Frame::default()
             .inner_margin(egui::Margin::same(5.0))
-            .outer_margin(egui::Margin::symmetric(0.0, 5.0))
+            // .outer_margin(egui::Margin::symmetric(0.0, 5.0))
+            .outer_margin(egui::Margin {
+                left: 0.0,
+                right: 0.0,
+                top: 5.0,
+                bottom: 0.0,
+            })
             .stroke(ui.style().visuals.window_stroke())
             .show(ui, |ui| {
                 ui.label(&self.name);
@@ -147,13 +153,6 @@ impl Track {
                     painter.line_segment([pos_sample_mid_screen, pos_sample_screen], stroke_line);
                     let circle_size = 1.5;
                     let circle_color = line_color;
-                    // if let Some(hover_info) = model_track.hover_info() {
-                    // if ix == 5 {
-                    //     circle_size = 3.0;
-                    //     circle_color = egui::Color32::LIGHT_GREEN;
-                    // }
-                    // if hover_info.samples.contains
-                    // }
                     painter.circle_filled(pos_sample_screen, circle_size, circle_color);
                 }
             }
@@ -178,8 +177,8 @@ impl Track {
                     let max = egui::pos2(max.x, max.y);
 
                     // NOTE: swapping min and max, as the Y-axis is inverted in egui
-                    let max_screen = to_screen.transform_pos(min);
-                    let min_screen = to_screen.transform_pos(max);
+                    let max_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(min));
+                    let min_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(max));
 
                     // draw line between samples on the same pixel column
                     painter.line_segment([min_screen, max_screen], stroke_line);
@@ -394,12 +393,16 @@ impl MouseHover {
                 model.tracks.update_hover_info(track_id, (&pos).into());
 
                 ui.ctx().input(|i| {
-                    let scroll = i.raw_scroll_delta;
-                    if scroll.x != 0.0 {
-                        if i.modifiers.shift {
+                    if i.modifiers.shift {
+                        let scroll = i.raw_scroll_delta;
+                        if scroll.x != 0.0 {
                             model.tracks.shift_x(scroll.x).unwrap();
-                        } else if i.modifiers.ctrl {
-                            model.tracks.zoom_x(pos.x, scroll.y * model.config.zoom_x_factor).unwrap();
+                        }
+                    } else if i.modifiers.ctrl {
+                        let scroll = i.raw_scroll_delta;
+                        if scroll.y != 0.0 {
+                            let factor = model.config.zoom_x_factor;
+                            model.tracks.zoom_x(pos.x, scroll.y * factor).unwrap();
                         }
                     }
                 });

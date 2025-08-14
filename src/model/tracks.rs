@@ -92,6 +92,14 @@ impl Tracks {
             marker: std::marker::PhantomData,
         }
     }
+
+    pub fn get_total_buffer_range(&self) -> audio::SampleIxRange {
+        let mut total_range = audio::SampleIxRange::new(0.0, 0.0);
+        for track in self.iter() {
+            total_range.include(track.buffer.borrow().nr_samples() as f64);
+        }
+        total_range
+    }
 }
 
 impl Tracks {

@@ -24,3 +24,9 @@ impl From<&Pos> for egui::Pos2 {
         egui::pos2(pos.x, pos.y)
     }
 }
+
+impl From<Pos> for egui::Vec2 {
+    fn from(pos: Pos) -> egui::Vec2 {
+        egui::vec2(pos.x, pos.y)
+    }
+}

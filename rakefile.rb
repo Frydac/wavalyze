@@ -34,6 +34,12 @@ task :create_test_data do
             bit_depth: 32,
             sample_type: SampleType::FLOAT,
             sample_rate: 48_000,
+            nr_channels: 3,
+        },
+        {
+            bit_depth: 32,
+            sample_type: SampleType::FLOAT,
+            sample_rate: 48_000,
             nr_channels: 5,
         },
         {
