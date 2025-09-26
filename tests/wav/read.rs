@@ -3,7 +3,6 @@ use wavalyze::audio::BufferPool;
 use wavalyze::audio::SampleBuffer;
 use hound;
 
-
 #[test]
 fn test_read_to_file() {
     let config = ReadConfig {
@@ -17,68 +16,149 @@ fn test_read_to_file() {
     assert_eq!(file.bit_depth, 16);
     assert_eq!(file.channels.len(), 1);
     let _buffer_id_i16 = file.channels[0].buffer;
-    // let sample_buffer_i16 = file.channels[0].buffer.get_buffer().unwrap();
-    // assert!(matches!(sample_buffer_i16, wavalyze::audio::buffer2::SampleBuffer::I16(_)));
+}
+
+fn setup_test_wav_file<S: hound::Sample + Copy>(
+    spec: hound::WavSpec,
+    samples: &[S],
+    test_name: &str,
+) -> String {
+    let test_output_dir = "target/test_output";
+    std::fs::create_dir_all(test_output_dir).unwrap();
+    let file_path = format!(
+        "{}/{}_{}_{}.wav",
+        test_output_dir,
+        test_name,
+        spec.bits_per_sample,
+        match spec.sample_format {
+            hound::SampleFormat::Int => "int",
+            hound::SampleFormat::Float => "float",
+        }
+    );
+
+    let mut writer = hound::WavWriter::create(&file_path, spec).unwrap();
+    for &sample in samples {
+        writer.write_sample(sample).unwrap();
+    }
+    writer.finalize().unwrap();
+    file_path
 }
 
 #[test]
-fn test_read_to_file_options() {
-    // 1. Create a wav file with hound
+fn test_read_options_i16() {
     let spec = hound::WavSpec {
         channels: 3,
         sample_rate: 44100,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
-    let test_output_dir = "target/test_output";
-    std::fs::create_dir_all(test_output_dir).unwrap();
-    let file_path = format!("{}/test_read_options.wav", test_output_dir);
-    let mut writer = hound::WavWriter::create(&file_path, spec).unwrap();
+    let samples: Vec<i16> = (1..=12).collect();
+    let file_path = setup_test_wav_file(spec, &samples, "i16");
 
-    // Write some known interleaved samples
-    // 4 frames of 3 channels each
-    // Frame 0: 1, 2, 3
-    // Frame 1: 4, 5, 6
-    // Frame 2: 7, 8, 9
-    // Frame 3: 10, 11, 12
-    for i in 1..=12 {
-        writer.write_sample(i as i16).unwrap();
-    }
-    writer.finalize().unwrap();
-
-    // 2. Call read_to_file with options
     let config = ReadConfig {
         filepath: file_path,
-        ch_ixs: Some(vec![0, 2]), // Read channels 0 and 2
-        sample_range: Some(1..3), // Read frames 1 and 2 (exclusive end)
+        ch_ixs: Some(vec![0, 2]),
+        sample_range: Some(1..3),
     };
     let mut buffer_pool = BufferPool::new();
     let file = read_to_file(config, &mut buffer_pool).unwrap();
 
-    // 3. Assertions
-    assert_eq!(file.sample_rate, 44100);
-    assert_eq!(file.bit_depth, 16);
-    assert_eq!(file.channels.len(), 2); // We read 2 channels
+    assert_eq!(file.sample_rate, spec.sample_rate);
+    assert_eq!(file.bit_depth, spec.bits_per_sample);
+    assert_eq!(file.channels.len(), 2);
 
-    // Check channel 0
     let ch0 = file.channels.iter().find(|c| c.ch_ix == 0).unwrap();
-    let buffer0_id = ch0.buffer;
-    let buffer0 = buffer_pool.get_buffer(buffer0_id).unwrap();
-    if let SampleBuffer::I16(buf) = buffer0 {
-        // Frames 1 and 2 for channel 0 are samples 4 and 7.
-        assert_eq!(buf.data, vec![4, 7]);
+    if let SampleBuffer::I16(buf) = buffer_pool.get_buffer(ch0.buffer).unwrap() {
+        assert_eq!(buf.data, &[4, 7]);
     } else {
-        panic!("Incorrect buffer type for channel 0");
+        panic!("Incorrect buffer type");
     }
 
-    // Check channel 2
     let ch2 = file.channels.iter().find(|c| c.ch_ix == 2).unwrap();
-    let buffer2_id = ch2.buffer;
-    let buffer2 = buffer_pool.get_buffer(buffer2_id).unwrap();
-    if let SampleBuffer::I16(buf) = buffer2 {
-        // Frames 1 and 2 for channel 2 are samples 6 and 9.
-        assert_eq!(buf.data, vec![6, 9]);
+    if let SampleBuffer::I16(buf) = buffer_pool.get_buffer(ch2.buffer).unwrap() {
+        assert_eq!(buf.data, &[6, 9]);
     } else {
-        panic!("Incorrect buffer type for channel 2");
+        panic!("Incorrect buffer type");
+    }
+}
+
+#[test]
+fn test_read_options_i24() {
+    let spec = hound::WavSpec {
+        channels: 3,
+        sample_rate: 44100,
+        bits_per_sample: 24,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let samples: Vec<i32> = (1..=12).map(|x| x * 1000).collect();
+    let file_path = setup_test_wav_file(spec, &samples, "i24");
+
+    let config = ReadConfig {
+        filepath: file_path,
+        ch_ixs: Some(vec![0, 2]),
+        sample_range: Some(1..3),
+    };
+    let mut buffer_pool = BufferPool::new();
+    let file = read_to_file(config, &mut buffer_pool).unwrap();
+
+    let ch0 = file.channels.iter().find(|c| c.ch_ix == 0).unwrap();
+    if let SampleBuffer::I32(buf) = buffer_pool.get_buffer(ch0.buffer).unwrap() {
+        assert_eq!(buf.data, &[4000, 7000]);
+    } else {
+        panic!("Incorrect buffer type");
+    }
+}
+
+#[test]
+fn test_read_options_i32() {
+    let spec = hound::WavSpec {
+        channels: 3,
+        sample_rate: 44100,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let samples: Vec<i32> = (1..=12).map(|x| x * 100000).collect();
+    let file_path = setup_test_wav_file(spec, &samples, "i32");
+
+    let config = ReadConfig {
+        filepath: file_path,
+        ch_ixs: Some(vec![0, 2]),
+        sample_range: Some(1..3),
+    };
+    let mut buffer_pool = BufferPool::new();
+    let file = read_to_file(config, &mut buffer_pool).unwrap();
+
+    let ch0 = file.channels.iter().find(|c| c.ch_ix == 0).unwrap();
+    if let SampleBuffer::I32(buf) = buffer_pool.get_buffer(ch0.buffer).unwrap() {
+        assert_eq!(buf.data, &[400000, 700000]);
+    } else {
+        panic!("Incorrect buffer type");
+    }
+}
+
+#[test]
+fn test_read_options_f32() {
+    let spec = hound::WavSpec {
+        channels: 3,
+        sample_rate: 44100,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+    let samples: Vec<f32> = (1..=12).map(|x| x as f32 * 0.1).collect();
+    let file_path = setup_test_wav_file(spec, &samples, "f32");
+
+    let config = ReadConfig {
+        filepath: file_path,
+        ch_ixs: Some(vec![0, 2]),
+        sample_range: Some(1..3),
+    };
+    let mut buffer_pool = BufferPool::new();
+    let file = read_to_file(config, &mut buffer_pool).unwrap();
+
+    let ch0 = file.channels.iter().find(|c| c.ch_ix == 0).unwrap();
+    if let SampleBuffer::F32(buf) = buffer_pool.get_buffer(ch0.buffer).unwrap() {
+        assert_eq!(buf.data, &[0.4, 0.7]);
+    } else {
+        panic!("Incorrect buffer type");
     }
 }
