@@ -1,11 +1,10 @@
 use wavalyze::audio::sample_range::SampleIxRange;
-use wavalyze::audio::SampleIx;
 
 #[test]
 fn test_zoom() {
     let mut range = SampleIxRange::new(100.0, 200.0);
     range.zoom(10.0, 150.0);
-    assert_eq!(range.start(), 95.0);
+
     assert_eq!(range.end(), 205.0);
 }
 

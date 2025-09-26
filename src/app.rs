@@ -36,11 +36,22 @@ impl App {
     pub fn new(_cc: &eframe::CreationContext<'_>, config: AppConfig) -> Self {
         let model = model::SharedModel::default();
 
-        for path in &config.audio_files {
-            model
-                .borrow_mut()
-                .add_wav_file(path)
-                .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
+        // Diff gets precedence over audio files, we ignore any extra audio files if we have the
+        // diff option set
+        if let Some(ref diff_files) = config.diff {
+            for diff_file in diff_files {
+                model
+                    .borrow_mut()
+                    .add_wav_file(&diff_file.path, diff_file.channel, diff_file.offset)
+                    .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
+            }
+        } else {
+            for path in &config.audio_files {
+                model
+                    .borrow_mut()
+                    .add_wav_file(path, None, None)
+                    .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
+            }
         }
 
         println!(

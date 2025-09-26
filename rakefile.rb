@@ -47,9 +47,18 @@ task :create_test_data do
             sample_type: SampleType::SIGNED,
             sample_rate: 44_100,
             nr_channels: 10,
-        }
+        },
+        {
+            bit_depth: 16,
+            sample_type: SampleType::SIGNED,
+            signal: SignalType::SQUARE,
+            sample_rate: 48_000,
+            nr_channels: 2,
+        },
     ].each do |kwargs|
-        fn = data_dir(file: "sine_#{kwargs[:bit_depth]}_#{kwargs[:sample_type]}_#{kwargs[:sample_rate]}_#{kwargs[:nr_channels]}.wav")
+        default_signal = { signal: SignalType::SINE }
+        kwargs = default_signal.merge(kwargs)
+        fn = data_dir(file: "#{kwargs[:signal]}_#{kwargs[:bit_depth]}_#{kwargs[:sample_type]}_#{kwargs[:sample_rate]}_#{kwargs[:nr_channels]}.wav")
         SoundFileBuilder.new.set(**kwargs).build(fn)
     end
 end

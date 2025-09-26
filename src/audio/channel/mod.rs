@@ -1,5 +1,14 @@
+pub mod id;
+pub mod layout;
+
+pub use super::channel::id::Id;
+pub use super::channel::layout::Layout;
+
 use super::sample::Sample;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
+
+// TODO: replace
+// * a channel I would say is a Buffer(id) with a ChannelId?
 
 // Represents one audio channel, i.e. a list of samples
 // probably overkill, but I suspect I'm going to want to store some extra metadat in here

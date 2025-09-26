@@ -1,3 +1,9 @@
+## Diff functionality
+  * at least start with cli options to select 2 tracks from 1 or 2 files
+  * super position tracks with 2 colors in some way
+    * when hovering, show diff value too
+
+
 ## TODO
 * rulers
   * sample index/time
@@ -12,11 +18,6 @@
 * info panel
   * tab?
 
-* diff 2 tracks
-  * at least start with cli options to select 2 tracks from 1 or 2 files
-  * super position tracks with 2 colors in some way
-    * when hovering, show diff value too
-  * 
 
 * steal ideas from Audacity/Audition :D
 
