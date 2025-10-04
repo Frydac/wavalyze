@@ -3,7 +3,7 @@ use crate::math::round::round_up_to_power_of_10;
 use crate::model;
 use egui;
 
-pub fn show(ui: &mut egui::Ui, model: &model::SharedModel) {
+pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
     let height = 40.0;
     let width = ui.available_width();
     // let rect = egui::Rect::from_x_y_ranges(0.0..=width, 0.0..=height);

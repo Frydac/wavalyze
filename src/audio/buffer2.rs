@@ -1,16 +1,18 @@
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::ops::{Deref, DerefMut};
 
-pub trait Sample: Default + Copy {}
-impl Sample for f32 {}
-impl Sample for i32 {}
-impl Sample for i16 {}
+use crate::audio::{sample2::Sample, sample_range2::SampleValueRange};
 
+/// One channel of audio samples.  
+/// Could be used for storing interleaved samples, but not yet used like that? Probably want some
+/// kind of enum for that?
+#[derive(Debug, PartialEq, Clone)]
 pub struct Buffer<T: Sample> {
     pub sample_rate: u32,
     pub bit_depth: u16,
     pub data: Vec<T>,
 }
 
+/// Constructors
 impl<T: Sample> Buffer<T> {
     pub fn new(sample_rate: u32, bit_depth: u16) -> Self {
         Self {
@@ -37,17 +39,51 @@ impl<T: Sample> Buffer<T> {
         result.data.resize(size, T::default());
         result
     }
+}
+
+impl<T: Sample> Buffer<T> {
+    pub fn nr_samples(&self) -> usize {
+        self.data.len()
+    }
 
     pub fn duration_s(&self) -> f64 {
         self.data.len() as f64 / self.sample_rate as f64
     }
+
+    /// Returns the minimum value in the buffer
+    /// NOTE: we filter out NaN values, they have no effect (we expect no NaN values in general)
+    pub fn min(&self) -> Option<&T> {
+        self.data
+            .iter()
+            .filter(|&&x| !x.is_nan()) // Remove NaN values
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+    }
+
+    /// Returns the maximum value in the buffer
+    /// NOTE: we ignore NaN values, similar to C or C++ afaik
+    pub fn max(&self) -> Option<&T> {
+        self.data.iter().filter(|&&x| !x.is_nan()).max_by(|a, b| a.partial_cmp(b).unwrap())
+    }
+
+    /// Returns the minimum value in the buffer
+    /// NOTE: NaN values are propagated I think, similar to C or C++ afaik
+    /// * it propagates NaN in unpredictable ways, depending of it comes first or second,
+    ///   comparison is always false
+    /// * doesn't do any checks, so probably fastest
+    pub fn min_fold(&self) -> T {
+        self.data.iter().fold(T::MAX, |a, &b| if b < a { b } else { a })
+    }
+
+    pub fn max_fold(&self) -> T {
+        self.data.iter().fold(T::MIN, |a, &b| if b > a { b } else { a })
+    }
 }
 
-
-// Use deref to access the underlying buffer
+/// Use deref to access the underlying buffer
+/// Impies Indexing and iterator support (not IntoIterator! Deref takes a reference)
 impl<T: Sample> Deref for Buffer<T> {
     type Target = Vec<T>;
-    
+
     fn deref(&self) -> &Self::Target {
         &self.data
     }
@@ -58,46 +94,36 @@ impl<T: Sample> DerefMut for Buffer<T> {
     }
 }
 
-
-// Indexing support
-impl<T: Sample> Index<usize> for Buffer<T> {
-    type Output = T;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.data[index]
-    }
+// TODO: Enum -> SampleValueRange<T>
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SampleType {
+    Float,
+    Int(u32),
 }
 
-impl<T: Sample> IndexMut<usize> for Buffer<T> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.data[index]
-    }
+pub const PCM16_FORMAT: SampleType = SampleType::Int(16);
+pub const PCM24_FORMAT: SampleType = SampleType::Int(24);
+pub const PCM32_FORMAT: SampleType = SampleType::Int(32);
+pub const FLOAT_FORMAT: SampleType = SampleType::Float;
+
+pub const PCM16_RANGE: SampleValueRange<i16> = sample_range_i16(16);
+pub const PCM24_RANGE: SampleValueRange<i32> = sample_range_i32(24);
+pub const PCM32_RANGE: SampleValueRange<i32> = sample_range_i32(32);
+pub const FLOAT_RANGE: SampleValueRange<f32> = SampleValueRange::<f32>::new(-1.0, 1.0);
+
+// This can't work at compile time (yet) unfortunately
+// pub fn sample_range_generic<T: Sample + From<i64>>(bit_depth: u32) -> SampleValueRange<T> {
+//     let min_i64 = -(1_i64 << (bit_depth - 1));
+//     let max_i64 = (1_i64 << (bit_depth - 1)) - 1;
+//     SampleValueRange::new(T::from(min_i64), T::from(max_i64))
+// }
+
+const fn sample_range_i16(bit_depth: u32) -> SampleValueRange<i16> {
+    assert!(bit_depth <= 16);
+    SampleValueRange::new(1_i16 << (bit_depth - 1), ((1_u16 << (bit_depth - 1)) - 1) as i16)
 }
 
-// Iterator support
-impl<T: Sample> IntoIterator for Buffer<T> {
-    type Item = T;
-    type IntoIter = std::vec::IntoIter<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
-
-impl<'a, T: Sample> IntoIterator for &'a Buffer<T> {
-    type Item = &'a T;
-    type IntoIter = std::slice::Iter<'a, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
-    }
-}
-
-impl<'a, T: Sample> IntoIterator for &'a mut Buffer<T> {
-    type Item = &'a mut T;
-    type IntoIter = std::slice::IterMut<'a, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter_mut()
-    }
+const fn sample_range_i32(bit_depth: u32) -> SampleValueRange<i32> {
+    assert!(bit_depth <= 32);
+    SampleValueRange::new(1_i32 << (bit_depth - 1), ((1_u32 << (bit_depth - 1)) - 1) as i32)
 }

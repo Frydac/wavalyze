@@ -1,4 +1,4 @@
-use wavalyze::audio::buffer2::Buffer;
+use wavalyze::audio::buffer2::{Buffer};
 
 #[test]
 fn test_buffer() {
@@ -38,22 +38,6 @@ fn test_buffer_index_mut() {
     buffer[1] = 4.0;
     assert_eq!(buffer[0], 3.0);
     assert_eq!(buffer[1], 4.0);
-}
-
-#[test]
-fn test_buffer_into_iter() {
-    let mut buffer = Buffer::<f32>::new(44100, 32);
-    buffer.data.push(1.0);
-    buffer.data.push(2.0);
-    assert_eq!(buffer.into_iter().collect::<Vec<f32>>(), vec![1.0, 2.0]);
-}
-
-#[test]
-fn test_buffer_into_iter_ref() {
-    let mut buffer = Buffer::<f32>::new(44100, 32);
-    buffer.data.push(1.0);
-    buffer.data.push(2.0);
-    assert_eq!(buffer.into_iter().collect::<Vec<f32>>(), vec![1.0, 2.0]);
 }
 
 #[test]

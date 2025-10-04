@@ -27,13 +27,13 @@ impl View {
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // TODO: handle async interactions
 
 
         // NOTE: order of panels is important
-        self.top_panel_menu_bar(ctx);
-        self.side_panel(ctx);
+        self.ui_top_panel_menu_bar(ctx);
+        self.ui_side_panel(ctx);
 
         // TODO: place holder
         egui::TopBottomPanel::bottom("bottom_panel")
@@ -46,10 +46,10 @@ impl View {
             });
 
         // NOTE: central_panel should always come last
-        self.central_panel(ctx);
+        self.ui_central_panel(ctx);
     }
 
-    fn side_panel(&mut self, ctx: &egui::Context) {
+    fn ui_side_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("left_panel")
             .resizable(true)
             .default_width(150.0)
@@ -84,7 +84,7 @@ impl View {
             });
     }
 
-    fn top_panel_menu_bar(&mut self, ctx: &egui::Context) {
+    fn ui_top_panel_menu_bar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_panel_menu_bar").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
@@ -160,10 +160,10 @@ impl View {
         }
     }
 
-    fn central_panel(&mut self, ctx: &egui::Context) {
+    fn ui_central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui_top_panel_tool_bar(ui, ctx);
-            ruler::show(ui, &self.model);
+            ruler::ui(ui, &self.model);
             self.ui_tracks(ctx, ui);
         });
     }

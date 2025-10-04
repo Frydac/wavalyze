@@ -7,13 +7,13 @@ use crate::pos;
 /// Depending on the X-axis zoom level, i.e. in nr of samples per pixel, the data takes a different
 /// form.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ViewBuffer {
-    /// Use this when the `samples_per_pixel < 1`
+    /// Use this when the `pixels_per_sample < 1`
     SingleSamples(Vec<pos::Pos>),
-    /// Use this when the `samples_per_pixel in [1, 2)`
+    /// Use this when the `pixels_per_sample in [1, 2)`
     OneLine(Vec<pos::Pos>),
-    /// Use this when the `samples_per_pixel >= 2`
+    /// Use this when the `pixels_per_sample >= 2`
     /// TODO: make some min, max struct?
     LinePerPixelColumn(Vec<[pos::Pos; 2]>),
 }

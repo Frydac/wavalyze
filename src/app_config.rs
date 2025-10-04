@@ -1,11 +1,13 @@
 use clap::Parser;
 use std::str::FromStr;
 
+use crate::wav::read::ChIx;
+
 /// A file to be used in a diff operation, with optional channel and offset
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputAudioFile {
     pub path: String,
-    pub channel: Option<u32>,
+    pub channel: Option<ChIx>,
     pub offset: Option<u32>,
 }
 
@@ -36,7 +38,7 @@ impl FromStr for InputAudioFile {
                         if channel.is_some() {
                             return Err("channel specified more than once".to_string());
                         }
-                        channel = Some(value.parse::<u32>().map_err(|e| e.to_string())?);
+                        channel = Some(value.parse::<usize>().map_err(|e| e.to_string())?);
                     }
                     "offset" => {
                         if offset.is_some() {

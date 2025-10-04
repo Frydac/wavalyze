@@ -8,8 +8,11 @@ pub mod cross_correlation;
 pub mod db;
 pub mod rms;
 pub mod sample;
+pub mod sample2;
 pub mod sample_range;
+pub mod sample_range2;
 pub mod sample_rect;
+pub mod sample_rect2;
 pub mod util;
 
 // pub type SampleIx = i64;

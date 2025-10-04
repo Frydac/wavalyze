@@ -28,7 +28,7 @@ impl Default for App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.view.update(ctx, frame);
+        self.view.ui(ctx, frame);
     }
 }
 

@@ -4,6 +4,7 @@ use slotmap::{new_key_type, SlotMap};
 use crate::audio::buffer2::Buffer;
 
 // TODO: move somewhere, also name? ok I guess
+#[derive(Debug, PartialEq, Clone)]
 pub enum SampleBuffer {
     F32(Buffer<f32>),
     I32(Buffer<i32>),
@@ -42,7 +43,9 @@ impl SampleBuffer {
 new_key_type! { pub struct BufferId; }
 
 // BufferManager?
-#[derive(Default)]
+// probably better, we also need to manage the AudioThumbnails, which are closely related to the 
+// buffers and need access to them, especially if we want to lazy update them
+#[derive(Default, Debug)]
 pub struct BufferPool {
     buffers: SlotMap<BufferId, SampleBuffer>,
 }
