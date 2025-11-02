@@ -1,18 +1,21 @@
-use crate::{audio, wav::read::ChIx};
+use crate::{
+    audio::{self, manager::BufferId},
+    wav::read::ChIx,
+};
 use slotmap::new_key_type;
 use std::collections::HashMap;
 
 // Accociate a channel id with a buffer
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Channel {
     pub ch_ix: usize,
-    pub buffer_id: audio::buffer_pool::BufferId,
+    pub buffer_id: BufferId,
     pub channel_id: Option<audio::Id>,
 }
 
 pub type Channels = HashMap<ChIx, Channel>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct File {
     pub channels: Channels,
     pub sample_type: audio::SampleType,
@@ -21,6 +24,4 @@ pub struct File {
     pub layout: Option<audio::Layout>,
 }
 
-
 new_key_type! { pub struct FileId; }
-

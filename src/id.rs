@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use std::fmt;
+use std::marker::PhantomData;
 
 // Make a strong Id type for a given type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,7 +15,7 @@ impl<T> Id<T> {
             _phantom: PhantomData,
         }
     }
-    
+
     pub fn value(&self) -> u32 {
         self.value
     }
@@ -26,7 +26,6 @@ impl<T> fmt::Display for Id<T> {
         write!(f, "{}", self.value)
     }
 }
-
 
 #[test]
 fn test_id() {

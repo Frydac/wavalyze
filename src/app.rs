@@ -1,4 +1,4 @@
-use crate::{model, view, AppConfig};
+use crate::{log, model, view, AppConfig};
 use eframe::egui;
 
 #[derive(Debug)]
@@ -59,19 +59,12 @@ impl App {
             model.borrow().tracks.len()
         );
 
-        App {
+        let app = App {
             model: model.clone(),
             view: view::View::new(model),
             config,
-        }
+        };
+        log::init_tracing();
+        app
     }
 }
-
-// impl App {
-//     pub fn new() -> Self {
-//         Self {
-//             model: model::Model::new(),
-//             view: view::View::new(),
-//         }
-//     }
-// }

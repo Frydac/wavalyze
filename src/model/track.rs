@@ -10,7 +10,7 @@ use anyhow::ensure;
 use anyhow::Result;
 use itertools::Itertools;
 
-use super::SampleIx;
+use audio::SampleIx;
 
 // TODO: I think I need
 // pub type SharedBuffer = Rc<RefCell<Buffer<f32>>>;

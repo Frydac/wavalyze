@@ -30,7 +30,6 @@ impl View {
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // TODO: handle async interactions
 
-
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
         self.ui_side_panel(ctx);

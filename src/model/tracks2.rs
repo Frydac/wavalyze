@@ -1,6 +1,9 @@
 use slotmap::SlotMap;
 
-use crate::{model::track2::{Track, TrackId}, pos};
+use crate::{
+    model::track2::{Track, TrackId},
+    pos,
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct Tracks {
@@ -10,7 +13,6 @@ pub struct Tracks {
     hover_info: Option<TracksHoverInfo>,
     // selection
     // zoom
-
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]

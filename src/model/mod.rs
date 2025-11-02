@@ -1,9 +1,9 @@
 pub mod config;
+pub mod hover_info;
 pub mod track;
+pub mod track2;
 pub mod tracks;
 pub mod tracks2;
-pub mod track2;
-pub mod hover_info;
 pub mod view_buffer;
 
 use crate::wav::read::ChIx;
@@ -30,7 +30,8 @@ pub struct Model {
     files: Vec<Rc<wav::File>>,
 
     files2: Vec<wav::file2::File>,
-    buffers: audio::BufferPool,
+    // buffers: audio::BufferPool,
+    audio: audio::manager::AudioManager,
 }
 
 pub type SharedModel = Rc<RefCell<Model>>;
@@ -55,7 +56,7 @@ impl Model {
             }
 
             let name = format!("{} - ch {}", file.basename(), ch_ix);
-            let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix as usize, &name)?;
+            let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
             self.tracks.push(track);
         } else {
             // For each channel create a model::track
@@ -70,19 +71,25 @@ impl Model {
         // Store file
         self.files.push(Rc::new(file));
 
-
         // New buffer api
         let read_config = crate::wav::read::ReadConfig {
             filepath: path.to_string(),
             ch_ixs: ch_ix.is_some().then(|| vec![ch_ix.unwrap()]),
             sample_range: None,
         };
-        let file2 = crate::wav::read::read_to_file(read_config, &mut self.buffers)?;
-        dbg!(file2);
-
+        // let file2 = crate::wav::read::read_to_file(read_config, &mut self.buffers)?;
+        // dbg!(file2);
 
         Ok(())
     }
 }
 
-impl Model {}
+impl Model {
+    pub fn add_tracks_from_wav(&mut self, wav_read_config: wav::ReadConfig) -> Result<()> {
+        let file = self.audio.load_file(wav_read_config)?;
+
+
+
+        Ok(())
+    }
+}

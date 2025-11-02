@@ -32,6 +32,9 @@ slotmap = "1.0.7"
 strum = "0.27.2"
 strum_macros = "0.27.2"
 bitflags = "2.9.3"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
+
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -51,6 +54,7 @@ opt-level = 2
 
 [dev-dependencies]
 hound = "3.5.1"
+tracing-test = "0.2.5"
 
 
 [patch.crates-io]

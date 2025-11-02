@@ -5,7 +5,7 @@ use super::Id;
 // TODO: move to channel::Layout ?
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Layout: u64 {
         const NONE = 0;
         const LEFT = 1 << Id::Left as u64;

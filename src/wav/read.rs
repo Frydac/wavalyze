@@ -1,6 +1,7 @@
 use crate::audio;
-use crate::audio::buffer2::Buffer;
-use crate::audio::{BufferPool, SampleBuffer};
+use crate::audio::buffer2::{Buffer, BufferE};
+use crate::audio::manager::Buffers;
+// use crate::audio::{BufferPool, SampleBuffer};
 use crate::wav::file2::{Channel, File};
 
 use anyhow::{ensure, Result};
@@ -21,24 +22,24 @@ pub struct ReadConfig {
     pub sample_range: Option<Range<usize>>,
 }
 
-pub fn read_to_file(config: ReadConfig, buffer_pool: &mut BufferPool) -> Result<File> {
+pub fn read_to_file(config: ReadConfig, buffers: &mut Buffers) -> Result<File> {
     // open wav file with hound
     let mut reader = hound::WavReader::open(&config.filepath)
         .map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", &config.filepath, err))?;
     let spec = reader.spec();
     dbg!(spec);
 
-    // read samples into appropriate type
-    let buffers: HashMap<ChIx, SampleBuffer> = match spec.sample_format {
+    // read samples into appropriate type and associate with channel index
+    let chix_buffers: HashMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<f32>(&mut reader, config)?, SampleBuffer::F32),
+            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<f32>(&mut reader, config)?, BufferE::F32),
             _ => {
                 return Err(anyhow::anyhow!("Unsupported bit depth for float: {}", spec.bits_per_sample));
             }
         },
         hound::SampleFormat::Int => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 16 => convert_samples(read_to_buffers::<i16>(&mut reader, config)?, SampleBuffer::I16),
-            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<i32>(&mut reader, config)?, SampleBuffer::I32),
+            bit_depth if bit_depth <= 16 => convert_samples(read_to_buffers::<i16>(&mut reader, config)?, BufferE::I16),
+            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<i32>(&mut reader, config)?, BufferE::I32),
             _ => {
                 return Err(anyhow::anyhow!("Unsupported bit depth for int: {}", spec.bits_per_sample));
             }
@@ -47,14 +48,14 @@ pub fn read_to_file(config: ReadConfig, buffer_pool: &mut BufferPool) -> Result<
 
     let file = File {
         // move buffers to storage and store it's id in file
-        channels: buffers
+        channels: chix_buffers
             .into_iter()
             .map(|(ch_ix, buffer)| {
                 (
                     ch_ix,
                     Channel {
                         ch_ix,
-                        buffer_id: buffer_pool.add_buffer(buffer),
+                        buffer_id: buffers.insert(buffer),
                         channel_id: None,
                     },
                 )
@@ -65,11 +66,11 @@ pub fn read_to_file(config: ReadConfig, buffer_pool: &mut BufferPool) -> Result<
         bit_depth: spec.bits_per_sample,
         sample_type: spec.sample_format.into(),
     };
-    return Ok(file);
+    Ok(file)
 }
 
 // TODO: maybe use Vec<(ChIx, Vec<T>)> instead of HashMap<ChIx, Vec<T>>?
-fn convert_samples<T>(samples: HashMap<ChIx, T>, converter: impl Fn(T) -> SampleBuffer) -> HashMap<ChIx, SampleBuffer> {
+fn convert_samples<T>(samples: HashMap<ChIx, T>, converter: impl Fn(T) -> BufferE) -> HashMap<ChIx, BufferE> {
     samples.into_iter().map(|(index, sample)| (index, converter(sample))).collect()
 }
 

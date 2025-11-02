@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::audio::{sample2::Sample, sample_range2::SampleValueRange};
+use crate::audio::sample2::Sample;
 
 /// One channel of audio samples.  
 /// Could be used for storing interleaved samples, but not yet used like that? Probably want some
@@ -10,6 +10,13 @@ pub struct Buffer<T: Sample> {
     pub sample_rate: u32,
     pub bit_depth: u16,
     pub data: Vec<T>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum BufferE {
+    F32(Buffer<f32>),
+    I32(Buffer<i32>),
+    I16(Buffer<i16>),
 }
 
 /// Constructors
@@ -101,15 +108,15 @@ pub enum SampleType {
     Int(u32),
 }
 
-pub const PCM16_FORMAT: SampleType = SampleType::Int(16);
-pub const PCM24_FORMAT: SampleType = SampleType::Int(24);
-pub const PCM32_FORMAT: SampleType = SampleType::Int(32);
-pub const FLOAT_FORMAT: SampleType = SampleType::Float;
+// pub const PCM16_FORMAT: SampleType = SampleType::Int(16);
+// pub const PCM24_FORMAT: SampleType = SampleType::Int(24);
+// pub const PCM32_FORMAT: SampleType = SampleType::Int(32);
+// pub const FLOAT_FORMAT: SampleType = SampleType::Float;
 
-pub const PCM16_RANGE: SampleValueRange<i16> = sample_range_i16(16);
-pub const PCM24_RANGE: SampleValueRange<i32> = sample_range_i32(24);
-pub const PCM32_RANGE: SampleValueRange<i32> = sample_range_i32(32);
-pub const FLOAT_RANGE: SampleValueRange<f32> = SampleValueRange::<f32>::new(-1.0, 1.0);
+// pub const PCM16_RANGE: SampleValueRange<i16> = sample_range_i16(16);
+// pub const PCM24_RANGE: SampleValueRange<i32> = sample_range_i32(24);
+// pub const PCM32_RANGE: SampleValueRange<i32> = sample_range_i32(32);
+// pub const FLOAT_RANGE: SampleValueRange<f32> = SampleValueRange::<f32>{min: -1.0, max: 1.0};
 
 // This can't work at compile time (yet) unfortunately
 // pub fn sample_range_generic<T: Sample + From<i64>>(bit_depth: u32) -> SampleValueRange<T> {
@@ -117,13 +124,3 @@ pub const FLOAT_RANGE: SampleValueRange<f32> = SampleValueRange::<f32>::new(-1.0
 //     let max_i64 = (1_i64 << (bit_depth - 1)) - 1;
 //     SampleValueRange::new(T::from(min_i64), T::from(max_i64))
 // }
-
-const fn sample_range_i16(bit_depth: u32) -> SampleValueRange<i16> {
-    assert!(bit_depth <= 16);
-    SampleValueRange::new(1_i16 << (bit_depth - 1), ((1_u16 << (bit_depth - 1)) - 1) as i16)
-}
-
-const fn sample_range_i32(bit_depth: u32) -> SampleValueRange<i32> {
-    assert!(bit_depth <= 32);
-    SampleValueRange::new(1_i32 << (bit_depth - 1), ((1_u32 << (bit_depth - 1)) - 1) as i32)
-}

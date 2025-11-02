@@ -1,58 +1,93 @@
+use anyhow::{Context, Result};
 use slotmap::new_key_type;
 
-use crate::{audio::{buffer_pool::BufferId}, model::{self, hover_info}, rect::Rect};
+use crate::{
+    audio::{buffer_pool::BufferId, sample_range2::SampleFractionalIx, sample_rect2::SampleRectEnum, BufferPool},
+    model::{self, hover_info},
+    rect::Rect,
+};
 
 new_key_type! { pub struct TrackId; }
+
+/// Represents a view on an audio buffer in the context of a track
+/// A track could contain multiple TrackItems
+/// TODO: we probaly want an AudioThumbnail soon
+/// * also with id and pool
+/// * some abstraction managing both buffers and thumbnails
+///   * fn get_sample_view_buffer(BufferId, SampleFractionalIxRange, ViewRect) -> ViewBuffer
+///     * ViewBuffer is an enum where depending on zoom level we have single samples
+///       or min max per pixel. So at most ViewRect.width() nr of elements
+///
+#[derive(Debug, PartialEq, Clone)]
+pub struct TrackItem {
+    buffer_id: BufferId,
+
+    /// Rectangular view over the buffer's samples
+    pub sample_rect: SampleRectEnum,
+
+    /// For positioning wrt the 'absolute' sample range of the track
+    pub sample_ix_offset: SampleFractionalIx,
+}
+
+impl TrackItem {
+    pub fn new(buffer_id: BufferId, sample_rect: SampleRectEnum) -> Self {
+        Self {
+            buffer_id,
+            sample_rect,
+            sample_ix_offset: 0.0,
+        }
+    }
+}
+
+// pub enum SampleViewBuffer<T: Sample> {
+//     Single(Buffer<T>),
+// }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Track {
     // pub id: Option<TrackId>,
-    pub track_id: TrackId, // Id of this track in storage, mabye better Optional, lets try without
-                           // for now
-    /// The pixel rectangle with absolute screen coordinates that should display self.sample_rect of
-    /// samples
+    /// Id of this track in storage, mabye better Optional, lets try without option for now
+    pub track_id: TrackId,
+
+    /// The pixel rectangle in absolute screen coordinates for the track
+    /// We default to an empty rectangle until the view updates it
     pub screen_rect: Rect,
-
-    // TODO: we might display multiple buffers
-    // * need mutliple sample_rects
-    // * render into one view_rect? Multiple maybe allow for moving 1 without recomputing the other
-    buffer_id: BufferId, // SampleBuffer Id
-
-    /// The rectangle of samples indices that are currently visible,
-    /// indices into self.buffer.
-    // TODO: make sample_rect like SampleBuffer
-    // pub sample_rect: audio::SampleRect,
-
-    // x range is pixel width starting at 0.0
-    // y range is sample_rect sample range coordinates I think
-    // NOTE: not really needed, we can just use screen_rect and 'normalize' it, they should be very similar
-    pub view_rect: Rect,
-
 
     /// Zoom level in x direction
     ///
     /// * Doesn't change when updating the screen_rect to keep the zoom stable
     pub samples_per_pixel: Option<f32>,
 
+    // x range is pixel width starting at 0.0
+    // y range is sample_rect sample range coordinates I think
+    // NOTE: not really needed, we can just use screen_rect and 'normalize' it, they should be very similar
+    // pub view_rect: Rect,
     /// Contains all the samples as pixel positions relative to top_left (0,0), currently to be
     /// rendered by the track::View
     /// The final transformation to absolute screen coordinates is done in the view::Track
     view_buffer: model::ViewBuffer,
 
+    /// One item for now
+    track_item: TrackItem,
+
     pub hover_info: Option<hover_info::HoverInfo>,
 }
 
 impl Track {
-    pub fn new(track_id: TrackId, buffer_id: BufferId) -> Self {
-        Self {
+    pub fn new(track_id: TrackId, buffer_id: BufferId, buffer_pool: &mut BufferPool) -> Result<Self> {
+        let buffer = buffer_pool
+            .get_buffer(buffer_id)
+            .with_context(|| format!("Buffer {:?} not found in pool", buffer_id))?;
+
+        Ok(Self {
             track_id,
-            buffer_id,
             screen_rect: Rect::default(),
-            // sample_rect: audio::SampleRect::default(),
-            view_rect: Rect::default(),
+            // sample_rect: SampleRectEnum::from_buffer(buffer),
+            // view_rect: Rect::default(),
             samples_per_pixel: None,
             view_buffer: model::ViewBuffer::SingleSamples(vec![]),
+            track_item: TrackItem::new(buffer_id, SampleRectEnum::from_buffer(buffer)),
             hover_info: None,
-        }
+        })
     }
 }

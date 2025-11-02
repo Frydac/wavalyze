@@ -3,7 +3,6 @@ use crate::{
     sample::SampleType,
 };
 
-
 // Create a 'test' audio::Buffer with a sine wave per channel
 pub fn buffer_sine_float(nr_channels: usize, nr_samples: usize, amplitude: f32, sample_rate: u32) -> Buffer<f32> {
     let mut ab = BufferBuilder::new()

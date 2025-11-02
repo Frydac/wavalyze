@@ -1,7 +1,6 @@
-use wavalyze::wav::read::{ReadConfig,read_to_file};
-use wavalyze::audio::BufferPool;
-use wavalyze::audio::SampleBuffer;
-use hound;
+use wavalyze::audio::buffer2::BufferE;
+use wavalyze::audio::manager::Buffers;
+use wavalyze::wav::read::{read_to_file, ReadConfig};
 
 // #[test]
 // fn test_read_to_file() {
@@ -18,11 +17,7 @@ use hound;
 //     let _buffer_id_i16 = file.channels[0].buffer;
 // }
 
-fn setup_test_wav_file<S: hound::Sample + Copy>(
-    spec: hound::WavSpec,
-    samples: &[S],
-    test_name: &str,
-) -> String {
+fn setup_test_wav_file<S: hound::Sample + Copy>(spec: hound::WavSpec, samples: &[S], test_name: &str) -> String {
     let test_output_dir = "target/test_output";
     std::fs::create_dir_all(test_output_dir).unwrap();
     let file_path = format!(
@@ -60,15 +55,15 @@ fn test_read_options_i16() {
         ch_ixs: Some(vec![0, 2]),
         sample_range: Some(1..3),
     };
-    let mut buffer_pool = BufferPool::new();
-    let file = read_to_file(config, &mut buffer_pool).unwrap();
+    let mut buffers = Buffers::default();
+    let file = read_to_file(config, &mut buffers).unwrap();
 
     assert_eq!(file.sample_rate, spec.sample_rate);
     assert_eq!(file.bit_depth, spec.bits_per_sample);
     assert_eq!(file.channels.len(), 2);
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let SampleBuffer::I16(buf) = buffer_pool.get_buffer(ch0.buffer_id).unwrap() {
+    if let BufferE::I16(buf) = buffers.get(ch0.buffer_id).unwrap() {
         assert_eq!(buf.data, &[4, 7]);
         assert_eq!(buf.sample_rate, spec.sample_rate);
         assert_eq!(buf.bit_depth, spec.bits_per_sample);
@@ -77,7 +72,7 @@ fn test_read_options_i16() {
     }
 
     let ch2 = file.channels.get(&2).unwrap();
-    if let SampleBuffer::I16(buf) = buffer_pool.get_buffer(ch2.buffer_id).unwrap() {
+    if let BufferE::I16(buf) = buffers.get(ch2.buffer_id).unwrap() {
         assert_eq!(buf.data, &[6, 9]);
         assert_eq!(buf.sample_rate, spec.sample_rate);
         assert_eq!(buf.bit_depth, spec.bits_per_sample);
@@ -106,11 +101,11 @@ fn test_read_options_i24() {
         ch_ixs: Some(vec![0, 2]),
         sample_range: Some(1..3),
     };
-    let mut buffer_pool = BufferPool::new();
-    let file = read_to_file(config, &mut buffer_pool).unwrap();
+    let mut buffers = Buffers::default();
+    let file = read_to_file(config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let SampleBuffer::I32(buf) = buffer_pool.get_buffer(ch0.buffer_id).unwrap() {
+    if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap() {
         assert_eq!(buf.data, &[4000, 7000]);
     } else {
         panic!("Incorrect buffer type");
@@ -133,11 +128,11 @@ fn test_read_options_i32() {
         ch_ixs: Some(vec![0, 2]),
         sample_range: Some(1..3),
     };
-    let mut buffer_pool = BufferPool::new();
-    let file = read_to_file(config, &mut buffer_pool).unwrap();
+    let mut buffers = Buffers::default();
+    let file = read_to_file(config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let SampleBuffer::I32(buf) = buffer_pool.get_buffer(ch0.buffer_id).unwrap() {
+    if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap() {
         assert_eq!(buf.data, &[400000, 700000]);
     } else {
         panic!("Incorrect buffer type");
@@ -160,11 +155,11 @@ fn test_read_options_f32() {
         ch_ixs: Some(vec![0, 2]),
         sample_range: Some(1..3),
     };
-    let mut buffer_pool = BufferPool::new();
-    let file = read_to_file(config, &mut buffer_pool).unwrap();
+    let mut buffers = Buffers::default();
+    let file = read_to_file(config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let SampleBuffer::F32(buf) = buffer_pool.get_buffer(ch0.buffer_id).unwrap() {
+    if let BufferE::F32(buf) = buffers.get(ch0.buffer_id).unwrap() {
         assert_eq!(buf.data, &[0.4, 0.7]);
     } else {
         panic!("Incorrect buffer type");

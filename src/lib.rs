@@ -8,6 +8,8 @@ pub mod app;
 pub mod app_config;
 pub mod audio;
 pub mod generator;
+pub mod id;
+pub mod log;
 pub mod math;
 pub mod model;
 pub mod pos;
@@ -16,7 +18,6 @@ pub mod sample;
 pub mod util;
 pub mod view;
 pub mod wav;
-pub mod id;
 
 // Code used only for test builds/configs
 #[cfg(test)]

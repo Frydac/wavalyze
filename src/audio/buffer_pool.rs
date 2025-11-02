@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use slotmap::{new_key_type, SlotMap};
 use crate::audio::buffer2::Buffer;
+use slotmap::{new_key_type, SlotMap};
 
 // TODO: move somewhere, also name? ok I guess
 #[derive(Debug, PartialEq, Clone)]
@@ -43,7 +43,7 @@ impl SampleBuffer {
 new_key_type! { pub struct BufferId; }
 
 // BufferManager?
-// probably better, we also need to manage the AudioThumbnails, which are closely related to the 
+// probably better, we also need to manage the AudioThumbnails, which are closely related to the
 // buffers and need access to them, especially if we want to lazy update them
 #[derive(Default, Debug)]
 pub struct BufferPool {
