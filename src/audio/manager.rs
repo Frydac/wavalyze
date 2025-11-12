@@ -22,8 +22,8 @@ pub type Thumbnails = SlotMap<BufferId, ThumbnailE>;
 /// Manages audio buffers and their associated thumbnails
 #[derive(Debug, Clone, Default)]
 pub struct AudioManager {
-    buffers: Buffers,
-    thumbnails: Thumbnails,
+    pub buffers: Buffers,
+    pub thumbnails: Thumbnails,
 }
 
 impl AudioManager {

@@ -1,5 +1,6 @@
 use wavalyze::audio::buffer2::BufferE;
 use wavalyze::audio::manager::Buffers;
+use wavalyze::audio::sample_range2::SampleIxRange;
 use wavalyze::wav::read::{read_to_file, ReadConfig};
 
 // #[test]
@@ -53,7 +54,7 @@ fn test_read_options_i16() {
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(1..3),
+        sample_range: Some(SampleIxRange(1..3)),
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();
@@ -99,7 +100,7 @@ fn test_read_options_i24() {
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(1..3),
+        sample_range: Some(SampleIxRange(1..3)),
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();
@@ -126,7 +127,7 @@ fn test_read_options_i32() {
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(1..3),
+        sample_range: Some(SampleIxRange(1..3)),
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();
@@ -153,7 +154,7 @@ fn test_read_options_f32() {
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(1..3),
+        sample_range: Some(SampleIxRange(1..3)),
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();

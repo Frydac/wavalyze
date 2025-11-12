@@ -88,8 +88,6 @@ impl Model {
     pub fn add_tracks_from_wav(&mut self, wav_read_config: wav::ReadConfig) -> Result<()> {
         let file = self.audio.load_file(wav_read_config)?;
 
-
-
         Ok(())
     }
 }

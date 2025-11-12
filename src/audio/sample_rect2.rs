@@ -1,4 +1,4 @@
-use crate::audio::{self, sample, sample2::Sample, sample_range2::SampleFractionalIxRange};
+use crate::audio::{self, buffer2::BufferE, sample, sample2::Sample, sample_range2::SampleFractionalIxRange};
 
 ///
 /// Rectangle over a buffer with audio samples
@@ -29,18 +29,26 @@ impl<T: Sample> SampleRect<T> {
 
 /// Dynamically typed sample rect
 #[derive(Debug, Clone, PartialEq)]
-pub enum SampleRectEnum {
+pub enum SampleRectE {
     F32(SampleRect<f32>),
     I32(SampleRect<i32>),
     I16(SampleRect<i16>),
 }
 
-impl SampleRectEnum {
-    pub fn from_buffer(buffer: &audio::SampleBuffer) -> Self {
+impl SampleRectE {
+    pub fn from_sample_buffer(buffer: &audio::SampleBuffer) -> Self {
         match buffer {
-            audio::SampleBuffer::F32(buffer) => SampleRectEnum::F32(SampleRect::<f32>::from_buffer(buffer)),
-            audio::SampleBuffer::I32(buffer) => SampleRectEnum::I32(SampleRect::<i32>::from_buffer(buffer)),
-            audio::SampleBuffer::I16(buffer) => SampleRectEnum::I16(SampleRect::<i16>::from_buffer(buffer)),
+            audio::SampleBuffer::F32(buffer) => SampleRectE::F32(SampleRect::<f32>::from_buffer(buffer)),
+            audio::SampleBuffer::I32(buffer) => SampleRectE::I32(SampleRect::<i32>::from_buffer(buffer)),
+            audio::SampleBuffer::I16(buffer) => SampleRectE::I16(SampleRect::<i16>::from_buffer(buffer)),
+        }
+    }
+
+    pub fn from_buffer(buffer: &BufferE) -> Self {
+        match buffer {
+            BufferE::F32(buffer) => SampleRectE::F32(SampleRect::<f32>::from_buffer(buffer)),
+            BufferE::I32(buffer) => SampleRectE::I32(SampleRect::<i32>::from_buffer(buffer)),
+            BufferE::I16(buffer) => SampleRectE::I16(SampleRect::<i16>::from_buffer(buffer)),
         }
     }
 }

@@ -1,3 +1,7 @@
+pub mod diff;
+pub mod fft;
+pub mod single;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 

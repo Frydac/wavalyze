@@ -1,9 +1,15 @@
-use anyhow::{Context, Result};
+use crate::audio;
+use anyhow::Result;
 use slotmap::new_key_type;
 
 use crate::{
-    audio::{buffer_pool::BufferId, sample_range2::SampleFractionalIx, sample_rect2::SampleRectEnum, BufferPool},
-    model::{self, hover_info},
+    audio::{
+        manager::{AudioManager, BufferId},
+        sample_range2::SampleFractionalIx,
+        sample_rect2::SampleRectE,
+        BufferPool,
+    },
+    model::{self, hover_info, track::single::Single},
     rect::Rect,
 };
 
@@ -23,19 +29,22 @@ pub struct TrackItem {
     buffer_id: BufferId,
 
     /// Rectangular view over the buffer's samples
-    pub sample_rect: SampleRectEnum,
+    pub sample_rect: SampleRectE,
+    pub sample_view: audio::sample::View,
 
     /// For positioning wrt the 'absolute' sample range of the track
     pub sample_ix_offset: SampleFractionalIx,
 }
 
 impl TrackItem {
-    pub fn new(buffer_id: BufferId, sample_rect: SampleRectEnum) -> Self {
-        Self {
-            buffer_id,
-            sample_rect,
-            sample_ix_offset: 0.0,
-        }
+    // create sample_rect/view that encompasses the whole buffer
+    pub fn new(buffer_id: BufferId) -> Self {
+        // Self {
+        //     buffer_id,
+        //     sample_rect,
+        //     sample_ix_offset: 0.0,
+        // }
+        todo!()
     }
 }
 
@@ -50,8 +59,8 @@ pub struct Track {
     pub track_id: TrackId,
 
     /// The pixel rectangle in absolute screen coordinates for the track
-    /// We default to an empty rectangle until the view updates it
-    pub screen_rect: Rect,
+    /// Is updated by/for the view when displayed
+    pub screen_rect: Option<Rect>,
 
     /// Zoom level in x direction
     ///
@@ -65,29 +74,38 @@ pub struct Track {
     /// Contains all the samples as pixel positions relative to top_left (0,0), currently to be
     /// rendered by the track::View
     /// The final transformation to absolute screen coordinates is done in the view::Track
-    view_buffer: model::ViewBuffer,
+    view_buffer: Option<model::ViewBuffer>,
 
     /// One item for now
     track_item: TrackItem,
+
+    pub single: Single,
 
     pub hover_info: Option<hover_info::HoverInfo>,
 }
 
 impl Track {
-    pub fn new(track_id: TrackId, buffer_id: BufferId, buffer_pool: &mut BufferPool) -> Result<Self> {
-        let buffer = buffer_pool
-            .get_buffer(buffer_id)
-            .with_context(|| format!("Buffer {:?} not found in pool", buffer_id))?;
+    pub fn new2(track_id: TrackId, buffer_id: BufferId, audio: &mut AudioManager) -> Result<Self> {
+        // let buffer = audio
 
-        Ok(Self {
-            track_id,
-            screen_rect: Rect::default(),
-            // sample_rect: SampleRectEnum::from_buffer(buffer),
-            // view_rect: Rect::default(),
-            samples_per_pixel: None,
-            view_buffer: model::ViewBuffer::SingleSamples(vec![]),
-            track_item: TrackItem::new(buffer_id, SampleRectEnum::from_buffer(buffer)),
-            hover_info: None,
-        })
+        todo!()
+    }
+    pub fn new(track_id: TrackId, buffer_id: BufferId, buffer_pool: &mut BufferPool) -> Result<Self> {
+        // let buffer = buffer_pool
+        //     .get_buffer(buffer_id)
+        //     .with_context(|| format!("Buffer {:?} not found in pool", buffer_id))?;
+
+        // Ok(Self {
+        //     track_id,
+        //     screen_rect: Rect::default(),
+        //     // sample_rect: SampleRectEnum::from_buffer(buffer),
+        //     // view_rect: Rect::default(),
+        //     samples_per_pixel: None,
+        //     view_buffer: model::ViewBuffer::SingleSamples(vec![]),
+        //     track_item: TrackItem::new(buffer_id, SampleRectEnum::from_buffer(buffer)),
+        //     single: Single::new(buffer_id),
+        //     hover_info: None,
+        // })
+        todo!()
     }
 }

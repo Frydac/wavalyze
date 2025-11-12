@@ -25,6 +25,16 @@ impl std::ops::Deref for SampleIxRange {
     }
 }
 
+impl SampleIxRange {
+    pub fn len(&self) -> usize {
+        (self.end - self.start) as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 /// Fractional index of an audio sample is useful for zooming/moving at sub-sample resolution
 pub type SampleFractionalIx = f64;
 

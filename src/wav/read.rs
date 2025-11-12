@@ -1,13 +1,13 @@
 use crate::audio;
 use crate::audio::buffer2::{Buffer, BufferE};
 use crate::audio::manager::Buffers;
+use crate::audio::sample_range2::SampleIxRange;
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::wav::file2::{Channel, File};
 
 use anyhow::{ensure, Result};
 use hound;
 use std::collections::HashMap;
-use std::ops::Range;
 
 pub type ChIx = usize; // Channel index
 
@@ -19,7 +19,7 @@ pub struct ReadConfig {
     pub ch_ixs: Option<Vec<ChIx>>,
 
     /// Range of samples indices per channel to read, default: all
-    pub sample_range: Option<Range<usize>>,
+    pub sample_range: Option<SampleIxRange>,
 }
 
 pub fn read_to_file(config: ReadConfig, buffers: &mut Buffers) -> Result<File> {
@@ -29,6 +29,7 @@ pub fn read_to_file(config: ReadConfig, buffers: &mut Buffers) -> Result<File> {
     let spec = reader.spec();
     dbg!(spec);
 
+    // TODO: can probably immediately collect into HashMap<ChIx, Channel>, woudl it be better?
     // read samples into appropriate type and associate with channel index
     let chix_buffers: HashMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
@@ -83,9 +84,10 @@ where
     S: crate::audio::sample2::Sample + hound::Sample,
 {
     let nr_channels = reader.spec().channels as usize;
-    let sample_range = config.sample_range.unwrap_or(0..reader.duration() as usize);
+    let reader_duration = reader.duration() as i64;
+    let sample_range = config.sample_range.unwrap_or(SampleIxRange(0..reader_duration));
     anyhow::ensure!(
-        sample_range.end <= reader.duration() as usize,
+        sample_range.end <= reader_duration,
         "sample range end {} is larger than file duration {}",
         sample_range.end,
         reader.duration()

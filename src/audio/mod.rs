@@ -26,6 +26,14 @@ pub use audio::buffer::{Buffer, BufferBuilder};
 // pub use audio::channel::Channel;
 pub use audio::buffer_pool::{BufferPool, SampleBuffer};
 pub use audio::channel::{Channel, Id, Layout};
+pub use audio::manager::BufferId;
 pub use audio::sample::{Sample, SampleType};
 pub use audio::sample_range::{SampleIxRange, SampleValueRange};
 pub use audio::sample_rect::SampleRect;
+
+pub use audio::sample_rect2::SampleRectE;
+
+// pub use audio::sample_range2::SampleIx;
+// pub use audio::sample_range2::SampleIxRange;
+// pub use audio::sample_range2::SampleFractionalIx
+// pub use audio::sample_range2::SampleFractionalIxRange;
