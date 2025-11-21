@@ -2,6 +2,7 @@ pub mod range;
 pub mod view;
 
 pub use range::FracSampleIx;
+pub use range::FracIxRange;
 pub use range::IxRange;
 pub use range::SampleIx;
 pub use range::ValRange;

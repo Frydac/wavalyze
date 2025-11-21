@@ -10,4 +10,5 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
             .range(0.1..=10.0)
             .prefix("Zoom X Factor: "),
     );
+    ui.checkbox(&mut config.show_hover_info, "Show Hover Info");
 }

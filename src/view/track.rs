@@ -81,8 +81,8 @@ impl Track {
 
             // Draw/interact all the things
             self.ui_start_end(ui, model);
-            self.ui_samples(ui, model);
             self.ui_middle_line(ui, model);
+            self.ui_samples(ui, model);
             self.mouse_hover_info.ui(ui, model, self.id);
             // self.mouse_select.ui(ui);
         });
@@ -143,7 +143,7 @@ impl Track {
         let painter = ui.painter_at(screen_rect);
 
         match model_track.view_buffer() {
-            model::ViewBuffer::SingleSamples(buffer_pos) => {
+            model::ViewBufferE::SingleSamples(buffer_pos) => {
                 for (ix, pos_sample) in buffer_pos.iter().enumerate() {
                     let pos_sample: egui::Pos2 = pos_sample.into();
                     let pos_sample_mid = egui::pos2(pos_sample.x, 0.0);
@@ -156,7 +156,7 @@ impl Track {
                     painter.circle_filled(pos_sample_screen, circle_size, circle_color);
                 }
             }
-            model::ViewBuffer::OneLine(buffer_pos) => {
+            model::ViewBufferE::OneLine(buffer_pos) => {
                 let screen_pos: Vec<Pos2> = buffer_pos
                     .iter()
                     .map(|pos_sample| {
@@ -169,7 +169,7 @@ impl Track {
                 // painter.add(egui::Shape::line(screen_pos, stroke_line));
                 painter.line(screen_pos, stroke_line);
             }
-            model::ViewBuffer::LinePerPixelColumn(buffer_pos_min_max) => {
+            model::ViewBufferE::LinePerPixelColumn(buffer_pos_min_max) => {
                 let mut prev_max_y = f32::MAX;
                 let mut prev_min_y = f32::MIN;
                 for [min, max] in buffer_pos_min_max {
@@ -178,7 +178,15 @@ impl Track {
 
                     // NOTE: swapping min and max, as the Y-axis is inverted in egui
                     let max_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(min));
-                    let min_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(max));
+                    let mut min_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(max));
+
+                    // We ar drawing a line parallel the y-axis, it needs to be at least 1 pixel,
+                    // and it seems like it doesn't draw the start pixel here? (TODO: investigate)
+                    // At least this makes it so that the 'sample line' coincides with the midline
+                    // when the sample values are zero.
+                    if (max_screen.y - min_screen.y) < 1.0 {
+                        min_screen.y = max_screen.y - 1.0;
+                    }
 
                     // draw line between samples on the same pixel column
                     painter.line_segment([min_screen, max_screen], stroke_line);
@@ -426,7 +434,10 @@ impl MouseHover {
                 if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
                     self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
                 }
-                self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
+
+                if model.config.show_hover_info { 
+                    self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
+                }
             }
         }
     }

@@ -3,6 +3,13 @@ use crate::math::round::round_up_to_power_of_10;
 use crate::model;
 use egui;
 
+// TODO: 
+// * document/comments how it works
+// * refactor to reduce duplication and increase readability
+// * ideally tick numbers aren't drawn on top of each other
+// * some variables should probably depend on the lenght of the tick numbers
+//   * maybe better to use some kind of scientific notation?
+
 pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
     let height = 40.0;
     let width = ui.available_width();
@@ -79,7 +86,10 @@ pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
 
                             if sample_width != 0.0 {
                                 let min_nr_samples_per_tick = sample_width / max_nr_ticks;
-                                let nr_samples_per_tick = round_up_to_power_of_10(min_nr_samples_per_tick) as u64;
+                                let mut nr_samples_per_tick = round_up_to_power_of_10(min_nr_samples_per_tick) as u64;
+                                if nr_samples_per_tick == 0 {
+                                    nr_samples_per_tick = 1;
+                                }
                                 let start_sample_ix = track.sample_rect.ix_rng.start() as u64 / nr_samples_per_tick * nr_samples_per_tick;
                                 let mut cur_sample_ix = start_sample_ix as u64;
 

@@ -60,7 +60,7 @@ pub struct Track {
     /// Contains all the samples as pixel positions relative to top_left (0,0), currently to be
     /// rendered by the track::View
     /// The final transformation to absolute screen coordinates is done in the view::Track
-    view_buffer: model::ViewBuffer,
+    view_buffer: model::ViewBufferE,
 
     hover_info: Option<HoverInfo>,
 
@@ -163,7 +163,7 @@ impl Track {
             channel_ix,
             name: name.to_string(),
             view_rect: rect::Rect::new(0.0, 1.5, 0.0, -1.5),
-            view_buffer: model::ViewBuffer::SingleSamples(vec![]),
+            view_buffer: model::ViewBufferE::SingleSamples(vec![]),
 
             screen_rect: rect::Rect::default(),
             samples_per_pixel: None,
@@ -241,7 +241,7 @@ impl Track {
         self.hover_info.as_ref()
     }
 
-    pub fn view_buffer(&self) -> &model::ViewBuffer {
+    pub fn view_buffer(&self) -> &model::ViewBufferE {
         &self.view_buffer
     }
 
@@ -387,12 +387,12 @@ impl Track {
                 // we have at least 2 pixels width for each sample: draw each sample as a dot and a
                 // line to the midline
                 // Just collect the positions, the view will know who to draw them
-                model::ViewBuffer::SingleSamples(sample_pos_iter.collect())
+                model::ViewBufferE::SingleSamples(sample_pos_iter.collect())
             }
             sp if sp >= 2.0 => {
                 // we have at least two samples per pixel: draw a line for each pixel column
                 // between the min and max y values of all the samples in that pixel
-                model::ViewBuffer::LinePerPixelColumn(
+                model::ViewBufferE::LinePerPixelColumn(
                     sample_pos_iter
                         .chunk_by(|&pos| pos.x)
                         .into_iter()
@@ -407,7 +407,7 @@ impl Track {
             }
 
             // In the other case we will draw a contiguous line through all the samples values.
-            _ => model::ViewBuffer::OneLine(sample_pos_iter.collect()),
+            _ => model::ViewBufferE::OneLine(sample_pos_iter.collect()),
         };
 
         // view_rect:

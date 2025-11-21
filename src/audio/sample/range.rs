@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::audio::sample2::Sample;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Default)]
 pub struct ValRange<T: Sample> {
     pub min: T,
     pub max: T,
@@ -45,7 +45,7 @@ impl From<Range<SampleIx>> for IxRange {
 pub type FracSampleIx = f64;
 
 /// Half open range of sample indices `[start, end)`
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub struct FracIxRange {
     pub start: FracSampleIx,
     pub end: FracSampleIx,

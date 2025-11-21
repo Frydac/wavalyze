@@ -11,7 +11,7 @@ use crate::{audio, model};
 pub use model::config::Config;
 pub use model::track::Track;
 pub use model::tracks::Tracks;
-pub use model::view_buffer::ViewBuffer;
+pub use model::view_buffer::ViewBufferE;
 
 // NOTE: move all under this?
 
@@ -87,6 +87,11 @@ impl Model {
 impl Model {
     pub fn add_tracks_from_wav(&mut self, wav_read_config: wav::ReadConfig) -> Result<()> {
         let file = self.audio.load_file(wav_read_config)?;
+        // let basename = file.path.file_name().expect().to_str().unwrap();
+        // for (ch_ix, ch) in file.channels.iter().enumerate() {
+        //     let name = format!("{} - ch {}", file.path.(), ch_ix);
+        //     dbg!(name);
+        // }
 
         Ok(())
     }
