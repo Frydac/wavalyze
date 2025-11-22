@@ -40,7 +40,7 @@ impl<T: Sample> LevelData<T> {
                 min_max.min = min_max.min.min(sample);
                 min_max.max = min_max.max.max(sample);
             }
-            result.data.push(min_max.clone());
+            result.data.push(min_max);
         }
         result
     }
@@ -59,7 +59,7 @@ impl<T: Sample> LevelData<T> {
                 min_max.min = min_max.min.min(val_range.min);
                 min_max.max = min_max.max.max(val_range.max);
             }
-            result.data.push(min_max.clone());
+            result.data.push(min_max);
         }
         result
     }

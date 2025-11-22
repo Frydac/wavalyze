@@ -3,7 +3,7 @@ use crate::math::round::round_up_to_power_of_10;
 use crate::model;
 use egui;
 
-// TODO: 
+// TODO:
 // * document/comments how it works
 // * refactor to reduce duplication and increase readability
 // * ideally tick numbers aren't drawn on top of each other

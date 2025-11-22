@@ -1,8 +1,12 @@
 use crate::{
     audio::{
-        self, manager::{AudioManager, BufferId}, sample_range2::SampleFractionalIx, sample_rect2::SampleRectE
+        self,
+        manager::{AudioManager, BufferId},
+        sample_range2::SampleFractionalIx,
+        sample_rect2::SampleRectE,
     },
-    model, rect::Rect,
+    model,
+    rect::Rect,
 };
 use anyhow::{anyhow, Result};
 
@@ -22,7 +26,7 @@ impl Single {
         Ok(Self {
             view_buffer: model::ViewBufferE::SingleSamples(vec![]),
             screen_rect: None,
-            item: Item::new(buffer_id)
+            item: Item::new(buffer_id),
         })
     }
 
@@ -52,7 +56,7 @@ impl Item {
     pub fn new(buffer_id: BufferId) -> Self {
         Self {
             buffer_id,
-            sample_rect : None,
+            sample_rect: None,
             sample_view: None,
             sample_ix_offset: 0.0,
         }

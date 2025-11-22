@@ -1,4 +1,4 @@
-use crate::{log, model, view, AppConfig};
+use crate::{model, view, AppCliConfig};
 use eframe::egui;
 
 #[derive(Debug)]
@@ -12,7 +12,7 @@ pub struct App {
     view: view::View,
 
     #[allow(dead_code)]
-    config: AppConfig,
+    cli_config: AppCliConfig,
 }
 
 impl Default for App {
@@ -21,7 +21,7 @@ impl Default for App {
         Self {
             model: model.clone(),
             view: view::View::new(model),
-            config: AppConfig::default(),
+            cli_config: AppCliConfig::default(),
         }
     }
 }
@@ -30,15 +30,23 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.view.ui(ctx, frame);
     }
+
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        self.model.borrow().config.save_to_storage();
+        // self.save_user_config();
+        // self.model.save_to_storage(storage);
+    }
 }
 
 impl App {
-    pub fn new(_cc: &eframe::CreationContext<'_>, config: AppConfig) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>, cli_config: AppCliConfig, user_config: model::Config) -> Self {
         let model = model::SharedModel::default();
+
+        model.borrow_mut().config = user_config;
 
         // Diff gets precedence over audio files, we ignore any extra audio files if we have the
         // diff option set
-        if let Some(ref diff_files) = config.diff {
+        if let Some(ref diff_files) = cli_config.diff {
             for diff_file in diff_files {
                 model
                     .borrow_mut()
@@ -46,7 +54,7 @@ impl App {
                     .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
             }
         } else {
-            for path in &config.audio_files {
+            for path in &cli_config.audio_files {
                 model
                     .borrow_mut()
                     .add_wav_file(path, None, None)
@@ -59,12 +67,14 @@ impl App {
             model.borrow().tracks.len()
         );
 
-        let app = App {
+        Self {
             model: model.clone(),
             view: view::View::new(model),
-            config,
-        };
-        log::init_tracing();
-        app
+            cli_config,
+        }
     }
+
+    // fn save_user_config(&mut self) {
+    //     self.user_config.save_to_storage();
+    // }
 }

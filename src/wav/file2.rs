@@ -3,7 +3,7 @@ use crate::{
     wav::read::ChIx,
 };
 use slotmap::new_key_type;
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 // Accociate a channel id with a buffer
 #[derive(Debug, Clone)]

@@ -24,5 +24,5 @@ pub mod wav;
 pub mod test_utils;
 
 pub use app::App;
-pub use app_config::AppConfig;
+pub use app_config::AppCliConfig;
 pub use pos::Pos;

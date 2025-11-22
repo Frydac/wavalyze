@@ -1,14 +1,16 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-                                                                   //
-                                                                   // When compiling natively:
+
+// When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> anyhow::Result<()> {
-    // fn main() -> eframe::Result {
     use clap::Parser;
-    use wavalyze;
+    use wavalyze::{self, log, model};
 
-    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    // fn main() -> eframe::Result {
+    log::init_tracing();
+
+    // env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -26,17 +28,14 @@ fn main() -> anyhow::Result<()> {
     //     Box::new(|cc| Ok(Box::new(wavalyze::TemplateApp::new(cc)))),
     // )
 
-    let args = wavalyze::AppConfig::parse();
-    println!("{:?}", args);
+    let args = wavalyze::AppCliConfig::parse();
+    let user_config = model::Config::load_from_storage_or_default();
 
     // NOTE: to pass a lambda, it needs to be boxed.
     if let Err(err) = eframe::run_native(
         "wavalyze",
         native_options,
-        Box::new(|cc| {
-            let app = wavalyze::App::new(cc, args);
-            Ok(Box::new(app))
-        }),
+        Box::new(|cc| Ok(Box::new(wavalyze::App::new(cc, args, user_config)))),
     ) {
         eprintln!("Error: {}", err);
         std::process::exit(1);
@@ -48,7 +47,7 @@ fn main() -> anyhow::Result<()> {
 #[cfg(target_arch = "wasm32")]
 fn main() {
     use eframe::wasm_bindgen::JsCast as _;
-    use wavalyze;
+    use wavalyze::{self, model};
 
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
@@ -68,9 +67,14 @@ fn main() {
         //     .start(canvas, web_options, Box::new(|cc| Ok(Box::new(wavalyze::TemplateApp::new(cc)))))
         //     .await;
 
-        let args = wavalyze::AppConfig::default();
+        let args = wavalyze::AppCliConfig::default();
+        let user_config = model::Config::default();
         let start_result = eframe::WebRunner::new()
-            .start(canvas, web_options, Box::new(|cc| Ok(Box::new(wavalyze::App::new(cc, args)))))
+            .start(
+                canvas,
+                web_options,
+                Box::new(|cc| Ok(Box::new(wavalyze::App::new(cc, args, user_config)))),
+            )
             .await;
 
         // Remove the loading text and spinner:

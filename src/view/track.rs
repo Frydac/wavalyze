@@ -435,7 +435,7 @@ impl MouseHover {
                     self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
                 }
 
-                if model.config.show_hover_info { 
+                if model.config.show_hover_info {
                     self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
                 }
             }

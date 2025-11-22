@@ -75,7 +75,7 @@ impl FromStr for InputAudioFile {
 /// Application configuration, parsed from command line arguments
 #[derive(Parser, Debug, Default)]
 #[command(version, about, long_about = None)]
-pub struct AppConfig {
+pub struct AppCliConfig {
     /// Audio files to open
     pub audio_files: Vec<String>,
 
@@ -100,7 +100,7 @@ mod tests {
     fn test_app_config() {
         println!("test");
 
-        let args = AppConfig::try_parse_from(["test", "--start", "1", "--end", "2", "file1.wav", "file2.wav"]);
+        let args = AppCliConfig::try_parse_from(["test", "--start", "1", "--end", "2", "file1.wav", "file2.wav"]);
         println!("{:?}", args);
         assert!(args.is_ok());
         if let Ok(args) = args {
@@ -112,7 +112,7 @@ mod tests {
             assert!(args.diff.is_none());
         }
 
-        let args = AppConfig::try_parse_from(["test", "--end", "2", "file1.wav", "file2.wav"]);
+        let args = AppCliConfig::try_parse_from(["test", "--end", "2", "file1.wav", "file2.wav"]);
         println!("{:?}", args);
         assert!(args.is_ok());
         if let Ok(args) = args {
@@ -122,7 +122,7 @@ mod tests {
             assert!(args.diff.is_none());
         }
 
-        let args = AppConfig::try_parse_from(["test"]);
+        let args = AppCliConfig::try_parse_from(["test"]);
         println!("{:?}", args);
         assert!(args.is_ok());
         if let Ok(args) = args {
@@ -132,7 +132,7 @@ mod tests {
             assert!(args.diff.is_none());
         }
 
-        let args = AppConfig::try_parse_from(["test", "--diff", "file1.wav", "file2.wav"]);
+        let args = AppCliConfig::try_parse_from(["test", "--diff", "file1.wav", "file2.wav"]);
         println!("{:?}", args);
         assert!(args.is_ok());
         if let Ok(args) = args {
@@ -158,7 +158,7 @@ mod tests {
             );
         }
 
-        let args = AppConfig::try_parse_from(["test", "some.wav", "--diff", "file1.wav", "file2.wav"]);
+        let args = AppCliConfig::try_parse_from(["test", "some.wav", "--diff", "file1.wav", "file2.wav"]);
         println!("{:?}", args);
         assert!(args.is_ok());
         if let Ok(args) = args {
@@ -185,13 +185,13 @@ mod tests {
             );
         }
 
-        let args = AppConfig::try_parse_from(["test", "--diff", "file1.wav"]);
+        let args = AppCliConfig::try_parse_from(["test", "--diff", "file1.wav"]);
         assert!(args.is_err());
     }
 
     #[test]
     fn test_diff_file_parsing() {
-        let args = AppConfig::try_parse_from(["test", "--diff", "file1.wav:offset=10", "file2.wav:channel=1:offset=20"]);
+        let args = AppCliConfig::try_parse_from(["test", "--diff", "file1.wav:offset=10", "file2.wav:channel=1:offset=20"]);
         assert!(args.is_ok());
         if let Ok(args) = args {
             assert!(args.diff.is_some());
