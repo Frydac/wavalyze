@@ -138,20 +138,28 @@ impl Tracks {
 }
 
 impl Tracks {
-    pub fn shift_x(&mut self, dx_pixels: f32) -> Result<()> {
+    pub fn shift_x(&mut self, pixel_delta: f32) -> Result<()> {
         for track in self.tracks.values_mut() {
-            track.shift_sample_rect_x(dx_pixels)?;
+            track.shift_sample_rect_x(pixel_delta)?;
         }
         Ok(())
     }
 
-    /// * `center_screen_x` - The x position of the center of the zoom
+    pub fn shift_y(&mut self, pixel_delta: f32) -> Result<()> {
+        todo!()
+    }
+
+    /// * `zoom_center_x` - The x position of the center of the zoom
     /// * `zoom_delta` - The amount to zoom in or out
-    pub fn zoom_x(&mut self, center_screen_x: f32, zoom_delta: f32) -> Result<()> {
+    pub fn zoom_x(&mut self, zoom_center_x: f32, zoom_delta: f32) -> Result<()> {
         for track in self.tracks.values_mut() {
-            track.zoom_x(center_screen_x, zoom_delta)?;
+            track.zoom_x(zoom_center_x, zoom_delta)?;
         }
         Ok(())
+    }
+
+    pub fn zoom_y(&mut self, zoom_center_y: f32, zoom_delta: f32, track_id: TrackId) -> Result<()> {
+        todo!()
     }
 }
 

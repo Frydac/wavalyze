@@ -134,9 +134,12 @@ impl View {
         }
         // render view tracks in specified order
         {
+            // let rect_height = ui.available_height() - 20.0;
             let rect_height = ui.available_height();
             let height_track = rect_height / self.tracks.len() as f32;
             let width_track = ui.available_width();
+            let min_height_track = 150.0;
+            let height_track = height_track.max(min_height_track);
 
             // We want to detect if any track is hovered, so reset the current
             model.tracks.tracks_hover_info.current = None;
@@ -163,7 +166,14 @@ impl View {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui_top_panel_tool_bar(ui, ctx);
             ruler::ui(ui, &self.model);
-            self.ui_tracks(ctx, ui);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.allocate_ui([ui.available_width(), ui.available_height() - 20.0].into(), |ui| {
+                    self.ui_tracks(ctx, ui);
+                });
+                // ui.with_max_height(ui.available_height() - 20.0, |ui| {
+                //     self.ui_tracks(ctx, ui);
+                // });
+            });
         });
     }
 }

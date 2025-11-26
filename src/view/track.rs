@@ -61,6 +61,28 @@ impl Track {
             });
     }
 
+    pub fn handle_interaction(&mut self, ui: &mut egui::Ui, model: &mut model::Model, track_id: Id) {
+        if let Some(pos) = ui.ctx().pointer_hover_pos() {
+            if ui.min_rect().contains(pos) {
+                ui.ctx().input(|i| {
+                    if i.modifiers.shift {
+                        let scroll = i.raw_scroll_delta;
+                        if scroll.x != 0.0 {
+                            let _ = model.tracks.shift_x(scroll.x);
+                        }
+                    } else if i.modifiers.ctrl {
+                        let scroll = i.raw_scroll_delta;
+                        if scroll.y != 0.0 {
+                            let factor = model.config.zoom_x_factor;
+                            let _ = model.tracks.zoom_x(pos.x, scroll.y * factor);
+                        }
+                    }
+                });
+                model.tracks.update_hover_info(track_id, (&pos).into());
+            }
+        }
+    }
+
     pub fn ui_waveform(&mut self, ui: &mut egui::Ui, model: &mut model::Model) {
         // Frame that contains the waveform drawing
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
@@ -70,6 +92,10 @@ impl Track {
             // This gets the absolute position of the canvas
             let canvas_rect = ui.min_rect(); // TODO: don't know for sure what min_rect means in this context
                                              // dbg!(canvas_rect);
+
+            // First do mouse interactions (scroll,..) so this track is also drawn with updated
+            // view rect
+            self.mouse_hover_info.ui(ui, model, self.id);
 
             // update model track with current screen rect
             model
@@ -83,7 +109,6 @@ impl Track {
             self.ui_start_end(ui, model);
             self.ui_middle_line(ui, model);
             self.ui_samples(ui, model);
-            self.mouse_hover_info.ui(ui, model, self.id);
             // self.mouse_select.ui(ui);
         });
     }
@@ -386,6 +411,7 @@ impl MouseHover {
     }
 
     // fn ui(&mut self, ui: &mut egui::Ui, model_track: &mut model::track::Track) {
+    // TODO: move out scrolling interactioni out of 'hover info', not very logical to have it here
     fn ui(&mut self, ui: &mut egui::Ui, model: &mut model::Model, track_id: Id) {
         let canvas_rect = ui.min_rect();
 
@@ -398,8 +424,6 @@ impl MouseHover {
         // the popup.
         if let Some(pos) = ui.ctx().pointer_hover_pos() {
             if canvas_rect.contains(pos) {
-                model.tracks.update_hover_info(track_id, (&pos).into());
-
                 ui.ctx().input(|i| {
                     if i.modifiers.shift {
                         let scroll = i.raw_scroll_delta;
@@ -414,6 +438,7 @@ impl MouseHover {
                         }
                     }
                 });
+                model.tracks.update_hover_info(track_id, (&pos).into());
             }
         }
 
