@@ -1,4 +1,4 @@
-use crate::model;
+use crate::model::{self, Action};
 use crate::model::track;
 use crate::view::grid::KeyValueGrid;
 // use egui;
@@ -59,7 +59,8 @@ impl Track {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("x").clicked() {
-                        model.tracks.remove_track(self.id);
+                        model.actions.push(Action::RemoveTrackOld(self.id));
+                        // model.tracks.remove_track(self.id);
                     }
                     ui.label(&self.name);
                 });

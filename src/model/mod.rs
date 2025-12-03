@@ -6,9 +6,12 @@ pub mod track2;
 pub mod tracks;
 pub mod tracks2;
 pub mod view_buffer;
+pub mod action;
 
 use crate::wav::read::ChIx;
 use crate::{audio, model};
+
+pub use action::Action;
 pub use model::config::Config;
 pub use model::timeline::Timeline;
 pub use model::track::Track;
@@ -34,6 +37,8 @@ pub struct Model {
     files2: Vec<wav::file2::File>,
     // buffers: audio::BufferPool,
     audio: audio::manager::AudioManager,
+
+    pub actions: Vec<Action>,
 }
 
 pub type SharedModel = Rc<RefCell<Model>>;
@@ -96,5 +101,18 @@ impl Model {
         // }
 
         Ok(())
+    }
+}
+
+impl Model {
+    pub fn process_actions(&mut self) {
+        for action in self.actions.drain(..) {
+            match action {
+                Action::RemoveTrackOld(track_id) => {
+                                self.tracks.remove_track(track_id);
+                            }
+                Action::RemoveTrack(track_id) => todo!(),
+            }
+        }
     }
 }

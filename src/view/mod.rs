@@ -28,9 +28,8 @@ impl View {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // TODO: handle async interactions
-
         self.ui_handle_dropped_wav_files(ctx);
+        self.model.borrow_mut().process_actions();
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
