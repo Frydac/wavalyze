@@ -5,6 +5,12 @@
 
 
 ## TODO
+* remove all
+* drag drop files
+* show tree with checkboxes to toggle tracks
+* watch file for changes and reload, maybe reload option to always reload or ask user?
+
+
 * rulers
   * sample index/time
   * sample value

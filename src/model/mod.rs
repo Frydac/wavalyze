@@ -1,5 +1,6 @@
 pub mod config;
 pub mod hover_info;
+pub mod timeline;
 pub mod track;
 pub mod track2;
 pub mod tracks;
@@ -9,6 +10,7 @@ pub mod view_buffer;
 use crate::wav::read::ChIx;
 use crate::{audio, model};
 pub use model::config::Config;
+pub use model::timeline::Timeline;
 pub use model::track::Track;
 pub use model::tracks::Tracks;
 pub use model::view_buffer::ViewBufferE;

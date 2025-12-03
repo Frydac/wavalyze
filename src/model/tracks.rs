@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use egui::ahash::HashMap;
 use std::ops::Deref;
+use crate::model::Timeline;
 
 use super::SampleIx;
 // use anyhow::Result;
@@ -32,6 +33,7 @@ pub struct Tracks {
     pub samples_per_pixel: Option<f32>,
 
     pub tracks_hover_info: TracksHoverInfo,
+    pub time_line: Timeline,
 }
 
 impl Tracks {
@@ -134,6 +136,11 @@ impl Tracks {
 
         // }
         Ok(())
+    }
+
+    pub fn clear_tracks(&mut self) {
+        self.tracks.clear();
+        self.track_order.clear();
     }
 }
 

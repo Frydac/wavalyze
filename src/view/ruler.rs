@@ -29,16 +29,20 @@ pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
                 let stroke = egui::Stroke::new(1.0, color);
                 let ruler_rect = ui.min_rect();
 
-                if model.borrow_mut().tracks.is_empty() {
-                    return;
-                }
                 {
                     let model = model.borrow();
-                    let track = model.tracks.track(0);
-                    let last_sample_ix = model.tracks.get_total_buffer_range().last() as u64;
+                    if model.tracks.is_empty() {
+                        return;
+                    }
+                    // Get a track. 
+                    // TODO: this info should come from a global timeline, where
+                    // the tracks are positioned on top of
+                    let track = model.tracks.tracks.iter().next();
 
                     // lets try and draw the 0 sample tick
-                    if let Some(track) = track {
+                    if let Some((id, track)) = track {
+                        let last_sample_ix = model.tracks.get_total_buffer_range().last() as u64;
+
                         // draw zero tick
                         if track.sample_rect.ix_rng.contains(0.0) {
                             if let Some(screen_x0) = track.sample_ix_to_screen_x(0.0) {

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::ops::Range;
 
 use crate::audio::sample2::Sample;
@@ -9,46 +10,39 @@ pub struct ValRange<T: Sample> {
 }
 
 pub type SampleIx = i64;
+pub type IxRange = IxRangeG<SampleIx>;
+pub type FracSampleIx = f64;
+pub type FracIxRange = IxRangeG<FracSampleIx>;
 
-/// Half open range of sample indices `[start, end)`
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct IxRange {
-    pub start: SampleIx,
-    pub end: SampleIx,
+pub trait Ix: Debug + Default + Copy + PartialOrd + PartialEq + Clone {}
+
+impl Ix for SampleIx {}
+impl Ix for FracSampleIx {}
+
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
+pub struct IxRangeG<T: Ix> {
+    pub start: T,
+    pub end: T,
 }
 
-impl IxRange {
-    pub fn len(&self) -> SampleIx {
+impl<T: Ix + std::ops::Sub<Output = T>> IxRangeG<T> {
+    pub fn len(&self) -> T {
         self.end - self.start
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn positive_len(&self) -> SampleIx {
-        self.end.max(self.start) - self.start
-    }
+    pub fn is_empty(&self) -> bool { self.len() == T::default() }
 }
 
-/// Enable (start..end).into()
-impl From<Range<SampleIx>> for IxRange {
-    fn from(r: Range<SampleIx>) -> Self {
-        IxRange {
+impl<T> From<Range<T>> for IxRangeG<T>
+where
+    T: Ix,
+{
+    fn from(r: Range<T>) -> Self {
+        IxRangeG {
             start: r.start,
             end: r.end,
         }
     }
-}
-
-/// Fractional index of an audio sample is useful for zooming/moving at sub-sample resolution
-pub type FracSampleIx = f64;
-
-/// Half open range of sample indices `[start, end)`
-#[derive(Debug, Clone, PartialEq, Default, Copy)]
-pub struct FracIxRange {
-    pub start: FracSampleIx,
-    pub end: FracSampleIx,
 }
 
 pub const PCM16_RANGE: ValRange<i16> = sample_range_i16(16);

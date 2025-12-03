@@ -28,6 +28,21 @@ impl Default for App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+
+        // if !ctx.input().raw.dropped_files.is_empty() {
+        //     println!("files dropped");
+
+        //     let dropped_files = ctx
+        //         .input()
+        //         .raw
+        //         .dropped_files
+        //         .clone()
+        //         .iter()
+        //         .map(|file| file.path.as_ref().unwrap().clone())
+        //         .collect::<Vec<PathBuf>>();
+
+        //     dbg!(&dropped_files);
+        // }
         self.view.ui(ctx, frame);
     }
 

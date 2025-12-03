@@ -30,6 +30,8 @@ impl View {
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // TODO: handle async interactions
 
+        self.ui_handle_dropped_wav_files(ctx);
+
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
         self.ui_side_panel(ctx);
@@ -83,6 +85,22 @@ impl View {
             });
     }
 
+    fn ui_handle_dropped_wav_files(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            for file in &i.raw.dropped_files {
+                if let Some(path) = &file.path {
+                    if path.extension() == Some(std::ffi::OsStr::new("wav")) {
+                        if let Some(path_str) = path.to_str() {
+                            if self.model.borrow_mut().add_wav_file(path_str, None, None).is_err() {
+                                tracing::error!("Failed to add wav file: {}", path_str);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     fn ui_top_panel_menu_bar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_panel_menu_bar").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -116,6 +134,10 @@ impl View {
             if ui.button("⏵ ").clicked() {
                 let _ = self.model.borrow_mut().tracks.shift_x(self.scroll_speed);
             }
+            // × ✖ ❌ 🗑️
+            if ui.button("✖").clicked() {
+                self.model.borrow_mut().tracks.clear_tracks();
+            }
         });
     }
 
@@ -131,6 +153,13 @@ impl View {
                     self.tracks.insert(*id, Track::new(track_model.name.clone(), *id));
                 }
             }
+            self.tracks.retain(|id, _| {
+                let should_keep = model.tracks.tracks.contains_key(id);
+                if !should_keep {
+                    println!("removing view track: {id}");
+                }
+                should_keep
+            });
         }
         // render view tracks in specified order
         {

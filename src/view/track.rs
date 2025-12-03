@@ -57,7 +57,12 @@ impl Track {
             })
             .stroke(ui.style().visuals.window_stroke())
             .show(ui, |ui| {
-                ui.label(&self.name);
+                ui.horizontal(|ui| {
+                    if ui.button("x").clicked() {
+                        model.tracks.remove_track(self.id);
+                    }
+                    ui.label(&self.name);
+                });
             });
     }
 
@@ -97,13 +102,18 @@ impl Track {
             // view rect
             self.mouse_hover_info.ui(ui, model, self.id);
 
+            let Some(model_track) = model.tracks.track_mut(self.id) else {
+                return;
+            };
+
             // update model track with current screen rect
-            model
-                .tracks
-                .track_mut(self.id)
-                .unwrap()
-                .set_screen_rect(canvas_rect.into())
-                .unwrap();
+            let _ = model_track.set_screen_rect(canvas_rect.into());
+            // model
+            //     .tracks
+            //     .track_mut(self.id)
+            //     .unwrap()
+            //     .set_screen_rect(canvas_rect.into())
+            //     .unwrap();
 
             // Draw/interact all the things
             self.ui_start_end(ui, model);
@@ -442,26 +452,27 @@ impl MouseHover {
             }
         }
 
-        let model_track = model.tracks.track_mut(track_id).unwrap();
-        if let Some(hover_info) = model_track.hover_info() {
-            // --- Logging for debugging flickering ---
-            // dbg!(track_id, hover_info.samples.is_empty());
-            // --- End logging ---
+        if let Some(model_track) = model.tracks.track_mut(track_id) {
+            if let Some(hover_info) = model_track.hover_info() {
+                // --- Logging for debugging flickering ---
+                // dbg!(track_id, hover_info.samples.is_empty());
+                // --- End logging ---
 
-            // if let Some(hover_info) = model.tracks.tracks_hover_info.previous {
+                // if let Some(hover_info) = model.tracks.tracks_hover_info.previous {
 
-            // Draw vertical line/sample info where mouse pointer is for all tracks, when mouse is
-            // over any track
-            if canvas_rect.x_range().contains(hover_info.screen_pos.x) {
-                self.ui_mouse_pos_vline(ui, hover_info, &canvas_rect);
+                // Draw vertical line/sample info where mouse pointer is for all tracks, when mouse is
+                // over any track
+                if canvas_rect.x_range().contains(hover_info.screen_pos.x) {
+                    self.ui_mouse_pos_vline(ui, hover_info, &canvas_rect);
 
-                // Draw horizontal line where mouse pointer is for only the track the mouse is over
-                if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
-                    self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
-                }
+                    // Draw horizontal line where mouse pointer is for only the track the mouse is over
+                    if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
+                        self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
+                    }
 
-                if model.config.show_hover_info {
-                    self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
+                    if model.config.show_hover_info {
+                        self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
+                    }
                 }
             }
         }
