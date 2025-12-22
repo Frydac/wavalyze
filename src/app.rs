@@ -1,5 +1,10 @@
-use crate::{model, view, AppCliConfig};
+use crate::{
+    args::{self, Args},
+    model::{self, Action},
+    view, AppCliConfig,
+};
 use eframe::egui;
+use tracing::trace;
 
 #[derive(Debug)]
 pub struct App {
@@ -12,7 +17,9 @@ pub struct App {
     view: view::View,
 
     #[allow(dead_code)]
-    cli_config: AppCliConfig,
+    cli_config: Option<AppCliConfig>,
+
+    args: Option<Args>,
 }
 
 impl Default for App {
@@ -21,14 +28,14 @@ impl Default for App {
         Self {
             model: model.clone(),
             view: view::View::new(model),
-            cli_config: AppCliConfig::default(),
+            cli_config: None,
+            args: None,
         }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-
         // if !ctx.input().raw.dropped_files.is_empty() {
         //     println!("files dropped");
 
@@ -47,17 +54,50 @@ impl eframe::App for App {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        self.model.borrow().config.save_to_storage();
+        self.model.borrow().user_config.save_to_storage();
         // self.save_user_config();
         // self.model.save_to_storage(storage);
     }
 }
 
 impl App {
+    pub fn new2(_cc: &eframe::CreationContext<'_>, args: Args, user_config: model::Config) -> Self {
+        // let model = model::SharedModel::default();
+        let mut model = model::Model::default();
+        model.user_config = user_config;
+        match args.command {
+            None => {
+                trace!("No command");
+                for file_read_config in &args.files {
+                    model.actions.push(Action::OpenFile(file_read_config.clone()));
+                }
+                model.actions.push(Action::ZoomToFull);
+            }
+            Some(ref command) => match command {
+                args::Commands::Open { ref files } => {
+                    trace!("Open command");
+                    // todo!("open files");
+                }
+                args::Commands::Diff { file1, file2 } => {
+                    trace!("Diff command");
+                    // todo!("diff files");
+                }
+            },
+        }
+
+        let model = model.into_shared();
+
+        Self {
+            model: model.clone(),
+            view: view::View::new(model),
+            cli_config: None,
+            args: Some(args),
+        }
+    }
     pub fn new(_cc: &eframe::CreationContext<'_>, cli_config: AppCliConfig, user_config: model::Config) -> Self {
         let model = model::SharedModel::default();
 
-        model.borrow_mut().config = user_config;
+        model.borrow_mut().user_config = user_config;
 
         // Diff gets precedence over audio files, we ignore any extra audio files if we have the
         // diff option set
@@ -85,7 +125,8 @@ impl App {
         Self {
             model: model.clone(),
             view: view::View::new(model),
-            cli_config,
+            cli_config: Some(cli_config),
+            args: None,
         }
     }
 

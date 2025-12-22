@@ -1,12 +1,9 @@
-use crate::audio;
+use crate::{audio, wav};
 use anyhow::Result;
 use slotmap::new_key_type;
 
 use crate::{
-    audio::{
-        manager::{AudioManager, BufferId},
-        BufferPool,
-    },
+    audio::manager::{AudioManager, BufferId},
     model::{self, hover_info, track::single::Single},
     rect::Rect,
 };
@@ -69,12 +66,17 @@ new_key_type! { pub struct TrackId; }
 // pub enum SampleViewBuffer<T: Sample> {
 //     Single(Buffer<T>),
 // }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrackMetaData {
+    File(wav::file2::File, wav::ChIx),
+    None,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Track {
     // pub id: Option<TrackId>,
     /// Id of this track in storage, mabye better Optional, lets try without option for now
-    pub track_id: TrackId,
+    // pub track_id: TrackId,
 
     /// The pixel rectangle in absolute screen coordinates for the track
     /// Is updated by/for the view when displayed
@@ -103,13 +105,18 @@ pub struct Track {
 
     /// Dirty flag for the inputs of the view buffer
     update_view_buffer_: bool,
+
+    track_md: TrackMetaData,
 }
 
 impl Track {
-    pub fn new2(track_id: TrackId, buffer_id: BufferId, audio: &mut AudioManager) -> Result<Self> {
+    // pub fn new2(track_id: TrackId, buffer_id: BufferId, audio: &mut AudioManager) -> Result<Self> {
+    // TODO: probably not pass audio here, we want to initialize possibly with certain existing
+    // samples_per_pixel.
+    pub fn new2(buffer_id: BufferId) -> Result<Self> {
         let single = Single::new(buffer_id)?;
+
         Ok(Self {
-            track_id,
             screen_rect: None,
             sample_rect: None,
             samples_per_pixel: None,
@@ -117,27 +124,10 @@ impl Track {
             single,
             hover_info: None,
             update_view_buffer_: false,
+            track_md: TrackMetaData::None,
         })
 
         // todo!()
-    }
-    pub fn new(track_id: TrackId, buffer_id: BufferId, buffer_pool: &mut BufferPool) -> Result<Self> {
-        // let buffer = buffer_pool
-        //     .get_buffer(buffer_id)
-        //     .with_context(|| format!("Buffer {:?} not found in pool", buffer_id))?;
-
-        // Ok(Self {
-        //     track_id,
-        //     screen_rect: Rect::default(),
-        //     // sample_rect: SampleRectEnum::from_buffer(buffer),
-        //     // view_rect: Rect::default(),
-        //     samples_per_pixel: None,
-        //     view_buffer: model::ViewBuffer::SingleSamples(vec![]),
-        //     track_item: TrackItem::new(buffer_id, SampleRectEnum::from_buffer(buffer)),
-        //     single: Single::new(buffer_id),
-        //     hover_info: None,
-        // })
-        todo!()
     }
 }
 

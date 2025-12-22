@@ -1,11 +1,11 @@
+use crate::model::Timeline;
 use crate::{audio, model, pos};
 use anyhow::anyhow;
 use anyhow::Result;
 use egui::ahash::HashMap;
 use std::ops::Deref;
-use crate::model::Timeline;
 
-use super::SampleIx;
+use crate::audio::SampleIx;
 // use anyhow::Result;
 
 pub type TrackId = crate::util::Id;

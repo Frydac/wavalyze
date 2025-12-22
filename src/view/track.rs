@@ -1,5 +1,5 @@
-use crate::model::{self, Action};
 use crate::model::track;
+use crate::model::{self, Action};
 use crate::view::grid::KeyValueGrid;
 // use egui;
 // use crate::pos;
@@ -79,7 +79,7 @@ impl Track {
                     } else if i.modifiers.ctrl {
                         let scroll = i.raw_scroll_delta;
                         if scroll.y != 0.0 {
-                            let factor = model.config.zoom_x_factor;
+                            let factor = model.user_config.zoom_x_factor;
                             let _ = model.tracks.zoom_x(pos.x, scroll.y * factor);
                         }
                     }
@@ -444,7 +444,7 @@ impl MouseHover {
                     } else if i.modifiers.ctrl {
                         let scroll = i.raw_scroll_delta;
                         if scroll.y != 0.0 {
-                            let factor = model.config.zoom_x_factor;
+                            let factor = model.user_config.zoom_x_factor;
                             model.tracks.zoom_x(pos.x, scroll.y * factor).unwrap();
                         }
                     }
@@ -471,7 +471,7 @@ impl MouseHover {
                         self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
                     }
 
-                    if model.config.show_hover_info {
+                    if model.user_config.show_hover_info {
                         self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
                     }
                 }

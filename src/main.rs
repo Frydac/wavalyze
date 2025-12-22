@@ -8,38 +8,32 @@ fn main() -> anyhow::Result<()> {
     use wavalyze::{self, log, model};
 
     // fn main() -> eframe::Result {
-    log::init_tracing();
+    let args2 = wavalyze::args::Args::parse();
 
-    // env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    log::init_tracing(args2.log_level.as_deref())?;
 
-    let native_options = eframe::NativeOptions {
+    // let args = wavalyze::AppCliConfig::parse();
+    let user_config = model::Config::load_from_storage_or_default();
+
+    let eframe_native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 300.0])
-            .with_min_inner_size([300.0, 220.0])
+            .with_inner_size([1280.0, 720.0])
+            .with_min_inner_size([480.0, 320.0])
             .with_icon(
-                // NOTE: Adding an icon is optional
-                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..]).expect("Failed to load icon"),
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/wavalyze_icon_001.png")[..]).expect("Failed to load icon"),
             ),
         ..Default::default()
     };
-    // eframe::run_native(
-    //     "eframe template",
-    //     native_options,
-    //     Box::new(|cc| Ok(Box::new(wavalyze::TemplateApp::new(cc)))),
-    // )
 
-    let args = wavalyze::AppCliConfig::parse();
-    let user_config = model::Config::load_from_storage_or_default();
-
-    // NOTE: to pass a lambda, it needs to be boxed.
     if let Err(err) = eframe::run_native(
         "wavalyze",
-        native_options,
-        Box::new(|cc| Ok(Box::new(wavalyze::App::new(cc, args, user_config)))),
+        eframe_native_options,
+        Box::new(|cc| Ok(Box::new(wavalyze::App::new2(cc, args2, user_config)))),
     ) {
-        eprintln!("Error: {}", err);
+        tracing::error!("Error: {}", err);
         std::process::exit(1);
     }
+
     Ok(())
 }
 

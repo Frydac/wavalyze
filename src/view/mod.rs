@@ -1,7 +1,9 @@
 pub mod config;
 pub mod grid;
 pub mod ruler;
+pub mod ruler2;
 pub mod track;
+pub mod track2;
 use std::collections::HashMap;
 
 use crate::model;
@@ -55,7 +57,7 @@ impl View {
             .default_width(150.0)
             .width_range(80.0..=ctx.available_rect().width() / 1.5)
             .show(ctx, |ui| {
-                config::show_config(ui, &mut self.model.borrow_mut().config);
+                config::show_config(ui, &mut self.model.borrow_mut().user_config);
 
                 ui.separator();
 
@@ -144,7 +146,6 @@ impl View {
         let mut model = self.model.borrow_mut();
 
         // update view tracks if needed
-        // TODO: delete? tracks
         {
             for (id, track_model) in &mut model.tracks.tracks {
                 if !self.tracks.contains_key(id) {
@@ -193,7 +194,8 @@ impl View {
     fn ui_central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui_top_panel_tool_bar(ui, ctx);
-            ruler::ui(ui, &self.model);
+            // ruler::ui(ui, &self.model);
+            let _ = ruler2::ui(ui, &self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.allocate_ui([ui.available_width(), ui.available_height() - 20.0].into(), |ui| {
                     self.ui_tracks(ctx, ui);

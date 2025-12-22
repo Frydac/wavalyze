@@ -104,7 +104,7 @@ impl<T: Sample> LevelData<T> {
         Ok(sample::ViewData::<T>::MinMax(out_mm))
     }
 
-    pub fn get_ix(&self, sample_ix: sample::SampleIx) -> usize {
+    pub fn get_ix(&self, sample_ix: sample::Ix) -> usize {
         (sample_ix as f64 / self.samples_per_pixel as f64).floor() as usize
     }
 }

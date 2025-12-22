@@ -7,6 +7,9 @@ pub struct Point {
     pub y: f32,
 }
 
+/// Modeled after emath::Rect, I didn't want to have egui/emath dependencies in my model.
+/// NOTE: the egui::Rect seems to be inclusive, not sure if that is the best way to go, but we'll
+/// run with it for now.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Rect {
     pub min: Point,
@@ -78,6 +81,21 @@ impl Rect {
 
     pub fn center(&self) -> Pos {
         Pos::new(self.left() + self.width() / 2.0, self.top() + self.height() / 2.0)
+    }
+
+    pub fn x_range_inc(&self) -> std::ops::RangeInclusive<f32> {
+        self.min.x..=self.max.x
+    }
+
+    pub fn x_range_inc_floor(&self) -> std::ops::RangeInclusive<i32> {
+        self.min.x.floor() as i32..=self.max.x.floor() as i32
+    }
+    pub fn y_range_inc(&self) -> std::ops::RangeInclusive<f32> {
+        self.min.y..=self.max.y
+    }
+
+    pub fn y_range_inc_floor(&self) -> std::ops::RangeInclusive<i32> {
+        self.min.y.floor() as i32..=self.max.y.floor() as i32
     }
 }
 

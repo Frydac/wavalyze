@@ -27,7 +27,7 @@ mod tests {
     fn test_round_up_to_power_of_10() {
         assert!(is_close(round_up_to_power_of_10(95.0), 100.0));
         assert!(is_close(round_up_to_power_of_10(100.0), 100.0));
-        assert!(is_close(round_up_to_power_of_10(101.0), 1000.0));
+        assert!(is_close(round_up_to_power_of_10(100.001), 1000.0));
         assert!(is_close(round_up_to_power_of_10(1.0), 1.0));
         assert!(is_close(round_up_to_power_of_10(0.5), 1.0));
         assert!(is_close(round_up_to_power_of_10(0.1), 0.1));

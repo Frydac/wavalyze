@@ -14,6 +14,7 @@
 
 pub type SampleIx = i64;
 
+/// deprecated!! use sample::range::IxRange
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SampleIxRange(pub std::ops::Range<SampleIx>);
 

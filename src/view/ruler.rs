@@ -10,9 +10,15 @@ use egui;
 // * some variables should probably depend on the lenght of the tick numbers
 //   * maybe better to use some kind of scientific notation?
 
+pub fn round(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
+    let pos = ui.painter().round_pos_to_pixel_center(pos);
+    pos
+}
+
 pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
     let height = 40.0;
     let width = ui.available_width();
+
     // let rect = egui::Rect::from_x_y_ranges(0.0..=width, 0.0..=height);
     let _stroke = egui::Stroke::new(1.0, egui::Color32::RED);
     ui.allocate_ui([width, height].into(), |ui| {
@@ -29,12 +35,14 @@ pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
                 let stroke = egui::Stroke::new(1.0, color);
                 let ruler_rect = ui.min_rect();
 
+                // NOTE: we can't use ui in any other way after this declaration..
+                let round = |pos: egui::Pos2| round(ui, pos);
                 {
                     let model = model.borrow();
                     if model.tracks.is_empty() {
                         return;
                     }
-                    // Get a track. 
+                    // Get a track.
                     // TODO: this info should come from a global timeline, where
                     // the tracks are positioned on top of
                     let track = model.tracks.tracks.iter().next();
@@ -48,8 +56,8 @@ pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
                             if let Some(screen_x0) = track.sample_ix_to_screen_x(0.0) {
                                 let pos_0 = [screen_x0, ruler_rect.top()].into();
                                 let pos_1 = [screen_x0, ruler_rect.bottom()].into();
-                                let pos_0 = ui.painter().round_pos_to_pixel_center(pos_0);
-                                let pos_1 = ui.painter().round_pos_to_pixel_center(pos_1);
+                                let pos_0 = round(pos_0);
+                                let pos_1 = round(pos_1);
                                 ui.painter().line_segment([pos_0, pos_1], stroke);
 
                                 let text_pos = pos_0 + egui::vec2(5.0, 0.0);

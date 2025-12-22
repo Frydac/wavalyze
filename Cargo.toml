@@ -57,6 +57,10 @@ opt-level = 2
 hound = "3.5.1"
 tracing-test = "0.2.5"
 
+[[test]]
+name = "model"
+path = "tests/model/mod.rs"
+
 
 [patch.crates-io]
 

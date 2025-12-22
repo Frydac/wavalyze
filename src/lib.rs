@@ -6,6 +6,7 @@
 // mod app;
 pub mod app;
 pub mod app_config;
+pub mod args;
 pub mod audio;
 pub mod generator;
 pub mod id;

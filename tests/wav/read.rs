@@ -1,6 +1,5 @@
 use wavalyze::audio::buffer2::BufferE;
 use wavalyze::audio::manager::Buffers;
-use wavalyze::audio::sample_range2::SampleIxRange;
 use wavalyze::wav::read::{read_to_file, ReadConfig};
 
 // #[test]
@@ -42,6 +41,8 @@ fn setup_test_wav_file<S: hound::Sample + Copy>(spec: hound::WavSpec, samples: &
 
 #[test]
 fn test_read_options_i16() {
+    use wavalyze::audio::sample;
+
     let spec = hound::WavSpec {
         channels: 3,
         sample_rate: 44100,
@@ -50,11 +51,16 @@ fn test_read_options_i16() {
     };
     let samples: Vec<i16> = (1..=12).collect();
     let file_path = setup_test_wav_file(spec, &samples, "i16");
+    let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(SampleIxRange(1..3)),
+        // sample_range: Some(sample::IxRange::from(1..3)),
+        sample_range: sample::OptIxRange {
+            start: Some(1),
+            end: Some(3),
+        },
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();
@@ -88,6 +94,7 @@ fn test_read_options_i16() {
 
 #[test]
 fn test_read_options_i24() {
+    use wavalyze::audio::sample;
     let spec = hound::WavSpec {
         channels: 3,
         sample_rate: 44100,
@@ -96,11 +103,16 @@ fn test_read_options_i24() {
     };
     let samples: Vec<i32> = (1..=12).map(|x| x * 1000).collect();
     let file_path = setup_test_wav_file(spec, &samples, "i24");
+    let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(SampleIxRange(1..3)),
+        // sample_range: Some(wavalyze::audio::sample::IxRange::from(1..3)),
+        sample_range: sample::OptIxRange {
+            start: Some(1),
+            end: Some(3),
+        },
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();
@@ -115,6 +127,7 @@ fn test_read_options_i24() {
 
 #[test]
 fn test_read_options_i32() {
+    use wavalyze::audio::sample;
     let spec = hound::WavSpec {
         channels: 3,
         sample_rate: 44100,
@@ -123,11 +136,16 @@ fn test_read_options_i32() {
     };
     let samples: Vec<i32> = (1..=12).map(|x| x * 100000).collect();
     let file_path = setup_test_wav_file(spec, &samples, "i32");
+    let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(SampleIxRange(1..3)),
+        // sample_range: Some(wavalyze::audio::sample::IxRange::from(1..3)),
+        sample_range: sample::OptIxRange {
+            start: Some(1),
+            end: Some(3),
+        },
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();
@@ -142,6 +160,7 @@ fn test_read_options_i32() {
 
 #[test]
 fn test_read_options_f32() {
+    use wavalyze::audio::sample;
     let spec = hound::WavSpec {
         channels: 3,
         sample_rate: 44100,
@@ -150,11 +169,16 @@ fn test_read_options_f32() {
     };
     let samples: Vec<f32> = (1..=12).map(|x| x as f32 * 0.1).collect();
     let file_path = setup_test_wav_file(spec, &samples, "f32");
+    let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
-        sample_range: Some(SampleIxRange(1..3)),
+        // sample_range: Some(wavalyze::audio::sample::IxRange::from(1..3)),
+        sample_range: sample::OptIxRange {
+            start: Some(1),
+            end: Some(3),
+        },
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(config, &mut buffers).unwrap();

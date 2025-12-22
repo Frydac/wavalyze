@@ -1,15 +1,8 @@
 pub mod range;
 pub mod view;
 
-pub use range::FracIxRange;
-pub use range::FracSampleIx;
-pub use range::IxRange;
-pub use range::SampleIx;
-pub use range::ValRange;
-pub use view::MinMaxSamples;
-pub use view::Samples;
-pub use view::View;
-pub use view::ViewData;
+pub use range::{FracIx, FracIxRange, Ix, IxRange, OptIxRange, ValRange};
+pub use view::{MinMaxSamples, Samples, View, ViewData};
 
 // The intention is to allow and audio Sample to be of type f32, i32 or i16
 // TODO: Not sure if this accomplishes this?

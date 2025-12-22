@@ -28,7 +28,7 @@ impl Config {
             Default::default()
         });
         info!(
-            "Config loaded from {}: {user_config:?}",
+            "Config loaded from {}: {user_config:#?}",
             confy::get_configuration_file_path("wavalyze", None)
                 .as_ref()
                 .map(|p| format!("{p:?}"))
@@ -42,7 +42,7 @@ impl Config {
             error!(error = %e, "Failed to save config");
         } else {
             info!(
-                "Config saved to {}: {self:?}",
+                "Config saved to {}: {self:#?}",
                 confy::get_configuration_file_path("wavalyze", None)
                     .as_ref()
                     .map(|p| format!("{p:?}"))

@@ -1,46 +1,55 @@
-use crate::audio;
 use crate::audio::buffer2::{Buffer, BufferE};
 use crate::audio::manager::Buffers;
-use crate::audio::sample_range2::SampleIxRange;
+use crate::audio::{self, sample};
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::wav::file2::{Channel, File};
 
 use anyhow::{ensure, Result};
 use hound;
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub type ChIx = usize; // Channel index
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReadConfig {
     /// Path to wav file to read
-    pub filepath: String,
+    pub filepath: PathBuf,
 
     /// Indices of channels to read from file, default: all
     pub ch_ixs: Option<Vec<ChIx>>,
 
     /// Range of samples indices per channel to read, default: all
-    pub sample_range: Option<SampleIxRange>,
+    // pub sample_range: Option<sample::IxRange>,
+    pub sample_range: sample::OptIxRange,
 }
 
+// TODO: think of better name :)
 pub fn read_to_file(config: ReadConfig, buffers: &mut Buffers) -> Result<File> {
-    // open wav file with hound
-    let mut reader = hound::WavReader::open(&config.filepath)
-        .map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", &config.filepath, err))?;
-    let spec = reader.spec();
-    dbg!(spec);
+    let Some(filepath) = config.filepath.to_str() else {
+        return Err(anyhow::anyhow!("Invalid filepath"));
+    };
 
-    // TODO: can probably immediately collect into HashMap<ChIx, Channel>, woudl it be better?
+    tracing::trace!("Start reading wav file '{}'", filepath);
+    let start = std::time::Instant::now();
+
+    // open wav file with hound
+    let mut reader =
+        hound::WavReader::open(&config.filepath).map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
+    let spec = reader.spec();
+
     // read samples into appropriate type and associate with channel index
     let chix_buffers: HashMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<f32>(&mut reader, config)?, BufferE::F32),
+            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<f32>(&mut reader, &config)?, BufferE::F32),
             _ => {
                 return Err(anyhow::anyhow!("Unsupported bit depth for float: {}", spec.bits_per_sample));
             }
         },
         hound::SampleFormat::Int => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 16 => convert_samples(read_to_buffers::<i16>(&mut reader, config)?, BufferE::I16),
-            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<i32>(&mut reader, config)?, BufferE::I32),
+            bit_depth if bit_depth <= 16 => convert_samples(read_to_buffers::<i16>(&mut reader, &config)?, BufferE::I16),
+            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<i32>(&mut reader, &config)?, BufferE::I32),
             _ => {
                 return Err(anyhow::anyhow!("Unsupported bit depth for int: {}", spec.bits_per_sample));
             }
@@ -66,7 +75,12 @@ pub fn read_to_file(config: ReadConfig, buffers: &mut Buffers) -> Result<File> {
         sample_rate: spec.sample_rate,
         bit_depth: spec.bits_per_sample,
         sample_type: spec.sample_format.into(),
+        path: Some(PathBuf::from(&filepath)),
+        nr_samples: reader.duration() as u64,
     };
+
+    tracing::trace!("Read wav data in {:?}: {}", start.elapsed(), file);
+
     Ok(file)
 }
 
@@ -78,14 +92,14 @@ fn convert_samples<T>(samples: HashMap<ChIx, T>, converter: impl Fn(T) -> Buffer
 // read samples into buffers knowing the sample type S
 fn read_to_buffers<S>(
     reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>,
-    config: ReadConfig,
+    config: &ReadConfig,
 ) -> Result<HashMap<ChIx, Buffer<S>>>
 where
     S: crate::audio::sample2::Sample + hound::Sample,
 {
     let nr_channels = reader.spec().channels as usize;
     let reader_duration = reader.duration() as i64;
-    let sample_range = config.sample_range.unwrap_or(SampleIxRange(0..reader_duration));
+    let sample_range = config.sample_range.to_ix_range(0, reader_duration);
     anyhow::ensure!(
         sample_range.end <= reader_duration,
         "sample range end {} is larger than file duration {}",
@@ -99,11 +113,16 @@ where
     }
 
     // Read the desired number of interleaved samples
-    let interleaved_samples: Result<Vec<S>, _> = reader.samples::<S>().take(sample_range.len() * nr_channels).collect();
+    let interleaved_samples: Result<Vec<S>, _> = reader.samples::<S>().take(sample_range.len() as usize * nr_channels).collect();
     let interleaved_samples = interleaved_samples?;
 
     // channel indices we want to deinterleave
-    let ch_ixs = config.ch_ixs.unwrap_or((0..nr_channels).collect());
+    // NOTE: this gets a refernce in to the Option if it has a value, otherwise it gets an owned
+    // value for all channels
+    let ch_ixs: Cow<'_, [ChIx]> = match config.ch_ixs.as_deref() {
+        Some(v) => Cow::Borrowed(v),
+        None => Cow::Owned((0..nr_channels).collect()),
+    };
 
     let channels = deinterleave(&interleaved_samples, nr_channels, &ch_ixs)?;
 

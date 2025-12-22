@@ -1,12 +1,13 @@
+pub mod action;
 pub mod config;
 pub mod hover_info;
+pub mod ruler;
 pub mod timeline;
 pub mod track;
 pub mod track2;
 pub mod tracks;
 pub mod tracks2;
 pub mod view_buffer;
-pub mod action;
 
 use crate::wav::read::ChIx;
 use crate::{audio, model};
@@ -17,6 +18,7 @@ pub use model::timeline::Timeline;
 pub use model::track::Track;
 pub use model::tracks::Tracks;
 pub use model::view_buffer::ViewBufferE;
+use tracing::info;
 
 // NOTE: move all under this?
 
@@ -26,17 +28,16 @@ use std::cell::RefCell;
 // use std::collections::VecDeque;
 use std::rc::Rc;
 
-use crate::audio::SampleIx;
-
 #[derive(Default, Debug)]
 pub struct Model {
-    pub config: Config,
+    pub user_config: Config,
     pub tracks: Tracks,
     files: Vec<Rc<wav::File>>,
 
     files2: Vec<wav::file2::File>,
     // buffers: audio::BufferPool,
     audio: audio::manager::AudioManager,
+    pub tracks2: tracks2::Tracks,
 
     pub actions: Vec<Action>,
 }
@@ -47,7 +48,12 @@ impl Model {
     pub fn default_shared() -> SharedModel {
         Rc::new(RefCell::new(Model::default()))
     }
+    // move self to shared model
+    pub fn into_shared(self) -> SharedModel {
+        Rc::new(RefCell::new(self))
+    }
 
+    // old
     pub fn add_wav_file(&mut self, path: &str, ch_ix: Option<ChIx>, offset: Option<u32>) -> Result<()> {
         println!("Adding wav file: {}", path);
 
@@ -79,11 +85,11 @@ impl Model {
         self.files.push(Rc::new(file));
 
         // New buffer api
-        let read_config = crate::wav::read::ReadConfig {
-            filepath: path.to_string(),
-            ch_ixs: ch_ix.is_some().then(|| vec![ch_ix.unwrap()]),
-            sample_range: None,
-        };
+        // let read_config = crate::wav::read::ReadConfig {
+        //     filepath: std::path::PathBuf::from(path),
+        //     ch_ixs: ch_ix.is_some().then(|| vec![ch_ix.unwrap()]),
+        //     sample_range: sample::OptIxRange::default(),
+        // };
         // let file2 = crate::wav::read::read_to_file(read_config, &mut self.buffers)?;
         // dbg!(file2);
 
@@ -92,26 +98,43 @@ impl Model {
 }
 
 impl Model {
-    pub fn add_tracks_from_wav(&mut self, wav_read_config: wav::ReadConfig) -> Result<()> {
+    pub fn load_wav(&mut self, wav_read_config: wav::ReadConfig) -> Result<()> {
         let file = self.audio.load_file(wav_read_config)?;
-        // let basename = file.path.file_name().expect().to_str().unwrap();
-        // for (ch_ix, ch) in file.channels.iter().enumerate() {
-        //     let name = format!("{} - ch {}", file.path.(), ch_ix);
-        //     dbg!(name);
-        // }
+        info!("Loaded file: {file}");
 
+        if let Err(e) = self.tracks2.add_tracks_from_file(&file) {
+            tracing::error!("Error adding tracks from file: {e}");
+        }
+
+        self.files2.push(file);
+
+        // TODO
         Ok(())
     }
 }
 
 impl Model {
+    /// Process actions we want to happen in between interacting with and drawing the UI
     pub fn process_actions(&mut self) {
-        for action in self.actions.drain(..) {
+        let actions: Vec<_> = self.actions.drain(..).collect();
+
+        for action in actions {
             match action {
                 Action::RemoveTrackOld(track_id) => {
-                                self.tracks.remove_track(track_id);
-                            }
+                    self.tracks.remove_track(track_id);
+                }
                 Action::RemoveTrack(track_id) => todo!(),
+                Action::RemoveAllTracks => {
+                    self.tracks.tracks.clear();
+                }
+                Action::OpenFile(read_config) => {
+                    // TODO: give extra info about the file
+                    let _ = self.load_wav(read_config);
+                }
+                Action::ZoomToFull => {
+                    // self.tracks.zoom_to_full();
+                    // todo!();
+                }
             }
         }
     }
