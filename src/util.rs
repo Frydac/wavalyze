@@ -18,5 +18,6 @@ pub type Id = u64;
 // NOTE: if we want to presist over sessions, maybe use uuid crate in stead?
 pub fn unique_id() -> Id {
     static mut COUNTER: AtomicU64 = AtomicU64::new(0);
+    #[allow(static_mut_refs)]
     unsafe { COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) }
 }
