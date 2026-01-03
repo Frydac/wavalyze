@@ -4,8 +4,6 @@ use crate::audio::sample;
 use crate::audio::sample2::Sample;
 
 /// One channel of audio samples.  
-/// Could be used for storing interleaved samples, but not yet used like that? Probably want some
-/// kind of enum for that?
 #[derive(Debug, PartialEq, Clone)]
 pub struct Buffer<T: Sample> {
     pub sample_rate: u32,
@@ -59,7 +57,7 @@ impl<T: Sample> Buffer<T> {
     }
 
     /// Returns the minimum value in the buffer
-    /// NOTE: we filter out NaN values, they have no effect (we expect no NaN values in general)
+    /// NOTE: we filter out NaN values, they have no effect (we expect no NaN values in general?)
     pub fn min(&self) -> Option<&T> {
         self.data
             .iter()

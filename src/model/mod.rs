@@ -10,6 +10,7 @@ pub mod tracks2;
 pub mod types;
 pub mod view_buffer;
 
+use crate::audio::thumbnail::ThumbnailE;
 use crate::model::track2::TrackId;
 use crate::{audio, model};
 
@@ -57,49 +58,6 @@ impl Model {
     pub fn into_shared(self) -> SharedModel {
         Rc::new(RefCell::new(self))
     }
-
-    // old
-    // pub fn add_wav_file(&mut self, path: &str, ch_ix: Option<ChIx>, offset: Option<u32>) -> Result<()> {
-    //     // println!("Adding wav file: {}", path);
-
-    //     // // Read file into float buffer
-    //     // let file = crate::wav::file::File::from_wav(path)?;
-
-    //     // println!("file.basename(): {}", file.basename());
-    //     // println!("file.nr_channels(): {}", file.nr_channels());
-
-    //     // if let Some(ch_ix) = ch_ix {
-    //     //     if ch_ix >= file.nr_channels() as ChIx {
-    //     //         return Err(anyhow::anyhow!("Channel {} out of range for file {}", ch_ix, path));
-    //     //     }
-
-    //     //     let name = format!("{} - ch {}", file.basename(), ch_ix);
-    //     //     let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
-    //     //     self.tracks.push(track);
-    //     // } else {
-    //     //     // For each channel create a model::track
-    //     //     for (ch_ix, ch) in file.buffer.borrow().channels().enumerate() {
-    //     //         // let name = format!("{} - ch {}", file.basename(), ix);
-    //     //         let name = format!("{} - ch {}", file.file_path, ch_ix);
-    //     //         let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
-    //     //         self.tracks.push(track);
-    //     //     }
-    //     // }
-
-    //     // Store file
-    //     // self.files.push(Rc::new(file));
-
-    //     // New buffer api
-    //     // let read_config = crate::wav::read::ReadConfig {
-    //     //     filepath: std::path::PathBuf::from(path),
-    //     //     ch_ixs: ch_ix.is_some().then(|| vec![ch_ix.unwrap()]),
-    //     //     sample_range: sample::OptIxRange::default(),
-    //     // };
-    //     // let file2 = crate::wav::read::read_to_file(read_config, &mut self.buffers)?;
-    //     // dbg!(file2);
-
-    //     Ok(())
-    // }
 }
 
 impl Model {

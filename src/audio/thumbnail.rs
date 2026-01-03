@@ -149,25 +149,28 @@ pub struct Thumbnail<T: Sample> {
     pub level_data: BTreeMap<SampPerPix, LevelData<T>>,
 }
 
+
 impl<T: Sample> Thumbnail<T> {
     pub fn from_buffer(buffer: &Buffer<T>, config: Option<ThumbnailConfig>) -> Self {
-        let mut result = Self {
-            level_data: BTreeMap::new(),
-        };
-
         let config = config.unwrap_or_default();
+        let mut level_data = BTreeMap::new();
+
         let mut samp_per_pix = config.samples_per_pixel_delta;
+
         loop {
-            let level_data = LevelData::from_buffer(buffer, samp_per_pix);
-            result.level_data.insert(samp_per_pix, level_data.clone());
+            let ld = LevelData::from_buffer(buffer, samp_per_pix);
+            let len = ld.data.len();
 
-            samp_per_pix *= 2;
+            level_data.insert(samp_per_pix, ld);
 
-            if level_data.data.len() <= config.min_nr_level_data_size || level_data.data.len() == 1 {
+            if len <= config.min_nr_level_data_size || len == 1 {
                 break;
             }
+
+            samp_per_pix *= 2;
         }
-        result
+
+        Self { level_data }
     }
 }
 
