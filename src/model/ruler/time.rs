@@ -2,7 +2,7 @@ use crate::{
     audio::sample,
     model::{
         ruler::{ix_lattice::IxLattice, sample_ix_to_screen_x, screen_x_to_sample_ix},
-        timeline::Timeline2,
+        IxZoomOffset, PixelCoord,
     },
     rect,
 };
@@ -22,16 +22,24 @@ pub struct Time {
     screen_rect: rect::Rect,
 
     /// We (usually) set the time_line info when we have content to render
-    time_line: Option<Timeline2>,
+    pub time_line: Option<IxZoomOffset>,
 
     /// The sample index ticks/lattice to draw for current screen rect/time_line
-    ix_lattice: IxLattice,
+    pub ix_lattice: IxLattice,
+
+
+    // TODO: don't recalculate ix_lattice every time, only when needed
+    // make API a bit cleaner
 }
 
 impl Time {
     // NOTE: we don't adjust the zoom level or ix_start intentionally
     pub fn set_screen_rect(&mut self, screen_rect: rect::Rect) {
         self.screen_rect = screen_rect;
+    }
+
+    pub fn screen_rect(&self) -> &rect::Rect {
+        &self.screen_rect
     }
 
     pub fn set_samples_per_pixel(&mut self, samples_per_pixel: f64) {
@@ -44,7 +52,9 @@ impl Time {
     pub fn ix_lattice(&mut self) -> Option<&IxLattice> {
         let time_line = self.time_line.as_ref()?;
         let ix_range = self.ix_range()?;
-        self.ix_lattice.compute_ticks(ix_range, self.screen_rect, crate::view::ruler2::NR_PIXELS_PER_TICK).ok()?;
+        self.ix_lattice
+            .compute_ticks(ix_range, self.screen_rect, crate::view::ruler2::NR_PIXELS_PER_TICK)
+            .ok()?;
         Some(&self.ix_lattice)
     }
 
@@ -72,29 +82,12 @@ impl Time {
             None
         })?;
         let ix_range = time_line.get_ix_range(self.screen_rect.width() as f64);
-        // if !ix_range.contains(sample_ix) {
-        //     tracing::trace!("sample_ix {} not in ix_range {:?}", sample_ix, ix_range);
-        //     return None;
-        // }
-        // let sample_ix_offset = sample_ix - ix_range.start;
-        // let sample_ix_frac = sample_ix_offset / ix_range.len();
-        // let screen_x = self.screen_rect.left() + sample_ix_frac as f32 * self.screen_rect.width();
-        // Some(screen_x)
         sample_ix_to_screen_x(sample_ix, ix_range, self.screen_rect)
     }
 
     pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<f64> {
-        let Some(ix_range) = self.ix_range() else { return None };
+        let ix_range = self.ix_range()?;
         screen_x_to_sample_ix(screen_x, ix_range, self.screen_rect)
-        // if !self.screen_rect.contains_x(screen_x) {
-        //     tracing::trace!("screen_x {} not in screen_rect {:?}", screen_x, self.screen_rect);
-        //     return None;
-        // }
-        // let ix_range = time_line.get_ix_range(self.screen_rect.width() as f64);
-        // let screen_x_offset = screen_x - self.screen_rect.left();
-        // let sample_ix_frac = screen_x_offset / self.screen_rect.width();
-        // let sample_ix = ix_range.start + sample_ix_frac as f64 * ix_range.len();
-        // Some(sample_ix)
     }
 
     // Returns all the absolute sample indices that are visible in the given screen x pixel column
@@ -106,5 +99,41 @@ impl Time {
         let end_ix = self.screen_x_to_sample_ix(screen_x + 1.0)?;
 
         todo!()
+    }
+}
+
+// TODO: handle unwraps
+impl Time {
+    pub fn shift_x(&mut self, delta_pixels: PixelCoord) {
+        if let Some(time_line) = self.time_line.as_mut() {
+            let delta_sample_ixs = delta_pixels * time_line.samples_per_pixel as f32;
+            time_line.ix_start += delta_sample_ixs as f64;
+            if let Some(mut hover_info) = self.hover_info {
+                hover_info.sample_ix = self.screen_x_to_sample_ix(hover_info.screen_x).unwrap().floor() as i64;
+                self.hover_info = Some(hover_info);
+            }
+        }
+    }
+
+    pub fn zoom_x(&mut self, nr_pixels: f32, center_x: f32) {
+        if !self.screen_rect.contains_x(center_x) {
+            return;
+        }
+        if self.time_line.is_none() {
+            return;
+        }
+        let center_x_normalized = center_x - self.screen_rect.min.x;
+        let frac_min = center_x_normalized / self.screen_rect.width();
+        let new_min_x = self.screen_rect.min.x - frac_min * nr_pixels;
+        let new_max_x = self.screen_rect.max.x + (1.0 - frac_min) * nr_pixels;
+        let Some(new_min_ix) = self.screen_x_to_sample_ix(new_min_x) else {
+            return;
+        };
+        let Some(new_max_ix) = self.screen_x_to_sample_ix(new_max_x) else {
+            return;
+        };
+        let Some(time_line) = self.time_line.as_mut() else { return };
+        time_line.ix_start = new_min_ix;
+        time_line.samples_per_pixel = (new_max_ix - new_min_ix) / self.screen_rect.width() as f64;
     }
 }

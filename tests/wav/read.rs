@@ -63,7 +63,7 @@ fn test_read_options_i16() {
         },
     };
     let mut buffers = Buffers::default();
-    let file = read_to_file(config, &mut buffers).unwrap();
+    let file = read_to_file(&config, &mut buffers).unwrap();
 
     assert_eq!(file.sample_rate, spec.sample_rate);
     assert_eq!(file.bit_depth, spec.bits_per_sample);
@@ -115,7 +115,7 @@ fn test_read_options_i24() {
         },
     };
     let mut buffers = Buffers::default();
-    let file = read_to_file(config, &mut buffers).unwrap();
+    let file = read_to_file(&config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
     if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap() {
@@ -148,7 +148,7 @@ fn test_read_options_i32() {
         },
     };
     let mut buffers = Buffers::default();
-    let file = read_to_file(config, &mut buffers).unwrap();
+    let file = read_to_file(&config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
     if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap() {
@@ -181,7 +181,7 @@ fn test_read_options_f32() {
         },
     };
     let mut buffers = Buffers::default();
-    let file = read_to_file(config, &mut buffers).unwrap();
+    let file = read_to_file(&config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
     if let BufferE::F32(buf) = buffers.get(ch0.buffer_id).unwrap() {

@@ -1,4 +1,5 @@
 pub mod config;
+pub mod fps;
 pub mod grid;
 pub mod ruler;
 pub mod ruler2;
@@ -6,18 +7,23 @@ pub mod track;
 pub mod track2;
 use std::collections::HashMap;
 
-use crate::model;
+use crate::model::Action;
 use crate::util;
 use crate::view::track::Track;
+use crate::view::track2::Track as Track2;
+use crate::{model, wav};
+use anyhow::Result;
 use egui;
+use model::track2::TrackId;
+use slotmap::SlotMap;
 
 #[derive(Debug)]
 pub struct View {
-    #[allow(dead_code)]
     model: model::SharedModel,
     tracks: HashMap<util::Id, Track>,
-    // TODO: store in model
-    scroll_speed: f32,
+    tracks2: SlotMap<TrackId, Track2>,
+
+    fps: fps::Fps,
 }
 
 impl View {
@@ -25,17 +31,27 @@ impl View {
         Self {
             model,
             tracks: HashMap::new(),
-            scroll_speed: 10.0,
+            tracks2: SlotMap::default(),
+            fps: fps::Fps::new(100),
         }
     }
 
+    pub fn ui_measured(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.fps.start_frame();
+
+        self.ui(ctx, frame);
+
+        self.fps.end_frame();
+    }
+
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.ui_handle_dropped_wav_files(ctx);
-        self.model.borrow_mut().process_actions();
+        self.handle_drag_and_drop_into_app(ctx);
+        let _ = self.model.borrow_mut().process_actions();
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
-        self.ui_side_panel(ctx);
+        self.ui_right_side_panel(ctx);
+        self.ui_left_side_panel(ctx);
 
         // TODO: place holder
         egui::TopBottomPanel::bottom("bottom_panel")
@@ -48,54 +64,68 @@ impl View {
             });
 
         // NOTE: central_panel should always come last
-        self.ui_central_panel(ctx);
+        let _ = self.ui_central_panel(ctx);
     }
 
-    fn ui_side_panel(&mut self, ctx: &egui::Context) {
+    fn ui_right_side_panel(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::right("right_panel")
+            .resizable(true)
+            .default_width(150.0)
+            .width_range(80.0..=ctx.available_rect().width() / 1.5)
+            .show(ctx, |ui| {
+                ui.add_space(5.0);
+                config::show_config(ui, &mut self.model.borrow_mut().user_config);
+                ui.add_space(5.0);
+                self.fps.ui(ui);
+                ui.add_space(5.0);
+                ruler2::ui_ruler_info_panel(ui, &self.model.borrow().tracks2.ruler);
+                ui.add_space(5.0);
+                ruler2::ui_hover_info_panel(ui, self.model.borrow().tracks2.ruler.hover_info.as_ref());
+            });
+    }
+
+    fn ui_left_side_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("left_panel")
             .resizable(true)
             .default_width(150.0)
             .width_range(80.0..=ctx.available_rect().width() / 1.5)
             .show(ctx, |ui| {
-                config::show_config(ui, &mut self.model.borrow_mut().user_config);
 
-                ui.separator();
+                // ui.separator();
 
-                egui::Frame::default()
-                    // .stroke(egui::Stroke::new(1.0, egui::Color32::BLACK))
-                    .inner_margin(egui::Margin::same(10.0))
-                    .show(ui, |ui| {
-                        let model = self.model.borrow();
+                // egui::Frame::default()
+                //     // .stroke(egui::Stroke::new(1.0, egui::Color32::BLACK))
+                //     .inner_margin(egui::Margin::same(10.0))
+                //     .show(ui, |ui| {
+                //         let model = self.model.borrow();
 
-                        for track in model.tracks.iter() {
-                            ui.label(&track.name);
-                            if let Some(spp) = track.samples_per_pixel {
-                                ui.label(format!("samples/pixel: {}", spp));
-                                let pixels_per_sample = 1.0 / spp;
-                                ui.label(format!("pixels/sample: {}", pixels_per_sample));
-                            }
-                            ui.separator();
-                        }
+                //         for track in model.tracks.iter() {
+                //             ui.label(&track.name);
+                //             if let Some(spp) = track.samples_per_pixel {
+                //                 ui.label(format!("samples/pixel: {}", spp));
+                //                 let pixels_per_sample = 1.0 / spp;
+                //                 ui.label(format!("pixels/sample: {}", pixels_per_sample));
+                //             }
+                //             ui.separator();
+                //         }
 
-                        if let Some(samples_per_pixel) = model.tracks.samples_per_pixel {
-                            ui.label(format!("samples per pixel: {}", samples_per_pixel));
-                        } else {
-                            ui.label("samples per pixel: not set");
-                        }
-                    });
+                //         if let Some(samples_per_pixel) = model.tracks.samples_per_pixel {
+                //             ui.label(format!("samples per pixel: {}", samples_per_pixel));
+                //         } else {
+                //             ui.label("samples per pixel: not set");
+                //         }
+                //     });
             });
     }
 
-    fn ui_handle_dropped_wav_files(&mut self, ctx: &egui::Context) {
+    /// Handle drag-and-drop wav files
+    /// TODO: use actions
+    fn handle_drag_and_drop_into_app(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             for file in &i.raw.dropped_files {
                 if let Some(path) = &file.path {
                     if path.extension() == Some(std::ffi::OsStr::new("wav")) {
-                        if let Some(path_str) = path.to_str() {
-                            if self.model.borrow_mut().add_wav_file(path_str, None, None).is_err() {
-                                tracing::error!("Failed to add wav file: {}", path_str);
-                            }
-                        }
+                        self.model.borrow_mut().actions.push(Action::OpenFile(wav::ReadConfig::new(path)));
                     }
                 }
             }
@@ -125,24 +155,35 @@ impl View {
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal_top(|ui| {
-            let _ = ui.button("Test");
-            let _ = ui.button("Button");
-            ui.add(egui::DragValue::new(&mut self.scroll_speed).speed(1.0));
-
-            if ui.button("⏴ ").clicked() {
-                let _ = self.model.borrow_mut().tracks.shift_x(-self.scroll_speed);
-            }
-            if ui.button("⏵ ").clicked() {
-                let _ = self.model.borrow_mut().tracks.shift_x(self.scroll_speed);
-            }
+            // let _ = ui.button("Test");
+            // let _ = ui.button("Button");
+            // ui.add(egui::DragValue::new(&mut self.scroll_speed).speed(1.0));
             // × ✖ ❌ 🗑️
-            if ui.button("✖").clicked() {
-                self.model.borrow_mut().tracks.clear_tracks();
+            if ui.button("close all ✖").clicked() {
+                // self.model.borrow_mut().tracks.clear_tracks();
+                self.model.borrow_mut().actions.push(Action::RemoveAllTracks);
+            }
+
+            if ui.button("x-axis reset").clicked() {
+                self.model.borrow_mut().actions.push(Action::ZoomToFull);
             }
         });
     }
 
-    fn ui_tracks(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn ui_tracks2(&mut self, ui: &mut egui::Ui) -> Result<()> {
+        let mut model = self.model.borrow_mut();
+
+        // render view tracks in specified order
+        {
+            for track_ix in 0..model.tracks2.tracks_order.len() {
+                let track_id = model.tracks2.tracks_order[track_ix];
+                crate::view::track2::ui(ui, &mut model, track_id)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn ui_tracks(&mut self, ui: &mut egui::Ui) {
         let mut model = self.model.borrow_mut();
 
         // update view tracks if needed
@@ -191,19 +232,22 @@ impl View {
         }
     }
 
-    fn ui_central_panel(&mut self, ctx: &egui::Context) {
+    fn ui_central_panel(&mut self, ctx: &egui::Context) -> Result<()> {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui_top_panel_tool_bar(ui, ctx);
             // ruler::ui(ui, &self.model);
             let _ = ruler2::ui(ui, &self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
+                let width = ui.available_width();
+                ui.set_max_width(width);
+                ui.set_min_width(width);
                 ui.allocate_ui([ui.available_width(), ui.available_height() - 20.0].into(), |ui| {
-                    self.ui_tracks(ctx, ui);
+                    // let resp = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height() - 20.0), egui::Sense::hover());
+                    let _ = self.ui_tracks2(ui);
                 });
-                // ui.with_max_height(ui.available_height() - 20.0, |ui| {
-                //     self.ui_tracks(ctx, ui);
-                // });
             });
         });
+
+        Ok(())
     }
 }

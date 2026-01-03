@@ -1,6 +1,7 @@
-use crate::model::{self, track2::TrackId, Model};
+use crate::model::{self, track2::TrackId, Action, Model};
 use anyhow::Result;
 
+#[derive(Debug, Clone)]
 pub struct Track {
     id: TrackId,
 }
@@ -29,4 +30,126 @@ impl Track {
     pub fn ui_track_header(&mut self, ui: &mut egui::Ui, track: &mut model::track2::Track) -> Result<()> {
         Ok(())
     }
+}
+
+pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
+    // ui.style_mut().spacing.item_spacing = egui::vec2(4.0, 0.0);
+    ui_header(ui, model, track_id)?;
+    ui_waveform_canvas(ui, model, track_id)?;
+
+    Ok(())
+}
+
+pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
+    egui::Frame::default()
+        .stroke(ui.style().visuals.window_stroke())
+        .inner_margin(ui.style().spacing.window_margin / 6.0)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            // ui.allocate_space(egui::vec2(ui.available_width(), 0.0));
+
+            ui.horizontal(|ui| {
+                let mut text = String::from("track header");
+                let mut hover_text = None;
+
+                if let Some((file, channel)) = model.find_file_channel_for_track(track_id) {
+                    let path = file.path.as_ref().and_then(|p| p.to_str()).unwrap_or("unknown");
+                    text = format!("{} - ch {}", path, channel.ch_ix);
+                    hover_text = Some(format!("{file}"));
+                }
+
+                let label_resp = ui.label(text);
+                if let Some(hover_text) = hover_text {
+                    label_resp.on_hover_text(hover_text);
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.style_mut().spacing.window_margin = egui::Margin::same(4.0);
+                    if ui.button("x").clicked() {
+                        model.actions.push(Action::RemoveTrack(track_id));
+                    }
+                });
+            });
+
+            // let rect = ui.max_rect();
+            // ui.painter().line_segment(
+            //     [rect.left_top(), rect.right_top()],
+            //     ui.visuals().window_stroke(),
+            // );
+        });
+
+    Ok(())
+}
+
+// Wrap the waveform canvas in a (manually implemented) resizable frame
+// TODO: see if we can extrac like a resizable canvas or something
+pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
+    const RESIZE_HANDLE_HEIGHT: f32 = 3.0;
+    let min_height: f32 = model.user_config.track.min_height;
+    let max_height: f32 = ui.available_height(); // TODO: find better value
+    let width = ui.available_width();
+    let height = model.tracks2.get_track_height(track_id).unwrap_or(min_height);
+
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+
+    // -- Waveform canvas --
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+        egui::Frame::canvas(ui.style()).show(ui, |ui| {
+            let width = ui.available_width();
+            ui.set_min_size(egui::vec2(width, height));
+            ui.set_max_size(egui::vec2(width, height));
+            let _ = ui_waveform(ui, model, track_id);
+        });
+    });
+
+    let track = model
+        .tracks2
+        .get_track_mut(track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+
+    // -- Resize handle --
+    // make a rect at the border of the canvas that can be used for resizing height only
+    let resize_handle_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.left(), rect.bottom() - RESIZE_HANDLE_HEIGHT),
+        egui::vec2(rect.width(), RESIZE_HANDLE_HEIGHT),
+    );
+    let response = ui.interact(resize_handle_rect, ui.id().with(track_id), egui::Sense::drag());
+    if response.dragged() {
+        track.height = (track.height + response.drag_delta().y).clamp(min_height, max_height);
+    }
+    // Visual + cursor
+    // ui.painter().rect_filled(resize_handle_rect, 0.0, ui.visuals().widgets.inactive.bg_fill);
+    if response.hovered() || response.dragged() {
+        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeVertical);
+    }
+
+    Ok(())
+}
+
+fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
+    let track = model
+        .tracks2
+        .get_track_mut(track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+
+    ui_middle_line(ui);
+
+    Ok(())
+}
+
+fn ui_middle_line(ui: &mut egui::Ui) {
+    let rect = ui.min_rect();
+    let y = rect.center().y;
+    let left = rpc(ui, egui::pos2(rect.left(), y));
+    let right = rpc(ui, egui::pos2(rect.right(), y));
+    ui.painter()
+        .line_segment([left, right], egui::Stroke::new(1.0, egui::Color32::GRAY));
+
+    // ui.painter().line_segment([min_x, max_x], ui.visuals().widgets.inactive.bg_stroke);
+}
+
+/// round to pixel center (TODO: move to somehwere more general)
+pub fn rpc(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
+    let pos = ui.painter().round_pos_to_pixel_center(pos);
+    pos
 }

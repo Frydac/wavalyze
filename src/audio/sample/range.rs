@@ -9,6 +9,32 @@ pub struct ValRange<T: Sample> {
     pub max: T,
 }
 
+impl<T: Sample + std::ops::Sub<Output = T>> ValRange<T> {
+    pub fn len(&self) -> T {
+        self.max - self.min
+    }
+}
+
+#[derive(Copy, Debug, Clone, PartialEq)]
+pub enum ValRangeE {
+    PCM16(ValRange<i16>),
+    PCM24(ValRange<i32>),
+    PCM32(ValRange<i32>),
+    F32(ValRange<f32>),
+}
+
+impl ValRangeE {
+    /// Returns the Full Scale values for given bit depth/sample type
+    pub fn min_max(&self) -> Self {
+        match self {
+            ValRangeE::PCM16(_) => ValRangeE::PCM16(PCM16_RANGE),
+            ValRangeE::PCM24(_) => ValRangeE::PCM24(PCM24_RANGE),
+            ValRangeE::PCM32(_) => ValRangeE::PCM32(PCM32_RANGE),
+            ValRangeE::F32(_) => ValRangeE::F32(FLOAT_RANGE),
+        }
+    }
+}
+
 pub type Ix = i64;
 pub type IxRange = IxRangeG<Ix>;
 pub type OptIx = Option<Ix>;
@@ -30,6 +56,7 @@ pub struct OptIxRange {
 }
 
 impl OptIxRange {
+    // pub EMPTY: OptIxRange = OptIxRange { start: None, end: None };
     pub fn to_ix_range(&self, default_start: Ix, default_end: Ix) -> IxRange {
         let start = self.start.unwrap_or(default_start);
         let end = self.end.unwrap_or(default_end);

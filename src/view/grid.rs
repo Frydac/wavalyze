@@ -43,4 +43,14 @@ impl KeyValueGrid {
             }
         });
     }
+
+    // pub fn ui(&mut self, ui: &mut egui::Ui, add_contents: impl FnOnce(&mut Self)) {
+    //     ui.group(|ui| {
+    //         ui.vertical(|ui| {
+    //             ui.heading("Grid");
+    //             ui.separator();
+    //             self.show(ui, add_contents);
+    //         });
+    //     });
+    // }
 }

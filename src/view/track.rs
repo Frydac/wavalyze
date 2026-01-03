@@ -79,7 +79,7 @@ impl Track {
                     } else if i.modifiers.ctrl {
                         let scroll = i.raw_scroll_delta;
                         if scroll.y != 0.0 {
-                            let factor = model.user_config.zoom_x_factor;
+                            let factor = model.user_config.zoom_x_scroll_factor;
                             let _ = model.tracks.zoom_x(pos.x, scroll.y * factor);
                         }
                     }
@@ -444,7 +444,7 @@ impl MouseHover {
                     } else if i.modifiers.ctrl {
                         let scroll = i.raw_scroll_delta;
                         if scroll.y != 0.0 {
-                            let factor = model.user_config.zoom_x_factor;
+                            let factor = model.user_config.zoom_x_scroll_factor;
                             model.tracks.zoom_x(pos.x, scroll.y * factor).unwrap();
                         }
                     }

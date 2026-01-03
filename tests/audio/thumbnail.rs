@@ -15,7 +15,7 @@ fn test_thumbnail() {
         samples_per_pixel_delta: 4,
         min_nr_level_data_size: 2,
     };
-    let thumbnail = Thumbnail::from_buffer(&buffer, config);
+    let thumbnail = Thumbnail::from_buffer(&buffer, Some(config));
     // dbg!(&thumbnail);
     // println!("thumbnail: {}", &thumbnail);
 

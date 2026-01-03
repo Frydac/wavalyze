@@ -6,7 +6,7 @@ use tracing::{debug, instrument};
 
 use itertools::Itertools;
 
-use crate::audio::buffer2::Buffer;
+use crate::audio::buffer2::{Buffer, BufferE};
 use crate::audio::sample::{self, MinMaxSamples};
 use crate::audio::sample2::Sample;
 
@@ -17,6 +17,16 @@ pub enum ThumbnailE {
     F32(Thumbnail<f32>),
     I32(Thumbnail<i32>),
     I16(Thumbnail<i16>),
+}
+
+impl ThumbnailE {
+    pub fn from_buffer_e(buffer: &BufferE, config: Option<ThumbnailConfig>) -> Self {
+        match buffer {
+            BufferE::F32(buffer) => ThumbnailE::F32(Thumbnail::from_buffer(buffer, config)),
+            BufferE::I32(buffer) => ThumbnailE::I32(Thumbnail::from_buffer(buffer, config)),
+            BufferE::I16(buffer) => ThumbnailE::I16(Thumbnail::from_buffer(buffer, config)),
+        }
+    }
 }
 
 /// Represents the sample values for a single zoom level
@@ -140,11 +150,12 @@ pub struct Thumbnail<T: Sample> {
 }
 
 impl<T: Sample> Thumbnail<T> {
-    pub fn from_buffer(buffer: &Buffer<T>, config: ThumbnailConfig) -> Self {
+    pub fn from_buffer(buffer: &Buffer<T>, config: Option<ThumbnailConfig>) -> Self {
         let mut result = Self {
             level_data: BTreeMap::new(),
         };
 
+        let config = config.unwrap_or_default();
         let mut samp_per_pix = config.samples_per_pixel_delta;
         loop {
             let level_data = LevelData::from_buffer(buffer, samp_per_pix);

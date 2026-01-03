@@ -19,5 +19,7 @@ pub type Id = u64;
 pub fn unique_id() -> Id {
     static mut COUNTER: AtomicU64 = AtomicU64::new(0);
     #[allow(static_mut_refs)]
-    unsafe { COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) }
+    unsafe {
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    }
 }

@@ -1,24 +1,26 @@
 pub mod action;
 pub mod config;
 pub mod hover_info;
+pub mod ix_zoom_offset;
 pub mod ruler;
-pub mod timeline;
 pub mod track;
 pub mod track2;
 pub mod tracks;
 pub mod tracks2;
+pub mod types;
 pub mod view_buffer;
 
-use crate::wav::read::ChIx;
+use crate::model::track2::TrackId;
 use crate::{audio, model};
 
 pub use action::Action;
 pub use model::config::Config;
-pub use model::timeline::Timeline;
+pub use model::ix_zoom_offset::IxZoomOffset;
 pub use model::track::Track;
 pub use model::tracks::Tracks;
+pub use model::types::PixelCoord;
 pub use model::view_buffer::ViewBufferE;
-use tracing::info;
+use tracing::{info, trace};
 
 // NOTE: move all under this?
 
@@ -32,11 +34,10 @@ use std::rc::Rc;
 pub struct Model {
     pub user_config: Config,
     pub tracks: Tracks,
-    files: Vec<Rc<wav::File>>,
-
-    files2: Vec<wav::file2::File>,
+    // files: Vec<Rc<wav::File>>,
+    pub files2: Vec<wav::file2::File>,
     // buffers: audio::BufferPool,
-    audio: audio::manager::AudioManager,
+    pub audio: audio::manager::AudioManager,
     pub tracks2: tracks2::Tracks,
 
     pub actions: Vec<Action>,
@@ -45,6 +46,10 @@ pub struct Model {
 pub type SharedModel = Rc<RefCell<Model>>;
 
 impl Model {
+    pub fn split_mut(&mut self) -> (&mut model::ruler::Time, &mut Vec<model::action::Action>) {
+        (&mut self.tracks2.ruler, &mut self.actions)
+    }
+
     pub fn default_shared() -> SharedModel {
         Rc::new(RefCell::new(Model::default()))
     }
@@ -54,88 +59,92 @@ impl Model {
     }
 
     // old
-    pub fn add_wav_file(&mut self, path: &str, ch_ix: Option<ChIx>, offset: Option<u32>) -> Result<()> {
-        println!("Adding wav file: {}", path);
+    // pub fn add_wav_file(&mut self, path: &str, ch_ix: Option<ChIx>, offset: Option<u32>) -> Result<()> {
+    //     // println!("Adding wav file: {}", path);
 
-        // Read file into float buffer
-        let file = crate::wav::file::File::from_wav(path)?;
+    //     // // Read file into float buffer
+    //     // let file = crate::wav::file::File::from_wav(path)?;
 
-        println!("file.basename(): {}", file.basename());
-        println!("file.nr_channels(): {}", file.nr_channels());
+    //     // println!("file.basename(): {}", file.basename());
+    //     // println!("file.nr_channels(): {}", file.nr_channels());
 
-        if let Some(ch_ix) = ch_ix {
-            if ch_ix >= file.nr_channels() as ChIx {
-                return Err(anyhow::anyhow!("Channel {} out of range for file {}", ch_ix, path));
-            }
+    //     // if let Some(ch_ix) = ch_ix {
+    //     //     if ch_ix >= file.nr_channels() as ChIx {
+    //     //         return Err(anyhow::anyhow!("Channel {} out of range for file {}", ch_ix, path));
+    //     //     }
 
-            let name = format!("{} - ch {}", file.basename(), ch_ix);
-            let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
-            self.tracks.push(track);
-        } else {
-            // For each channel create a model::track
-            for (ch_ix, ch) in file.buffer.borrow().channels().enumerate() {
-                // let name = format!("{} - ch {}", file.basename(), ix);
-                let name = format!("{} - ch {}", file.file_path, ch_ix);
-                let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
-                self.tracks.push(track);
-            }
-        }
+    //     //     let name = format!("{} - ch {}", file.basename(), ch_ix);
+    //     //     let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
+    //     //     self.tracks.push(track);
+    //     // } else {
+    //     //     // For each channel create a model::track
+    //     //     for (ch_ix, ch) in file.buffer.borrow().channels().enumerate() {
+    //     //         // let name = format!("{} - ch {}", file.basename(), ix);
+    //     //         let name = format!("{} - ch {}", file.file_path, ch_ix);
+    //     //         let track = model::track::Track::new(Rc::clone(&file.buffer), ch_ix, &name)?;
+    //     //         self.tracks.push(track);
+    //     //     }
+    //     // }
 
-        // Store file
-        self.files.push(Rc::new(file));
+    //     // Store file
+    //     // self.files.push(Rc::new(file));
 
-        // New buffer api
-        // let read_config = crate::wav::read::ReadConfig {
-        //     filepath: std::path::PathBuf::from(path),
-        //     ch_ixs: ch_ix.is_some().then(|| vec![ch_ix.unwrap()]),
-        //     sample_range: sample::OptIxRange::default(),
-        // };
-        // let file2 = crate::wav::read::read_to_file(read_config, &mut self.buffers)?;
-        // dbg!(file2);
+    //     // New buffer api
+    //     // let read_config = crate::wav::read::ReadConfig {
+    //     //     filepath: std::path::PathBuf::from(path),
+    //     //     ch_ixs: ch_ix.is_some().then(|| vec![ch_ix.unwrap()]),
+    //     //     sample_range: sample::OptIxRange::default(),
+    //     // };
+    //     // let file2 = crate::wav::read::read_to_file(read_config, &mut self.buffers)?;
+    //     // dbg!(file2);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }
 
 impl Model {
-    pub fn load_wav(&mut self, wav_read_config: wav::ReadConfig) -> Result<()> {
+    pub fn load_wav(&mut self, wav_read_config: &wav::ReadConfig) -> Result<()> {
+        trace!("Loading wav file: {wav_read_config:?}");
+
+        // Load buffers and associate with buffer id's in a File instance
         let file = self.audio.load_file(wav_read_config)?;
         info!("Loaded file: {file}");
 
-        if let Err(e) = self.tracks2.add_tracks_from_file(&file) {
+        // Add tracks for the loaded buffers in the file
+        if let Err(e) = self.tracks2.add_tracks_from_file(&file, &self.user_config.track) {
             tracing::error!("Error adding tracks from file: {e}");
+            return Err(e);
         }
 
+        // Store the file instance itself
         self.files2.push(file);
 
-        // TODO
         Ok(())
+    }
+
+    pub fn find_file_channel_for_track(&self, track_id: TrackId) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
+        let track = self.tracks2.get_track(track_id)?;
+        let buffer_id = track.single.item.buffer_id;
+        for file in self.files2.iter() {
+            if let Some(channel) = file.get_channel(buffer_id) {
+                return Some((file, channel));
+            }
+        }
+        None
+    }
+
+    pub fn zoom_to_full(&mut self) -> Result<()> {
+        self.tracks2.zoom_to_full(&self.audio)
     }
 }
 
 impl Model {
     /// Process actions we want to happen in between interacting with and drawing the UI
-    pub fn process_actions(&mut self) {
+    pub fn process_actions(&mut self) -> Result<()> {
         let actions: Vec<_> = self.actions.drain(..).collect();
-
         for action in actions {
-            match action {
-                Action::RemoveTrackOld(track_id) => {
-                    self.tracks.remove_track(track_id);
-                }
-                Action::RemoveTrack(track_id) => todo!(),
-                Action::RemoveAllTracks => {
-                    self.tracks.tracks.clear();
-                }
-                Action::OpenFile(read_config) => {
-                    // TODO: give extra info about the file
-                    let _ = self.load_wav(read_config);
-                }
-                Action::ZoomToFull => {
-                    // self.tracks.zoom_to_full();
-                    // todo!();
-                }
-            }
+            action.process(self)?;
         }
+        Ok(())
     }
 }

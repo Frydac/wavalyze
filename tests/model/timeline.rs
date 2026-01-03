@@ -1,6 +1,6 @@
 #[test]
 fn test_timeline() {
-    let mut timeline = wavalyze::model::timeline::Timeline2::default();
+    let mut timeline = wavalyze::model::IxZoomOffset::default();
     assert_eq!(timeline.samples_per_pixel, 0.0);
     assert_eq!(timeline.ix_start, 0.0);
 

@@ -8,6 +8,7 @@ pub struct SampleRect<T: Sample> {
     /// X range in f64 (for zooming/moving with sub-sample resolution)
     pub ix_rng: sample::FracIxRange,
     /// Y range in SampleType
+    /// TODO: maybe not an option?
     pub val_rng: Option<sample::ValRange<T>>,
 }
 
@@ -22,6 +23,10 @@ impl<T: Sample> SampleRect<T> {
             val_rng: Some(sample::ValRange::<T> { min: T::MIN, max: T::MAX }),
         }
     }
+
+    pub fn width(&self) -> f32 {
+        self.ix_rng.len() as f32
+    }
 }
 
 /// Dynamically typed sample rect
@@ -33,14 +38,6 @@ pub enum SampleRectE {
 }
 
 impl SampleRectE {
-    pub fn from_sample_buffer(buffer: &audio::SampleBuffer) -> Self {
-        match buffer {
-            audio::SampleBuffer::F32(buffer) => SampleRectE::F32(SampleRect::<f32>::from_buffer(buffer)),
-            audio::SampleBuffer::I32(buffer) => SampleRectE::I32(SampleRect::<i32>::from_buffer(buffer)),
-            audio::SampleBuffer::I16(buffer) => SampleRectE::I16(SampleRect::<i16>::from_buffer(buffer)),
-        }
-    }
-
     pub fn from_buffere(buffer: &BufferE) -> Self {
         match buffer {
             BufferE::F32(buffer) => SampleRectE::F32(SampleRect::<f32>::from_buffer(buffer)),
@@ -48,9 +45,23 @@ impl SampleRectE {
             BufferE::I16(buffer) => SampleRectE::I16(SampleRect::<i16>::from_buffer(buffer)),
         }
     }
-}
 
-impl SampleRectE {
+    pub fn width(&self) -> f32 {
+        match self {
+            SampleRectE::F32(rect) => rect.width(),
+            SampleRectE::I32(rect) => rect.width(),
+            SampleRectE::I16(rect) => rect.width(),
+        }
+    }
+
+    pub fn set_ix_rng(&mut self, ix_rng: sample::FracIxRange) {
+        match self {
+            SampleRectE::F32(rect) => rect.ix_rng = ix_rng,
+            SampleRectE::I32(rect) => rect.ix_rng = ix_rng,
+            SampleRectE::I16(rect) => rect.ix_rng = ix_rng,
+        }
+    }
+
     pub fn ix_rng(&self) -> sample::FracIxRange {
         match self {
             SampleRectE::F32(rect) => rect.ix_rng,

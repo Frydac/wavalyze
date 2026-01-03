@@ -1,4 +1,4 @@
-use crate::{audio, wav};
+use crate::{audio, model::config::TrackConfig, wav};
 use anyhow::Result;
 use slotmap::new_key_type;
 
@@ -107,13 +107,15 @@ pub struct Track {
     update_view_buffer_: bool,
 
     track_md: TrackMetaData,
+
+    pub height: f32,
 }
 
 impl Track {
     // pub fn new2(track_id: TrackId, buffer_id: BufferId, audio: &mut AudioManager) -> Result<Self> {
     // TODO: probably not pass audio here, we want to initialize possibly with certain existing
     // samples_per_pixel.
-    pub fn new2(buffer_id: BufferId) -> Result<Self> {
+    pub fn new2(buffer_id: BufferId, track_config: &TrackConfig) -> Result<Self> {
         let single = Single::new(buffer_id)?;
 
         Ok(Self {
@@ -125,6 +127,7 @@ impl Track {
             hover_info: None,
             update_view_buffer_: false,
             track_md: TrackMetaData::None,
+            height: track_config.min_height,
         })
 
         // todo!()
@@ -146,6 +149,22 @@ impl Track {
         }
     }
 
+    /// Create or update the sample rect to the given range
+    /// TODO: we could do this by only knowing the sample_type/bit_depth, iso depending on AudioManager?
+    pub fn set_ix_range(&mut self, ix_range: audio::sample::FracIxRange, audio: &AudioManager) -> Result<()> {
+        if let Some(sample_rect) = self.sample_rect {
+            let mut new_sample_rect = sample_rect;
+            new_sample_rect.set_ix_rng(ix_range);
+            self.set_sample_rect(new_sample_rect);
+        } else {
+            let buffer = audio.get_buffer(self.single.item.buffer_id)?;
+            let mut sample_rect = audio::SampleRectE::from_buffere(buffer);
+            sample_rect.set_ix_rng(ix_range);
+            self.set_sample_rect(sample_rect);
+        }
+        Ok(())
+    }
+
     pub fn update_view_buffer(&mut self, audio: &mut AudioManager) -> Result<()> {
         if !self.update_view_buffer_ {
             return Ok(());
@@ -160,4 +179,8 @@ impl Track {
 
         todo!()
     }
+
+    // pub fn pos_y_sample_value<T: Sample>(&self, value: T) -> Option<f32> {
+    //     todo!()
+    // }
 }

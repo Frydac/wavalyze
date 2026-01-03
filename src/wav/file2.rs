@@ -44,3 +44,12 @@ impl std::fmt::Display for File {
 }
 
 new_key_type! { pub struct FileId; }
+
+impl File {
+    pub fn get_channel(&self, buffer_id: BufferId) -> Option<&Channel> {
+        self.channels
+            .iter()
+            .find(|(_, channel)| channel.buffer_id == buffer_id)
+            .map(|(_, channel)| channel)
+    }
+}

@@ -1,4 +1,3 @@
-use crate::model::Timeline;
 use crate::{audio, model, pos};
 use anyhow::anyhow;
 use anyhow::Result;
@@ -33,7 +32,6 @@ pub struct Tracks {
     pub samples_per_pixel: Option<f32>,
 
     pub tracks_hover_info: TracksHoverInfo,
-    pub time_line: Timeline,
 }
 
 impl Tracks {

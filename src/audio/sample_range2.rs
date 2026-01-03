@@ -2,9 +2,7 @@
 
 // TODO: move to sample:: namespace?
 
-///
-/// Inclusive interval of sample values `[min, max]`
-///
+// Inclusive interval of sample values `[min, max]`
 // pub struct SampleValueRange<T: Sample>(pub std::ops::RangeInclusive<T>);
 // #[derive(Debug, Clone, PartialEq, PartialOrd, Copy)]
 // pub struct SampleValueRange<T: Sample> {

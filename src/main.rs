@@ -61,27 +61,28 @@ fn main() {
         //     .start(canvas, web_options, Box::new(|cc| Ok(Box::new(wavalyze::TemplateApp::new(cc)))))
         //     .await;
 
-        let args = wavalyze::AppCliConfig::default();
-        let user_config = model::Config::default();
-        let start_result = eframe::WebRunner::new()
-            .start(
-                canvas,
-                web_options,
-                Box::new(|cc| Ok(Box::new(wavalyze::App::new(cc, args, user_config)))),
-            )
-            .await;
+        // TODO: Redo with new app implementation
+        // let args = wavalyze::AppCliConfig::default();
+        // let user_config = model::Config::default();
+        // let start_result = eframe::WebRunner::new()
+        //     .start(
+        //         canvas,
+        //         web_options,
+        //         Box::new(|cc| Ok(Box::new(wavalyze::App::new(cc, args, user_config)))),
+        //     )
+        //     .await;
 
-        // Remove the loading text and spinner:
-        if let Some(loading_text) = document.get_element_by_id("loading_text") {
-            match start_result {
-                Ok(_) => {
-                    loading_text.remove();
-                }
-                Err(e) => {
-                    loading_text.set_inner_html("<p> The app has crashed. See the developer console for details. </p>");
-                    panic!("Failed to start eframe: {e:?}");
-                }
-            }
-        }
+        // // Remove the loading text and spinner:
+        // if let Some(loading_text) = document.get_element_by_id("loading_text") {
+        //     match start_result {
+        //         Ok(_) => {
+        //             loading_text.remove();
+        //         }
+        //         Err(e) => {
+        //             loading_text.set_inner_html("<p> The app has crashed. See the developer console for details. </p>");
+        //             panic!("Failed to start eframe: {e:?}");
+        //         }
+        //     }
+        // }
     });
 }
