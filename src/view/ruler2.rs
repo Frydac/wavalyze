@@ -14,18 +14,15 @@ pub fn rpc(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
     pos
 }
 
-pub fn interaction_handle_drag(ui: &mut egui::Ui, response: &egui::Response, model: &model::SharedModel) {
+pub fn interaction_handle_drag(ui: &mut egui::Ui, response: &egui::Response, model: &mut model::Model) {
     if response.dragged() {
         let delta = ui.input(|i| i.pointer.delta());
-        model
-            .borrow_mut()
-            .actions
-            .push(model::action::Action::ShiftX { nr_pixels: -delta.x });
+        model.actions.push(model::action::Action::ShiftX { nr_pixels: -delta.x });
     }
 }
 
 // TODO: can we get away with only passing the ruler?
-pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) -> Result<()> {
+pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     let height = 50.0;
     let width = ui.available_width();
     ui.allocate_ui([width, height].into(), |ui| {
@@ -46,9 +43,6 @@ pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) -> Result<()> {
 
                 // handle interactions
                 interaction_handle_drag(ui, &response, model);
-
-                // TODO: probably don't need the whole model (also need user_config)
-                let mut model = model.borrow_mut();
 
                 {
                     let ruler = &mut model.tracks2.ruler;

@@ -15,7 +15,7 @@ pub fn round(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
     pos
 }
 
-pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
+pub fn ui(ui: &mut egui::Ui, model: &model::Model) {
     let height = 40.0;
     let width = ui.available_width();
 
@@ -38,7 +38,6 @@ pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) {
                 // NOTE: we can't use ui in any other way after this declaration..
                 let round = |pos: egui::Pos2| round(ui, pos);
                 {
-                    let model = model.borrow();
                     if model.tracks.is_empty() {
                         return;
                     }

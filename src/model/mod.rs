@@ -10,26 +10,22 @@ pub mod tracks2;
 pub mod types;
 pub mod view_buffer;
 
-use crate::audio::thumbnail::ThumbnailE;
+pub use self::config::Config;
+pub use self::ix_zoom_offset::IxZoomOffset;
+pub use self::track::Track;
+pub use self::tracks::Tracks;
+pub use self::types::PixelCoord;
+pub use self::view_buffer::ViewBufferE;
+use crate::audio;
 use crate::model::track2::TrackId;
-use crate::{audio, model};
-
 pub use action::Action;
-pub use model::config::Config;
-pub use model::ix_zoom_offset::IxZoomOffset;
-pub use model::track::Track;
-pub use model::tracks::Tracks;
-pub use model::types::PixelCoord;
-pub use model::view_buffer::ViewBufferE;
 use tracing::{info, trace};
 
 // NOTE: move all under this?
 
 use crate::wav;
 use anyhow::Result;
-use std::cell::RefCell;
 // use std::collections::VecDeque;
-use std::rc::Rc;
 
 #[derive(Default, Debug)]
 pub struct Model {
@@ -42,22 +38,6 @@ pub struct Model {
     pub tracks2: tracks2::Tracks,
 
     pub actions: Vec<Action>,
-}
-
-pub type SharedModel = Rc<RefCell<Model>>;
-
-impl Model {
-    pub fn split_mut(&mut self) -> (&mut model::ruler::Time, &mut Vec<model::action::Action>) {
-        (&mut self.tracks2.ruler, &mut self.actions)
-    }
-
-    pub fn default_shared() -> SharedModel {
-        Rc::new(RefCell::new(Model::default()))
-    }
-    // move self to shared model
-    pub fn into_shared(self) -> SharedModel {
-        Rc::new(RefCell::new(self))
-    }
 }
 
 impl Model {

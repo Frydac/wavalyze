@@ -10,11 +10,6 @@ use tracing::trace;
 
 #[derive(Debug)]
 pub struct App {
-    #[allow(dead_code)]
-    // TODO: probably dont need the SharedModel here, we can just pass the model around I think
-    // also doesn't need to be a member, we can just use the run function and move it into the view
-    model: model::SharedModel,
-
     view: view::View,
 
     #[allow(dead_code)]
@@ -25,9 +20,8 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let model = model::Model::default_shared();
+        let model = model::Model::default();
         Self {
-            model: model.clone(),
             view: view::View::new(model),
             cli_config: None,
             args: None,
@@ -61,7 +55,7 @@ impl eframe::App for App {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        self.model.borrow().user_config.save_to_storage();
+        self.view.model().user_config.save_to_storage();
         // self.save_user_config();
         // self.model.save_to_storage(storage);
     }
@@ -96,10 +90,7 @@ impl App {
             },
         }
 
-        let model = model.into_shared();
-
         Self {
-            model: model.clone(),
             view: view::View::new(model),
             cli_config: None,
             args: Some(args),

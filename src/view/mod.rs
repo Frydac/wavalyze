@@ -19,7 +19,7 @@ use slotmap::SlotMap;
 
 #[derive(Debug)]
 pub struct View {
-    model: model::SharedModel,
+    model: model::Model,
     tracks: HashMap<util::Id, Track>,
     tracks2: SlotMap<TrackId, Track2>,
 
@@ -27,7 +27,7 @@ pub struct View {
 }
 
 impl View {
-    pub fn new(model: model::SharedModel) -> Self {
+    pub fn new(model: model::Model) -> Self {
         Self {
             model,
             tracks: HashMap::new(),
@@ -46,7 +46,7 @@ impl View {
 
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.handle_drag_and_drop_into_app(ctx);
-        let _ = self.model.borrow_mut().process_actions();
+        let _ = self.model.process_actions();
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
@@ -74,13 +74,13 @@ impl View {
             .width_range(80.0..=ctx.available_rect().width() / 1.5)
             .show(ctx, |ui| {
                 ui.add_space(5.0);
-                config::show_config(ui, &mut self.model.borrow_mut().user_config);
+                config::show_config(ui, &mut self.model.user_config);
                 ui.add_space(5.0);
                 self.fps.ui(ui);
                 ui.add_space(5.0);
-                ruler2::ui_ruler_info_panel(ui, &self.model.borrow().tracks2.ruler);
+                ruler2::ui_ruler_info_panel(ui, &self.model.tracks2.ruler);
                 ui.add_space(5.0);
-                ruler2::ui_hover_info_panel(ui, self.model.borrow().tracks2.ruler.hover_info.as_ref());
+                ruler2::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
             });
     }
 
@@ -95,9 +95,9 @@ impl View {
 
                 // egui::Frame::default()
                 //     // .stroke(egui::Stroke::new(1.0, egui::Color32::BLACK))
-                //     .inner_margin(egui::Margin::same(10.0))
-                //     .show(ui, |ui| {
-                //         let model = self.model.borrow();
+                // .inner_margin(egui::Margin::same(10.0))
+                // .show(ui, |ui| {
+                //         let model = &self.model;
 
                 //         for track in model.tracks.iter() {
                 //             ui.label(&track.name);
@@ -125,7 +125,7 @@ impl View {
             for file in &i.raw.dropped_files {
                 if let Some(path) = &file.path {
                     if path.extension() == Some(std::ffi::OsStr::new("wav")) {
-                        self.model.borrow_mut().actions.push(Action::OpenFile(wav::ReadConfig::new(path)));
+                        self.model.actions.push(Action::OpenFile(wav::ReadConfig::new(path)));
                     }
                 }
             }
@@ -160,31 +160,31 @@ impl View {
             // ui.add(egui::DragValue::new(&mut self.scroll_speed).speed(1.0));
             // × ✖ ❌ 🗑️
             if ui.button("close all ✖").clicked() {
-                // self.model.borrow_mut().tracks.clear_tracks();
-                self.model.borrow_mut().actions.push(Action::RemoveAllTracks);
+                // self.model.tracks.clear_tracks();
+                self.model.actions.push(Action::RemoveAllTracks);
             }
 
             if ui.button("x-axis reset").clicked() {
-                self.model.borrow_mut().actions.push(Action::ZoomToFull);
+                self.model.actions.push(Action::ZoomToFull);
             }
         });
     }
 
     fn ui_tracks2(&mut self, ui: &mut egui::Ui) -> Result<()> {
-        let mut model = self.model.borrow_mut();
+        let model = &mut self.model;
 
         // render view tracks in specified order
         {
             for track_ix in 0..model.tracks2.tracks_order.len() {
                 let track_id = model.tracks2.tracks_order[track_ix];
-                crate::view::track2::ui(ui, &mut model, track_id)?;
+                crate::view::track2::ui(ui, model, track_id)?;
             }
         }
         Ok(())
     }
 
     fn ui_tracks(&mut self, ui: &mut egui::Ui) {
-        let mut model = self.model.borrow_mut();
+        let model = &mut self.model;
 
         // update view tracks if needed
         {
@@ -222,7 +222,7 @@ impl View {
                 ui.allocate_ui([width_track, height_track].into(), |ui| {
                     let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
                     // this ui will notify the model of the current hover info
-                    view_track.ui(ui, &mut model);
+                    view_track.ui(ui, model);
                 });
             }
             // No track is hovered, unhover all tracks
@@ -236,7 +236,7 @@ impl View {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui_top_panel_tool_bar(ui, ctx);
             // ruler::ui(ui, &self.model);
-            let _ = ruler2::ui(ui, &self.model);
+            let _ = ruler2::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let width = ui.available_width();
                 ui.set_max_width(width);
@@ -249,5 +249,9 @@ impl View {
         });
 
         Ok(())
+    }
+
+    pub fn model(&self) -> &model::Model {
+        &self.model
     }
 }

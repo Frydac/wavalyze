@@ -149,7 +149,6 @@ pub struct Thumbnail<T: Sample> {
     pub level_data: BTreeMap<SampPerPix, LevelData<T>>,
 }
 
-
 impl<T: Sample> Thumbnail<T> {
     pub fn from_buffer(buffer: &Buffer<T>, config: Option<ThumbnailConfig>) -> Self {
         let config = config.unwrap_or_default();
