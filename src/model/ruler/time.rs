@@ -26,8 +26,6 @@ pub struct Time {
 
     /// The sample index ticks/lattice to draw for current screen rect/time_line
     pub ix_lattice: IxLattice,
-
-
     // TODO: don't recalculate ix_lattice every time, only when needed
     // make API a bit cleaner
 }

@@ -24,7 +24,6 @@ pub fn interaction_handle_drag(ui: &mut egui::Ui, response: &egui::Response, mod
     }
 }
 
-
 // TODO: can we get away with only passing the ruler?
 pub fn ui(ui: &mut egui::Ui, model: &model::SharedModel) -> Result<()> {
     let height = 50.0;

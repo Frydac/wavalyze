@@ -1,5 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
+use crate::audio::sample;
 use crate::audio::sample2::Sample;
 
 /// One channel of audio samples.  
@@ -84,6 +85,10 @@ impl<T: Sample> Buffer<T> {
     pub fn max_fold(&self) -> T {
         self.data.iter().fold(T::MIN, |a, &b| if b > a { b } else { a })
     }
+
+    pub fn val_range(&self) -> sample::ValRange<T> {
+        T::val_range(self.bit_depth)
+    }
 }
 
 /// Use deref to access the underlying buffer
@@ -122,5 +127,5 @@ pub enum SampleType {
 // pub fn sample_range_generic<T: Sample + From<i64>>(bit_depth: u32) -> SampleValueRange<T> {
 //     let min_i64 = -(1_i64 << (bit_depth - 1));
 //     let max_i64 = (1_i64 << (bit_depth - 1)) - 1;
-//     SampleValueRange::new(T::from(min_i64), T::from(max_i64))
+//     SampleValueRange::new(T::from(.min_i64), T::from(max_i64))
 // }

@@ -1,5 +1,9 @@
 use crate::{
-    args::{self, Args}, model::{self, Action}, view, wav::ReadConfig, AppCliConfig
+    args::{self, Args},
+    model::{self, Action},
+    view,
+    wav::ReadConfig,
+    AppCliConfig,
 };
 use eframe::egui;
 use tracing::trace;

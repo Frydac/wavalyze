@@ -20,7 +20,7 @@ impl<T: Sample> SampleRect<T> {
                 start: 0.0,
                 end: buffer.nr_samples() as f64,
             },
-            val_rng: Some(sample::ValRange::<T> { min: T::MIN, max: T::MAX }),
+            val_rng: Some(buffer.val_range()),
         }
     }
 
