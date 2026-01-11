@@ -14,7 +14,7 @@ pub use self::config::Config;
 pub use self::ix_zoom_offset::IxZoomOffset;
 pub use self::track::Track;
 pub use self::tracks::Tracks;
-pub use self::types::PixelCoord;
+pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
 use crate::audio;
 use crate::model::track2::TrackId;

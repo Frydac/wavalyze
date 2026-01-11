@@ -1,8 +1,10 @@
+use num_traits::ToPrimitive;
+
 use crate::audio::sample::ValRange;
 use std::fmt::Debug;
 
 // Represents a single audio sample value
-pub trait Sample: Debug + Default + Copy + PartialOrd + PartialEq + Clone {
+pub trait Sample: Debug + Default + Copy + PartialOrd + PartialEq + Clone + ToPrimitive {
     // Needed for dealing with partial ordering of floats
     fn is_nan(&self) -> bool;
 

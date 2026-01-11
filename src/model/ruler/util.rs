@@ -12,13 +12,16 @@ pub fn sample_ix_to_screen_x(sample_ix: f64, sample_ix_range: sample::FracIxRang
 }
 
 // assumes both ranges are valid
-pub fn screen_x_to_sample_ix(screen_x: f32, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> Option<f64> {
+pub fn screen_x_to_sample_ix(screen_x: f32, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> f64 {
     let screen_x_offset = screen_x - screen_rect.left();
     let sample_ix_frac = screen_x_offset / screen_rect.width();
-    let sample_ix = sample_ix_range.start + sample_ix_frac as f64 * sample_ix_range.len();
-    Some(sample_ix)
+    sample_ix_range.start + sample_ix_frac as f64 * sample_ix_range.len()
+    // let sample_ix = 
+    // sample_ix
 }
 
+// PERF: remove range_len check, this can be in a per sample basis, while the range should be
+// checked per buffer.
 pub fn sample_value_to_screen_y<T>(sample_value: T, val_range: sample::ValRange<T>, screen_rect: Rect) -> Option<f32>
 where
     T: Sample + Copy + ToPrimitive,

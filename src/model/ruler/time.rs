@@ -85,7 +85,7 @@ impl Time {
 
     pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<f64> {
         let ix_range = self.ix_range()?;
-        screen_x_to_sample_ix(screen_x, ix_range, self.screen_rect)
+        Some(screen_x_to_sample_ix(screen_x, ix_range, self.screen_rect))
     }
 
     // Returns all the absolute sample indices that are visible in the given screen x pixel column
