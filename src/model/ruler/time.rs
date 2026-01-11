@@ -80,7 +80,7 @@ impl Time {
             None
         })?;
         let ix_range = time_line.get_ix_range(self.screen_rect.width() as f64);
-        sample_ix_to_screen_x(sample_ix, ix_range, self.screen_rect)
+        Some(sample_ix_to_screen_x(sample_ix, ix_range, self.screen_rect))
     }
 
     pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<f64> {

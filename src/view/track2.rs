@@ -1,36 +1,36 @@
-use crate::model::{self, track2::TrackId, Action, Model};
+use crate::model::{track2::TrackId, Action, Model};
 use anyhow::Result;
 
-#[derive(Debug, Clone)]
-pub struct Track {
-    id: TrackId,
-}
+// #[derive(Debug, Clone)]
+// pub struct Track {
+//     id: TrackId,
+// }
 
-impl Track {
-    pub fn new(id: TrackId) -> Self {
-        Self { id }
-    }
+// impl Track {
+//     pub fn new(id: TrackId) -> Self {
+//         Self { id }
+//     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, model: &mut Model) -> Result<()> {
-        // ui.label(format!("Track: {:?}", self.id));
-        let track = model
-            .tracks2
-            .tracks
-            .get_mut(self.id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", self.id))?;
+//     pub fn ui(&mut self, ui: &mut egui::Ui, model: &mut Model) -> Result<()> {
+//         // ui.label(format!("Track: {:?}", self.id));
+//         let track = model
+//             .tracks2
+//             .tracks
+//             .get_mut(self.id)
+//             .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", self.id))?;
 
-        let screen_rect = ui.min_rect();
-        track.set_screen_rect(screen_rect.into());
+//         let screen_rect = ui.min_rect();
+//         track.set_screen_rect(screen_rect.into());
 
-        self.ui_track_header(ui, track)?;
+//         self.ui_track_header(ui, track)?;
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    pub fn ui_track_header(&mut self, ui: &mut egui::Ui, track: &mut model::track2::Track) -> Result<()> {
-        Ok(())
-    }
-}
+//     pub fn ui_track_header(&mut self, ui: &mut egui::Ui, track: &mut model::track2::Track) -> Result<()> {
+//         Ok(())
+//     }
+// }
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     // ui.style_mut().spacing.item_spacing = egui::vec2(4.0, 0.0);

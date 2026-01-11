@@ -1,13 +1,13 @@
-use anyhow::anyhow;
-use anyhow::{ensure, Result};
+// use anyhow::anyhow;
+// use anyhow::{ensure, Result};
 use std::collections::BTreeMap;
 use std::fmt;
-use tracing::{debug, instrument};
+// use tracing::{debug, instrument};
 
 use itertools::Itertools;
 
 use crate::audio::buffer2::{Buffer, BufferE};
-use crate::audio::sample::{self, MinMaxSamples};
+use crate::audio::sample::{self};
 use crate::audio::sample2::Sample;
 
 type SampPerPix = u64;
@@ -27,28 +27,37 @@ impl ThumbnailE {
             BufferE::I16(buffer) => ThumbnailE::I16(Thumbnail::from_buffer(buffer, config)),
         }
     }
+
+    pub fn get_smallest_samples_per_pixel(&self) -> Option<u64> {
+        match self {
+            ThumbnailE::F32(thumbnail) => thumbnail.get_smallest_samples_per_pixel(),
+            ThumbnailE::I32(thumbnail) => thumbnail.get_smallest_samples_per_pixel(),
+            ThumbnailE::I16(thumbnail) => thumbnail.get_smallest_samples_per_pixel(),
+        }
+    }
 }
 
 /// Represents the sample values for a single zoom level
 /// A set of min/max values per pixel column
 #[derive(Debug, Clone)]
 pub struct LevelData<T: Sample> {
-    pub samples_per_pixel: u64,
+    pub samples_per_pixel: f64,
     pub data: Vec<sample::ValRange<T>>,
 }
 
 impl<T: Sample> LevelData<T> {
     // TODO: we should make all the level data in one pass, not one pass per zoom level
-    pub fn from_buffer(buffer: &Buffer<T>, samples_per_pixel: u64) -> Self {
+    pub fn from_buffer(buffer: &[T], samples_per_pixel: u64) -> Self {
         let mut result = Self {
-            samples_per_pixel,
+            samples_per_pixel: samples_per_pixel as f64,
             data: vec![],
         };
         for chunk in &buffer.iter().chunks(samples_per_pixel as usize) {
             let mut min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
             for &sample in chunk {
-                min_max.min = min_max.min.min(sample);
-                min_max.max = min_max.max.max(sample);
+                min_max.include(sample);
+                // min_max.min = min_max.min.min(sample);
+                // min_max.max = min_max.max.max(sample);
             }
             result.data.push(min_max);
         }
@@ -56,14 +65,15 @@ impl<T: Sample> LevelData<T> {
     }
 
     pub fn from_level_data(level_data: &LevelData<T>, samples_per_pixel: u64) -> Self {
-        assert!(samples_per_pixel > level_data.samples_per_pixel);
+        assert!(samples_per_pixel as f64 > level_data.samples_per_pixel);
 
-        let ratio = samples_per_pixel as f64 / level_data.samples_per_pixel as f64;
+        let ratio = samples_per_pixel as f64 / level_data.samples_per_pixel;
         let mut result = Self {
-            samples_per_pixel,
+            samples_per_pixel: samples_per_pixel as f64,
             data: vec![],
         };
-        for chunk in &level_data.data.iter().chunks(level_data.samples_per_pixel as usize) {
+        result.data.reserve(level_data.data.len() / ratio as usize);
+        for chunk in &level_data.data.iter().chunks(ratio as usize) {
             let mut min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
             for val_range in chunk {
                 min_max.min = min_max.min.min(val_range.min);
@@ -73,49 +83,89 @@ impl<T: Sample> LevelData<T> {
         }
         result
     }
+    pub fn from_buffer_fractional_2(buffer: &[T], sample_ix_range: sample::IxRange, samples_per_pixel: f64) -> Self {
+        let mut res = Self {
+            samples_per_pixel,
+            data: vec![],
+        };
+        res.from_buffer_fractional(buffer, sample_ix_range, samples_per_pixel);
+        res
+    }
+
+    pub fn from_buffer_fractional(&mut self, buffer: &[T], sample_ix_range: sample::IxRange, samples_per_pixel: f64) {
+        let start_ix = sample_ix_range.start.max(0) as usize;
+        let end_ix = sample_ix_range.end.max(0).min(buffer.len() as i64) as usize;
+
+        if start_ix == end_ix {
+            return;
+        }
+
+        let mut cur_min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
+        self.data.clear();
+        self.data.reserve((end_ix - start_ix) / samples_per_pixel as usize);
+
+        let mut cur_ix_out = 0;
+        buffer
+            .iter()
+            .skip(start_ix)
+            .take(end_ix - start_ix)
+            .enumerate()
+            .for_each(|(ix_in, val)| {
+                let ix_out = ix_in as f64 / samples_per_pixel;
+                let ix_out = ix_out.floor() as usize;
+                if ix_out == cur_ix_out {
+                    cur_min_max.include(*val);
+                } else {
+                    self.data.push(cur_min_max);
+                    cur_min_max = sample::ValRange { min: *val, max: *val };
+                    cur_ix_out = ix_out;
+                }
+            });
+    }
 }
 
 impl<T: Sample> LevelData<T> {
-    pub fn get_sample_view(&self, sample_ix_range: sample::IxRange, samples_per_pixel: f64) -> Result<sample::ViewData<T>> {
-        ensure!(
-            samples_per_pixel >= self.samples_per_pixel as f64,
-            "We can only zoom out, i.e. more samples per pixel"
-        );
+    // TODO: need to redo this? ViewData is not positions only
+    // pub fn get_sample_view(&self, sample_ix_range: sample::IxRange, samples_per_pixel: f64) -> Result<sample::ViewData<T>> {
+    //     ensure!(
+    //         samples_per_pixel >= self.samples_per_pixel as f64,
+    //         "We can only zoom out, i.e. more samples per pixel"
+    //     );
 
-        let ratio = samples_per_pixel / self.samples_per_pixel as f64;
-        dbg!(ratio);
-        let nr_out_samples = sample_ix_range.len() as f64 / ratio;
-        let nr_samples_available = (self.data.len() as i64 * self.samples_per_pixel as i64) - sample_ix_range.start;
-        let mut out_mm = MinMaxSamples::<T>::with_capacity(nr_out_samples as usize);
-        out_mm.extend(
-            self.data
-                .iter()
-                .skip(self.get_ix(sample_ix_range.start))
-                .enumerate()
-                .chunk_by(|(ix, _)| ((*ix as f64) / ratio).floor() as usize)
-                .into_iter()
-                .map(|(_out_view_ix, group)| {
-                    group.fold(
-                        sample::ValRange::<T> { min: T::MAX, max: T::MIN },
-                        |mut min_max, (_ix, val_range)| {
-                            min_max.min = min_max.min.min(val_range.min);
-                            min_max.max = min_max.max.max(val_range.max);
-                            min_max
-                        },
-                    )
-                }),
-        );
+    //     let ratio = samples_per_pixel / self.samples_per_pixel as f64;
+    //     dbg!(ratio);
+    //     let nr_out_samples = sample_ix_range.len() as f64 / ratio;
+    //     let nr_samples_available = (self.data.len() as i64 * self.samples_per_pixel as i64) - sample_ix_range.start;
+    //     let mut out_mm = MinMaxSamples::<T>::with_capacity(nr_out_samples as usize);
+    //     out_mm.extend(
+    //         self.data
+    //             .iter()
+    //             .skip(self.get_ix(sample_ix_range.start))
+    //             .enumerate()
+    //             .chunk_by(|(ix, _)| ((*ix as f64) / ratio).floor() as usize)
+    //             .into_iter()
+    //             .map(|(_out_view_ix, group)| {
+    //                 group.fold(
+    //                     sample::ValRange::<T> { min: T::MAX, max: T::MIN },
+    //                     |mut min_max, (_ix, val_range)| {
+    //                         min_max.min = min_max.min.min(val_range.min);
+    //                         min_max.max = min_max.max.max(val_range.max);
+    //                         min_max
+    //                     },
+    //                 )
+    //             }),
+    //     );
 
-        println!("nr_out_samples: {}", nr_out_samples);
-        println!("out_mm.len(): {}", out_mm.len());
-        println!("nr_samples_available: {}", nr_samples_available);
-        let nr_out_samples_available = nr_samples_available as f64 / ratio;
-        println!("nr_out_samples_available: {}", nr_out_samples_available);
-        Ok(sample::ViewData::<T>::MinMax(out_mm))
-    }
+    //     println!("nr_out_samples: {}", nr_out_samples);
+    //     println!("out_mm.len(): {}", out_mm.len());
+    //     println!("nr_samples_available: {}", nr_samples_available);
+    //     let nr_out_samples_available = nr_samples_available as f64 / ratio;
+    //     println!("nr_out_samples_available: {}", nr_out_samples_available);
+    //     Ok(sample::ViewData::<T>::MinMax(out_mm))
+    // }
 
     pub fn get_ix(&self, sample_ix: sample::Ix) -> usize {
-        (sample_ix as f64 / self.samples_per_pixel as f64).floor() as usize
+        (sample_ix as f64 / self.samples_per_pixel).floor() as usize
     }
 }
 
@@ -174,24 +224,28 @@ impl<T: Sample> Thumbnail<T> {
 }
 
 impl<T: Sample> Thumbnail<T> {
-    #[instrument(skip(self), fields(self = %self))]
-    pub fn get_sample_view(&self, sample_ix_range: sample::IxRange, samples_per_pixel: f64) -> Result<sample::ViewData<T>> {
-        let spp_requested = samples_per_pixel as u64;
+    // #[instrument(skip(self), fields(self = %self))]
+    // pub fn get_sample_view(&self, sample_ix_range: sample::IxRange, samples_per_pixel: f64) -> Result<sample::ViewData<T>> {
+    //     let spp_requested = samples_per_pixel as u64;
 
-        // Find level data with ssp_key smaller than and closest to the given ssp_key
-        let (spp_source, level_data) = self.level_data.range(..spp_requested).next_back().ok_or_else(|| {
-            // Safely reference the smallest key if it exists, else fallback message:
-            let min_spp = self.level_data.keys().next().map(|k| k.to_string()).unwrap_or("<empty>".into());
-            anyhow!(
-                "No level data available for samples_per_pixel {} (min is {})",
-                samples_per_pixel,
-                min_spp
-            )
-        })?;
+    //     // Find level data with ssp_key smaller than and closest to the given ssp_key
+    //     let (spp_source, level_data) = self.level_data.range(..spp_requested).next_back().ok_or_else(|| {
+    //         // Safely reference the smallest key if it exists, else fallback message:
+    //         let min_spp = self.level_data.keys().next().map(|k| k.to_string()).unwrap_or("<empty>".into());
+    //         anyhow!(
+    //             "No level data available for samples_per_pixel {} (min is {})",
+    //             samples_per_pixel,
+    //             min_spp
+    //         )
+    //     })?;
 
-        debug!(spp_source, spp_requested);
+    //     debug!(spp_source, spp_requested);
 
-        level_data.get_sample_view(sample_ix_range, samples_per_pixel)
+    //     level_data.get_sample_view(sample_ix_range, samples_per_pixel)
+    // }
+
+    pub fn get_smallest_samples_per_pixel(&self) -> Option<u64> {
+        self.level_data.keys().next().copied()
     }
 }
 

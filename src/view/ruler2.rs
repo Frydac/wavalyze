@@ -44,21 +44,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
                 // handle interactions
                 interaction_handle_drag(ui, &response, model);
 
-                {
-                    let ruler = &mut model.tracks2.ruler;
-                    ruler.set_screen_rect(rect.into());
-
-                    // for demo, should come from loaded file?
-                    // {
-                    //     if !ruler.valid() {
-                    //         tracing::warn!("Ruler not valid setting to demo range");
-                    //         ruler.zoom_to_ix_range(sample::FracIxRange {
-                    //             start: -180.0,
-                    //             end: 900_000.0,
-                    //         });
-                    //     }
-                    // }
-                }
+                // Update the screen rect of the ruler
+                model.tracks2.ruler.set_screen_rect(rect.into());
 
                 let pos_in_rect = ui.ctx().pointer_hover_pos().filter(|&pos| rect.contains(pos));
                 match pos_in_rect {

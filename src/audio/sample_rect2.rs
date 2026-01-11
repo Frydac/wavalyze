@@ -1,4 +1,5 @@
 use crate::audio::{self, buffer2::BufferE, sample, sample2::Sample};
+use anyhow::{anyhow, Result};
 
 ///
 /// A 2D 'camera' view expressed in terms of sample indices and sample values.
@@ -67,6 +68,26 @@ impl SampleRectE {
             SampleRectE::F32(rect) => rect.ix_rng,
             SampleRectE::I32(rect) => rect.ix_rng,
             SampleRectE::I16(rect) => rect.ix_rng,
+        }
+    }
+
+    pub fn get_f32(&self) -> Result<&SampleRect<f32>> {
+        match self {
+            SampleRectE::F32(rect) => Ok(rect),
+            _ => Err(anyhow!("Not a f32 rect")),
+        }
+    }
+
+    pub fn get_i32(&self) -> Result<&SampleRect<i32>> {
+        match self {
+            SampleRectE::I32(rect) => Ok(rect),
+            _ => Err(anyhow!("Not a i32 rect")),
+        }
+    }
+    pub fn get_i16(&self) -> Result<&SampleRect<i16>> {
+        match self {
+            SampleRectE::I16(rect) => Ok(rect),
+            _ => Err(anyhow!("Not a i16 rect")),
         }
     }
 }

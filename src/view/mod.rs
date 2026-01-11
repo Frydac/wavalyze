@@ -10,19 +10,18 @@ use std::collections::HashMap;
 use crate::model::Action;
 use crate::util;
 use crate::view::track::Track;
-use crate::view::track2::Track as Track2;
+// use crate::view::track2::Track as Track2;
 use crate::{model, wav};
 use anyhow::Result;
 use egui;
-use model::track2::TrackId;
-use slotmap::SlotMap;
+// use model::track2::TrackId;
+// use slotmap::SlotMap;
 
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
     tracks: HashMap<util::Id, Track>,
-    tracks2: SlotMap<TrackId, Track2>,
-
+    // tracks2: SlotMap<TrackId, Track2>,
     fps: fps::Fps,
 }
 
@@ -31,7 +30,7 @@ impl View {
         Self {
             model,
             tracks: HashMap::new(),
-            tracks2: SlotMap::default(),
+            // tracks2: SlotMap::default(),
             fps: fps::Fps::new(100),
         }
     }

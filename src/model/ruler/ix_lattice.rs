@@ -61,7 +61,8 @@ impl IxLattice {
         let start_sample_ix = ceil_to_multiple(sample_ix_range.start.ceil() as i64, multiple);
         let end_sample_ix = floor_to_multiple(sample_ix_range.end.floor() as i64, multiple);
         for cur_sample_ix in (start_sample_ix..=end_sample_ix).step_by(nr_samples_per_small_tick as usize) {
-            let Some(screen_x) = sample_ix_to_screen_x(cur_sample_ix as f64, sample_ix_range, screen_rect) else {
+            let screen_x = sample_ix_to_screen_x(cur_sample_ix as f64, sample_ix_range, screen_rect);
+            if !screen_rect.contains_x(screen_x) {
                 continue;
             };
             let tick_type = if cur_sample_ix % nr_samples_per_label_tick as i64 == 0 {

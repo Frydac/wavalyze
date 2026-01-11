@@ -83,18 +83,13 @@ pub struct Track {
     pub screen_rect: Option<Rect>,
     pub sample_rect: Option<audio::SampleRectE>,
 
-    /// Zoom level in x direction
-    ///
-    /// * Doesn't change when updating the screen_rect to keep the zoom stable
-    pub samples_per_pixel: Option<f32>,
-
     // x range is pixel width starting at 0.0
     // y range is sample_rect sample range coordinates I think
     // NOTE: not really needed, we can just use screen_rect and 'normalize' it, they should be very similar
     // pub view_rect: Rect,
-    /// Contains all the samples as pixel positions relative to top_left (0,0), currently to be
-    /// rendered by the track::View
-    /// The final transformation to absolute screen coordinates is done in the view::Track
+    // Contains all the samples as pixel positions relative to top_left (0,0), currently to be
+    // rendered by the track::View
+    // The final transformation to absolute screen coordinates is done in the view::Track
     view_buffer: Option<model::ViewBufferE>,
 
     /// One item for now
@@ -121,7 +116,7 @@ impl Track {
         Ok(Self {
             screen_rect: None,
             sample_rect: None,
-            samples_per_pixel: None,
+            // samples_per_pixel: None,
             view_buffer: None,
             single,
             hover_info: None,
@@ -171,9 +166,19 @@ impl Track {
         }
         self.update_view_buffer_ = false;
 
-        if self.screen_rect.is_none() || self.sample_rect.is_none() {
-            return Ok(());
-        }
+        let screen_rect = self.screen_rect.ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+        let sample_rect = self.sample_rect.ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+
+        // let samples_per_pixel = sample_rect.width() / screen_rect.width();
+        // if samples_per_pixel <= 2.0 {
+        //     let buffer = audio.get_buffer(self.single.item.buffer_id)?;
+
+        // } else {
+        // let thumbnail = audio.
+
+        // }
+
+        // let (screen_rect, sample_rect) =
 
         // self.single
 

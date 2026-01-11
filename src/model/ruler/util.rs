@@ -4,23 +4,15 @@ use crate::{
 };
 use num_traits::{FromPrimitive, ToPrimitive};
 
-pub fn sample_ix_to_screen_x(sample_ix: f64, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> Option<f32> {
-    if !sample_ix_range.contains(sample_ix) {
-        tracing::trace!("sample_ix {} not in ix_range {:?}", sample_ix, sample_ix_range);
-        return None;
-    }
+// assumes both ranges are valid
+pub fn sample_ix_to_screen_x(sample_ix: f64, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> f32 {
     let sample_ix_offset = sample_ix - sample_ix_range.start;
     let sample_ix_frac = sample_ix_offset / sample_ix_range.len();
-    let screen_x = screen_rect.left() + sample_ix_frac as f32 * screen_rect.width();
-    Some(screen_x)
+    screen_rect.left() + sample_ix_frac as f32 * screen_rect.width()
 }
 
+// assumes both ranges are valid
 pub fn screen_x_to_sample_ix(screen_x: f32, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> Option<f64> {
-    //     let ix_range = sample_ix_range.to_ix_range();
-    // if !screen_rect.contains_x(screen_x) {
-    //     tracing::trace!("screen_x {} not in screen_rect {:?}", screen_x, screen_rect);
-    //     return None;
-    // }
     let screen_x_offset = screen_x - screen_rect.left();
     let sample_ix_frac = screen_x_offset / screen_rect.width();
     let sample_ix = sample_ix_range.start + sample_ix_frac as f64 * sample_ix_range.len();

@@ -15,6 +15,34 @@ impl<T: Sample + std::ops::Sub<Output = T>> ValRange<T> {
     }
 }
 
+impl<T: Sample> ValRange<T> {
+    //// Extend the range to include the given value
+    pub fn include(&mut self, val: T) {
+        if val < self.min {
+            self.min = val;
+        }
+        if val > self.max {
+            self.max = val;
+        }
+    }
+
+    /// Check if the given value is within the range
+    pub fn includes(&self, val: T) -> bool {
+        val >= self.min && val <= self.max
+    }
+
+    /// Extend the range to include the given range
+    pub fn extend(&mut self, other: Self) {
+        self.min = self.min.min(other.min);
+        self.max = self.max.max(other.max);
+    }
+
+    /// Check if the given range is within the range
+    pub fn contains(&self, other: Self) -> bool {
+        self.min <= other.min && self.max >= other.max
+    }
+}
+
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub enum ValRangeE {
     PCM16(ValRange<i16>),
