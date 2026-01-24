@@ -16,7 +16,7 @@ pub fn screen_x_to_sample_ix(screen_x: f32, sample_ix_range: sample::FracIxRange
     let screen_x_offset = screen_x - screen_rect.left();
     let sample_ix_frac = screen_x_offset / screen_rect.width();
     sample_ix_range.start + sample_ix_frac as f64 * sample_ix_range.len()
-    // let sample_ix = 
+    // let sample_ix =
     // sample_ix
 }
 
@@ -40,6 +40,27 @@ where
 
     // Invert Y axis: max value at top, min at bottom
     Some(screen_rect.bottom() - frac * screen_rect.height())
+}
+
+pub fn sample_value_to_screen_y_e(sample_value: f32, val_range: sample::ValRangeE, screen_rect: Rect) -> Option<f32> {
+    match val_range {
+        sample::ValRangeE::PCM16(val_range) => {
+            let sv_i16 = sample::convert::flt2pcm16(sample_value);
+            sample_value_to_screen_y(sv_i16, val_range, screen_rect)
+        }
+        sample::ValRangeE::PCM24(val_range) => {
+            let sv_i32 = sample::convert::flt2pcm24(sample_value);
+            sample_value_to_screen_y(sv_i32, val_range, screen_rect)
+        }
+        sample::ValRangeE::PCM32(val_range) => {
+            let sv_i32 = sample::convert::flt2pcm32(sample_value);
+            sample_value_to_screen_y(sv_i32, val_range, screen_rect)
+        }
+        sample::ValRangeE::F32(val_range) => {
+            let sv_f32 = sample_value;
+            sample_value_to_screen_y(sv_f32, val_range, screen_rect)
+        }
+    }
 }
 
 pub fn screen_y_to_sample_value<T>(screen_y: f32, val_range: sample::ValRange<T>, screen_rect: Rect) -> Option<T>

@@ -1,31 +1,35 @@
 // use anyhow::{ensure, Result};
 use crate::pos::Pos;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
-}
+// #[derive(Debug, Clone, Copy, Default, PartialEq)]
+// pub struct Point {
+//     pub x: f32,
+//     pub y: f32,
+// }
 
 /// Modeled after emath::Rect, I didn't want to have egui/emath dependencies in my model.
 /// NOTE: the egui::Rect seems to be inclusive, not sure if that is the best way to go, but we'll
 /// run with it for now.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Rect {
-    pub min: Point,
-    pub max: Point,
+    pub min: Pos,
+    pub max: Pos,
 }
 
 impl Rect {
     pub fn new(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Self {
         Self {
-            min: Point { x: min_x, y: min_y },
-            max: Point { x: max_x, y: max_y },
+            min: Pos { x: min_x, y: min_y },
+            max: Pos { x: max_x, y: max_y },
         }
     }
 
     pub fn from_min_size(min_x: f32, min_y: f32, width: f32, height: f32) -> Self {
         Self::new(min_x, min_y, min_x + width, min_y + height)
+    }
+
+    pub fn from_pos_size(pos: Pos, size: Pos) -> Self {
+        Self::new(pos.x, pos.y, pos.x + size.x, pos.y + size.y)
     }
 
     pub fn width(&self) -> f32 {
@@ -57,7 +61,10 @@ impl Rect {
     }
 
     pub fn contains_y_pos(self, pos: Pos) -> bool {
-        self.min.y <= pos.y && pos.y <= self.max.y
+        self.contains_y(pos.y)
+    }
+    pub fn contains_y(self, y: f32) -> bool {
+        self.min.y <= y && y <= self.max.y
     }
     pub fn contains(self, pos: Pos) -> bool {
         self.contains_x_pos(pos) && self.contains_y_pos(pos)
@@ -109,11 +116,11 @@ impl From<Rect> for egui::Rect {
 impl From<egui::Rect> for Rect {
     fn from(rect: egui::Rect) -> Self {
         Self {
-            min: Point {
+            min: Pos {
                 x: rect.min.x,
                 y: rect.min.y,
             },
-            max: Point {
+            max: Pos {
                 x: rect.max.x,
                 y: rect.max.y,
             },

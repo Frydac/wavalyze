@@ -1,5 +1,9 @@
-use crate::{audio, model::config::TrackConfig, wav};
-use anyhow::Result;
+use crate::{
+    audio::{self, sample},
+    model::config::TrackConfig,
+    wav,
+};
+use anyhow::{anyhow, Result};
 use slotmap::new_key_type;
 
 use crate::{
@@ -10,62 +14,6 @@ use crate::{
 
 new_key_type! { pub struct TrackId; }
 
-/// Represents a view on an audio buffer in the context of a track
-/// A track could contain multiple TrackItems
-/// TODO: we probaly want an AudioThumbnail soon
-/// * also with id and pool
-/// * some abstraction managing both buffers and thumbnails
-///   * fn get_sample_view_buffer(BufferId, SampleFractionalIxRange, ViewRect) -> ViewBuffer
-///     * ViewBuffer is an enum where depending on zoom level we have single samples
-///       or min max per pixel. So at most ViewRect.width() nr of elements
-///
-// #[derive(Debug, PartialEq, Clone)]
-// pub struct TrackItem {
-//     buffer_id: BufferId,
-
-//     /// Rectangular view over the buffer's samples
-//     pub sample_rect: Option<SampleRectE>,
-//     pub sample_view: Option<audio::sample::View>,
-
-//     /// For positioning wrt the 'absolute' sample range of the track
-//     pub sample_ix_offset: SampleFractionalIx,
-// }
-
-// impl TrackItem {
-//     pub fn new(buffer_id: BufferId) -> Self {
-//         Self {
-//             buffer_id,
-//             sample_rect: None,
-//             sample_view: None,
-//             sample_ix_offset: 0.0,
-//         }
-//     }
-
-//     pub fn update_sample_view(&mut self, samples_per_pixel: f32, audio: &AudioManager, sample_rect: Option<SampleRectE>) -> Result<()> {
-//         let buffer = audio
-//             .buffers
-//             .get(self.buffer_id)
-//             .ok_or(anyhow!("Buffer {:?} not found", self.buffer_id))?;
-
-//         // take the argument over self
-//         // if no sample_rect is given, create one over the whole buffer.
-//         self.sample_rect = sample_rect.or_else(|| self.sample_rect.take().or_else(|| Some(SampleRectE::from_buffere(buffer))));
-
-//         let ix_rng = self.sample_rect.as_ref().unwrap().ix_rng();
-//         let ix_rng = audio::sample::IxRange {
-//             start: ix_rng.start.ceil() as i64,
-//             end: ix_rng.end.ceil() as i64,
-//         };
-//         let sample_view = audio.get_sample_view_buffer(self.buffer_id, ix_rng, samples_per_pixel)?;
-//         self.sample_view = Some(sample_view);
-
-//         Ok(())
-//     }
-// }
-
-// pub enum SampleViewBuffer<T: Sample> {
-//     Single(Buffer<T>),
-// }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrackMetaData {
     File(wav::file2::File, wav::ChIx),
@@ -160,7 +108,7 @@ impl Track {
         Ok(())
     }
 
-    pub fn update_view_buffer(&mut self, audio: &mut AudioManager) -> Result<()> {
+    pub fn update_sample_view(&mut self, audio: &mut AudioManager) -> Result<()> {
         if !self.update_view_buffer_ {
             return Ok(());
         }
@@ -168,21 +116,17 @@ impl Track {
 
         let screen_rect = self.screen_rect.ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
         let sample_rect = self.sample_rect.ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        let buffer_id = self.single.item.buffer_id;
 
-        // let samples_per_pixel = sample_rect.width() / screen_rect.width();
-        // if samples_per_pixel <= 2.0 {
-        //     let buffer = audio.get_buffer(self.single.item.buffer_id)?;
+        self.single.item.sample_view = Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect)?);
 
-        // } else {
-        // let thumbnail = audio.
+        // trace!("self.single.item.sample_view: {:?}", self.single.item.sample_view);
 
-        // }
+        Ok(())
+    }
 
-        // let (screen_rect, sample_rect) =
-
-        // self.single
-
-        todo!()
+    pub fn get_sample_view(&self) -> Result<&sample::View> {
+        self.single.item.sample_view.as_ref().ok_or(anyhow!("sample_view is missing"))
     }
 
     // pub fn pos_y_sample_value<T: Sample>(&self, value: T) -> Option<f32> {

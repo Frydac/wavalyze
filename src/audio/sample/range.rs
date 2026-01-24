@@ -9,12 +9,24 @@ pub struct ValRange<T: Sample> {
     pub max: T,
 }
 
-impl<T: Sample + std::ops::Sub<Output = T>> ValRange<T> {
-    pub fn len(&self) -> T {
-        self.max - self.min
+// impl<T: Sample + std::ops::Sub<Output = T>> ValRange<T> {
+//     pub fn len(&self) -> T {
+//         self.max - self.min
+//     }
+//     pub fn is_empty(&self) -> bool {
+//         self.len() == T::ZERO
+//     }
+// }
+
+impl<T: Sample> ValRange<T> {
+    pub fn len(&self) -> f64 {
+        self.max.distance(self.min)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0.0
     }
 }
-
 impl<T: Sample> ValRange<T> {
     //// Extend the range to include the given value
     pub fn include(&mut self, val: T) {
@@ -59,6 +71,15 @@ impl ValRangeE {
             ValRangeE::PCM24(_) => ValRangeE::PCM24(PCM24_RANGE),
             ValRangeE::PCM32(_) => ValRangeE::PCM32(PCM32_RANGE),
             ValRangeE::F32(_) => ValRangeE::F32(FLOAT_RANGE),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ValRangeE::PCM16(range) => range.is_empty(),
+            ValRangeE::PCM24(range) => range.is_empty(),
+            ValRangeE::PCM32(range) => range.is_empty(),
+            ValRangeE::F32(range) => range.is_empty(),
         }
     }
 }

@@ -51,8 +51,11 @@ impl View {
         self.ui_top_panel_menu_bar(ctx);
         self.ui_right_side_panel(ctx);
         self.ui_left_side_panel(ctx);
+        self.ui_bottom_side_panel(ctx);
+        let _ = self.ui_central_panel(ctx); // central_panel should always come last
+    }
 
-        // TODO: place holder
+    fn ui_bottom_side_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("bottom_panel")
             .resizable(false)
             .min_height(0.0)
@@ -61,9 +64,6 @@ impl View {
                     ui.heading("Bottom Panel");
                 });
             });
-
-        // NOTE: central_panel should always come last
-        let _ = self.ui_central_panel(ctx);
     }
 
     fn ui_right_side_panel(&mut self, ctx: &egui::Context) {
@@ -153,19 +153,19 @@ impl View {
     }
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        ui.horizontal_top(|ui| {
-            // let _ = ui.button("Test");
-            // let _ = ui.button("Button");
-            // ui.add(egui::DragValue::new(&mut self.scroll_speed).speed(1.0));
-            // × ✖ ❌ 🗑️
-            if ui.button("close all ✖").clicked() {
-                // self.model.tracks.clear_tracks();
-                self.model.actions.push(Action::RemoveAllTracks);
-            }
-
+        ui.horizontal(|ui| {
             if ui.button("x-axis reset").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.style_mut().spacing.window_margin = egui::Margin::same(4.0);
+                if ui.button("close all x").clicked() {
+                    // × ✖ ❌ 🗑️
+                    // if ui.button("✖").clicked() {
+                    self.model.actions.push(Action::RemoveAllTracks);
+                    // model.actions.push(Action::RemoveTrack(track_id));
+                }
+            });
         });
     }
 
@@ -238,9 +238,10 @@ impl View {
             let _ = ruler2::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let width = ui.available_width();
-                ui.set_max_width(width);
-                ui.set_min_width(width);
-                ui.allocate_ui([ui.available_width(), ui.available_height() - 20.0].into(), |ui| {
+                // NOTE: -20.0 seems needed if we fit the height of the tracks then there is no
+                // scrollbar
+                let height = ui.available_height() - 20.0;
+                ui.allocate_ui([width, height].into(), |ui| {
                     // let resp = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height() - 20.0), egui::Sense::hover());
                     let _ = self.ui_tracks2(ui);
                 });

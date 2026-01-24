@@ -63,6 +63,14 @@ impl SampleRectE {
         }
     }
 
+    pub fn shift_ix_rng(&mut self, shift: f64) {
+        match self {
+            SampleRectE::F32(rect) => rect.ix_rng.start += shift,
+            SampleRectE::I32(rect) => rect.ix_rng.start += shift,
+            SampleRectE::I16(rect) => rect.ix_rng.start += shift,
+        }
+    }
+
     pub fn ix_rng(&self) -> sample::FracIxRange {
         match self {
             SampleRectE::F32(rect) => rect.ix_rng,
@@ -70,6 +78,22 @@ impl SampleRectE {
             SampleRectE::I16(rect) => rect.ix_rng,
         }
     }
+
+    pub fn val_rng(&self) -> Option<sample::ValRangeE> {
+        match self {
+            SampleRectE::F32(rect) => rect.val_rng.map(|val_rng| sample::ValRangeE::F32(val_rng)),
+            SampleRectE::I32(rect) => rect.val_rng.map(|val_rng| sample::ValRangeE::PCM24(val_rng)),
+            SampleRectE::I16(rect) => rect.val_rng.map(|val_rng| sample::ValRangeE::PCM16(val_rng)),
+        }
+    }
+
+    // pub fn val_rng<T: Sample>(&self) -> Option<sample::ValRange<T>> {
+    // match self {
+    //     SampleRectE::F32(sample_rect) => sample_rect.get_f32().ok().map(|rect| rect.val_rng),
+    //     SampleRectE::I32(sample_rect) => sample_rect.val_rng,
+    //     SampleRectE::I16(sample_rect) => sample_rect.val_rng,
+    // }
+    // }
 
     pub fn get_f32(&self) -> Result<&SampleRect<f32>> {
         match self {
@@ -84,6 +108,7 @@ impl SampleRectE {
             _ => Err(anyhow!("Not a i32 rect")),
         }
     }
+
     pub fn get_i16(&self) -> Result<&SampleRect<i16>> {
         match self {
             SampleRectE::I16(rect) => Ok(rect),

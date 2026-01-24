@@ -1,4 +1,7 @@
-use crate::model::{track2::TrackId, Action, Model};
+use crate::{
+    audio::sample::view::ViewData,
+    model::{ruler::sample_value_to_screen_y_e, track2::TrackId, Action, Model},
+};
 use anyhow::Result;
 
 // #[derive(Debug, Clone)]
@@ -52,7 +55,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 let mut text = String::from("track header");
                 let mut hover_text = None;
 
-                if let Some((file, channel)) = model.find_file_channel_for_track(track_id) {
+                if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
                     let path = file.path.as_ref().and_then(|p| p.to_str()).unwrap_or("unknown");
                     text = format!("{} - ch {}", path, channel.ch_ix);
                     hover_text = Some(format!("{file}"));
@@ -81,7 +84,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
     Ok(())
 }
 
-// Wrap the waveform canvas in a (manually implemented) resizable frame
+// Wrap the waveform in a (manually implemented) resizable frame
 // TODO: see if we can extrac like a resizable canvas or something
 pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     const RESIZE_HANDLE_HEIGHT: f32 = 3.0;
@@ -98,6 +101,7 @@ pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackI
             let width = ui.available_width();
             ui.set_min_size(egui::vec2(width, height));
             ui.set_max_size(egui::vec2(width, height));
+
             let _ = ui_waveform(ui, model, track_id);
         });
     });
@@ -127,12 +131,56 @@ pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackI
 }
 
 fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
+    // TODO: middle line also dependson sample_rect
+    ui_middle_line(ui);
+
+    let sample_ix_range = {
+        let time_line = model.tracks2.ruler.time_line.as_ref().ok_or(anyhow::anyhow!("No time line"))?;
+        time_line.get_ix_range(ui.min_rect().width() as f64)
+    };
     let track = model
         .tracks2
         .get_track_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
 
-    ui_middle_line(ui);
+    track.set_ix_range(sample_ix_range, &model.audio)?;
+    track.set_screen_rect(ui.min_rect().into());
+    track.update_sample_view(&mut model.audio)?;
+    let sample_view = track.get_sample_view()?;
+
+    let line_color = egui::Color32::LIGHT_RED.linear_multiply(0.7);
+    let screen_rect = track.screen_rect.ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+    let sample_rect = track.sample_rect.ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+
+    match sample_view.data {
+        ViewData::Single(ref positions) => {
+            if sample_view.samples_per_pixel < 0.25 {
+                positions.iter().for_each(|pos| {
+                    let pos = rpc(ui, pos.into());
+                    let circle_size = 2.0;
+                    let circle_color = line_color;
+                    ui.painter().circle_filled(pos, circle_size, circle_color);
+                    if let Some(val_rng) = sample_rect.val_rng() {
+                        if let Some(y_mid) = sample_value_to_screen_y_e(0.0, val_rng, screen_rect) {
+                            let pos_mid = rpc(ui, egui::pos2(pos.x, y_mid));
+                            ui.painter()
+                                .line_segment([pos_mid, pos], egui::Stroke::new(1.0, line_color.linear_multiply(0.25)));
+                        }
+                    }
+                });
+            } else {
+                let positions = positions.iter().map(|pos| rpc(ui, pos.into())).collect();
+                ui.painter().line(positions, egui::Stroke::new(1.0, line_color));
+            }
+        }
+        ViewData::MinMax(ref mix_max_positions) => {
+            mix_max_positions.iter().for_each(|pos| {
+                let min = rpc(ui, (&pos.min).into());
+                let max = rpc(ui, (&pos.max).into());
+                ui.painter().line_segment([min, max], egui::Stroke::new(1.0, line_color));
+            });
+        }
+    };
 
     Ok(())
 }

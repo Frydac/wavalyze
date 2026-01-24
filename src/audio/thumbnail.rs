@@ -20,6 +20,14 @@ pub enum ThumbnailE {
 }
 
 impl ThumbnailE {
+    /// Get the level data for the given samples per pixel (closest smaller or equal)
+    pub fn get_level_data(&self, samples_per_pixel: f32) -> Option<LevelDataERef<'_>> {
+        match self {
+            ThumbnailE::F32(thumbnail) => pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::F32),
+            ThumbnailE::I32(thumbnail) => pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::I32),
+            ThumbnailE::I16(thumbnail) => pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::I16),
+        }
+    }
     pub fn from_buffer_e(buffer: &BufferE, config: Option<ThumbnailConfig>) -> Self {
         match buffer {
             BufferE::F32(buffer) => ThumbnailE::F32(Thumbnail::from_buffer(buffer, config)),
@@ -37,12 +45,25 @@ impl ThumbnailE {
     }
 }
 
+#[derive(Debug)]
+pub enum LevelDataERef<'a> {
+    F32(&'a LevelData<f32>),
+    I32(&'a LevelData<i32>),
+    I16(&'a LevelData<i16>),
+}
+
 /// Represents the sample values for a single zoom level
 /// A set of min/max values per pixel column
 #[derive(Debug, Clone)]
 pub struct LevelData<T: Sample> {
     pub samples_per_pixel: f64,
     pub data: Vec<sample::ValRange<T>>,
+}
+impl<T: Sample> LevelData<T> {
+    /// Convert an index into data to a smallest sample index (in the original buffer)
+    pub fn ix_to_sample_ix(&self, ix: usize) -> usize {
+        (ix as f64 / self.samples_per_pixel).floor() as usize
+    }
 }
 
 impl<T: Sample> LevelData<T> {
@@ -257,4 +278,9 @@ impl<T: Sample> fmt::Display for Thumbnail<T> {
         }
         Ok(())
     }
+}
+
+/// Get the level data that has a samples_per_pixel smaller or equal and the closest to the given
+fn pick_level<T: Sample>(t: &Thumbnail<T>, spp: SampPerPix) -> Option<&LevelData<T>> {
+    t.level_data.range(..=spp).next_back().map(|(_, v)| v)
 }

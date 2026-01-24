@@ -1,14 +1,16 @@
 // Don't want my model to depend on egui to much, so we create a 'boundary'/'proxy' for egui::Pos2
 use egui;
 
+pub type Coord = f32;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Pos {
-    pub x: f32,
-    pub y: f32,
+    pub x: Coord,
+    pub y: Coord,
 }
 
 impl Pos {
-    pub fn new(x: f32, y: f32) -> Pos {
+    pub fn new(x: Coord, y: Coord) -> Pos {
         Pos { x, y }
     }
 }

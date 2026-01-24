@@ -15,6 +15,8 @@ pub trait Sample: Debug + Default + Copy + PartialOrd + PartialEq + Clone + ToPr
     where
         Self: Sized;
 
+    fn distance(self, other: Self) -> f64;
+
     const MAX: Self;
     const MIN: Self;
     const ZERO: Self;
@@ -56,6 +58,10 @@ impl Sample for f32 {
         ValRange { min: -1.0, max: 1.0 }
     }
 
+    fn distance(self, other: Self) -> f64 {
+        (self as f64 - other as f64).abs()
+    }
+
     const MAX: Self = f32::INFINITY;
     const MIN: Self = f32::NEG_INFINITY;
     const ZERO: Self = 0.0;
@@ -85,6 +91,10 @@ impl Sample for i32 {
         ValRange { min, max }
     }
 
+    fn distance(self, other: Self) -> f64 {
+        (self as f64 - other as f64).abs()
+    }
+
     const MAX: Self = i32::MAX;
     const MIN: Self = i32::MIN;
     const ZERO: Self = 0;
@@ -112,6 +122,10 @@ impl Sample for i16 {
         let max = ((1_u16 << (bit_depth - 1)) - 1) as i16;
         let min = -max - 1;
         ValRange { min, max }
+    }
+
+    fn distance(self, other: Self) -> f64 {
+        (self as f64 - other as f64).abs()
     }
 
     const MAX: Self = i16::MAX;

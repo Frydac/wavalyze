@@ -60,7 +60,7 @@ impl Model {
         Ok(())
     }
 
-    pub fn find_file_channel_for_track(&self, track_id: TrackId) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
+    pub fn get_file_channel_for_track(&self, track_id: TrackId) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
         let track = self.tracks2.get_track(track_id)?;
         let buffer_id = track.single.item.buffer_id;
         for file in self.files2.iter() {

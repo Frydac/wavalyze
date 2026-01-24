@@ -1,7 +1,8 @@
+pub mod convert;
 pub mod range;
 pub mod view;
 
-pub use range::{FracIx, FracIxRange, Ix, IxRange, OptIxRange, ValRange};
+pub use range::{FracIx, FracIxRange, Ix, IxRange, OptIxRange, ValRange, ValRangeE};
 pub use view::View;
 
 // The intention is to allow and audio Sample to be of type f32, i32 or i16
