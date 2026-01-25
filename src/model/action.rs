@@ -13,6 +13,9 @@ pub enum Action {
     /// Set y-zoom to fill the screen, with a minimum height per track
     ZoomToFull,
 
+    /// Adjust height of tracks to fit the screen, keeping in mind the min_height for each track
+    FillScreenHeight,
+
     /// Move the _view_ of all the tracks to the lef (negative value) or right (positive value)
     ShiftX {
         nr_pixels: PixelCoord,
@@ -61,6 +64,10 @@ impl Action {
                 model.tracks2.zoom_to_full(&model.audio)?;
                 // model.tracks.zoom_to_full();
                 // todo!();
+            }
+            Action::FillScreenHeight => {
+                let min_height = model.user_config.track.min_height;
+                model.tracks2.fill_screen_height(min_height)?;
             }
             Action::ShiftX { nr_pixels } => {
                 model.tracks2.ruler.shift_x(*nr_pixels);

@@ -1,6 +1,6 @@
 use crate::{
     audio::{self, BufferId},
-    model::{config::TrackConfig, ruler},
+    model::{config::TrackConfig, hover_info::HoverInfo3, ruler},
 };
 use anyhow::Result;
 use slotmap::SlotMap;
@@ -17,9 +17,10 @@ pub struct Tracks {
     pub tracks: SlotMap<TrackId, Track>,
     pub tracks_order: Vec<TrackId>,
     // hover
-    // hover_info: Option<TracksHoverInfo>,
+    pub hover_info: HoverInfo3,
     // selection
     // zoom
+    pub available_height: f32,
 }
 
 // no screen rect:
@@ -92,6 +93,12 @@ impl Tracks {
         }
     }
 
+    pub fn set_tracks_height(&mut self, height: f32) {
+        for track in self.tracks.values_mut() {
+            track.height = height;
+        }
+    }
+
     /// Update the sample ranges of all tracks to match the ruler zoom level
     /// Should be called after each change to the ruler zoom level/position
     /// TODO: enforce this somehow?
@@ -110,6 +117,14 @@ impl Tracks {
     }
 
     fn get_sample_rect_longest_track(&self, audio: &audio::manager::AudioManager) -> Option<audio::SampleRectE> {
+        // {
+        // let max_sample_rect = self.tracks.values().map(|track| {
+        //     let buffer_id = track.single.item.buffer_id;
+        //     let buffer = audio.get_buffer(buffer_id).ok()?;
+        //     let sample_rect = audio::SampleRectE::from_buffere(buffer);
+        //     Some(sample_rect)
+        // }).max_by_key(|sample_rect| sample_rect.width() as u64)?;
+        // }
         let mut max_sample_rect: Option<audio::SampleRectE> = None;
         for track in self.tracks.values() {
             let buffer_id = track.single.item.buffer_id;
@@ -129,6 +144,16 @@ impl Tracks {
     pub fn zoom_to_full(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
         let max_sample_rect = self.get_sample_rect_longest_track(audio).ok_or(anyhow::anyhow!("No tracks"))?;
         self.zoom_to_sample_rect(max_sample_rect, audio)
+    }
+
+    /// Update track heights to equally distribute the available height, taking min_height into account.
+    pub fn fill_screen_height(&mut self, min_height: f32) -> Result<()> {
+        // TODO: figure out why we need to compensate with 6.5 and make more robust
+        let track_height = self.available_height / self.tracks.len() as f32 - 6.5;
+        for track in self.tracks.values_mut() {
+            track.height = track_height.max(min_height);
+        }
+        Ok(())
     }
 
     fn zoom_to_sample_rect(&mut self, sample_rect: audio::SampleRectE, audio: &audio::manager::AudioManager) -> Result<()> {

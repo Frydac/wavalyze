@@ -64,6 +64,13 @@ impl MinMaxPos {
             self.shrink_max(max_y);
         }
     }
+
+    pub fn make_at_least_one_high(&mut self) {
+        if (self.max.y - self.min.y) < 1.0 {
+            // self.max.y = self.min.y + 1.0;
+            self.min.y = self.max.y - 1.0;
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -163,6 +170,7 @@ impl View {
                     if cur_min_max_pos.min.x == pos.x {
                         cur_min_max_pos.include_y(pos.y);
                     } else {
+                        cur_min_max_pos.make_at_least_one_high();
                         data.push(cur_min_max_pos);
                         cur_min_max_pos = MinMaxPos::from_pos(pos);
                     }
@@ -210,14 +218,17 @@ impl View {
         let ratio = samples_per_pixel as f64 / level_data.samples_per_pixel;
 
         // Get visible range of min/max sample indices present in the level_data
-        let start_ix = (sample_rect.ix_rng.start.max(0.0).ceil() * level_data.samples_per_pixel) as usize;
-        let end_ix = (sample_rect.ix_rng.end.max(0.0).floor() * level_data.samples_per_pixel) as usize;
+        let start_ix = sample_rect.ix_rng.start.max(0.0).ceil();
+        let end_ix = (sample_rect.ix_rng.end + 1.0).max(0.0).floor();
+        let start_ix = start_ix / level_data.samples_per_pixel;
+        let end_ix = end_ix / level_data.samples_per_pixel;
+        let start_ix = start_ix as usize;
+        let end_ix = end_ix as usize;
         let end_ix = end_ix.min(level_data.data.len());
         ensure!(end_ix >= start_ix, "end_ix < start_ix");
-        // let end_ix = (sample_rect.ix_rng.end.max(0.0).floor() as usize).min(buffer.len());
-        // ensure!(end_ix >= start_ix, "end_ix < start_ix");
         let nr_samples = end_ix - start_ix;
 
+        // Get screen positions for min/max sample, with floored x coordinate.
         let get_min_max_pos = |ix_in_level_data: usize, min_max_val: sample::ValRange<T>| -> Result<MinMaxPos> {
             let sample_ix = level_data.ix_to_sample_ix(ix_in_level_data);
             let pos_x = sample_ix_to_screen_x(sample_ix as f64, sample_rect.ix_rng, screen_rect);
@@ -244,11 +255,13 @@ impl View {
                 if cur_min_max_pos.min.x == min_max_pos.min.x {
                     cur_min_max_pos.include_y(min_max_pos.max.y);
                 } else {
+                    cur_min_max_pos.make_at_least_one_high();
                     data.push(cur_min_max_pos);
                     cur_min_max_pos = min_max_pos;
                 }
             }
             clip_view_data(&mut data, screen_rect);
+            // tracing::trace!("Created ViewData from level_data, samples_per_pixel: {}, data.len(): {}", samples_per_pixel, data.len());
             ViewData::MinMax(data)
         };
 

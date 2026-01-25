@@ -62,7 +62,7 @@ pub struct LevelData<T: Sample> {
 impl<T: Sample> LevelData<T> {
     /// Convert an index into data to a smallest sample index (in the original buffer)
     pub fn ix_to_sample_ix(&self, ix: usize) -> usize {
-        (ix as f64 / self.samples_per_pixel).floor() as usize
+        (ix as f64 * self.samples_per_pixel).floor() as usize
     }
 }
 
@@ -77,15 +77,20 @@ impl<T: Sample> LevelData<T> {
             let mut min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
             for &sample in chunk {
                 min_max.include(sample);
-                // min_max.min = min_max.min.min(sample);
-                // min_max.max = min_max.max.max(sample);
             }
             result.data.push(min_max);
         }
+        // tracing::trace!("Created LevelData from buffer, spp: {}, data.len(): {}", samples_per_pixel, result.data.len());
         result
     }
 
     pub fn from_level_data(level_data: &LevelData<T>, samples_per_pixel: u64) -> Self {
+        tracing::trace!(
+            "Creating LevelData from level_data, spp: {}, ld.len(): {}, ld.spp: {}",
+            samples_per_pixel,
+            level_data.data.len(),
+            level_data.samples_per_pixel
+        );
         assert!(samples_per_pixel as f64 > level_data.samples_per_pixel);
 
         let ratio = samples_per_pixel as f64 / level_data.samples_per_pixel;
@@ -200,7 +205,7 @@ pub struct ThumbnailConfig {
 impl Default for ThumbnailConfig {
     fn default() -> Self {
         Self {
-            samples_per_pixel_delta: 128,
+            samples_per_pixel_delta: 64,
             min_nr_level_data_size: 1024 * 4, // lowest resolution
         }
     }
@@ -225,22 +230,52 @@ impl<T: Sample> Thumbnail<T> {
         let config = config.unwrap_or_default();
         let mut level_data = BTreeMap::new();
 
-        let mut samp_per_pix = config.samples_per_pixel_delta;
+        tracing::trace!("Creating Thumbnail from buffer with nr_samples: {}", buffer.nr_samples());
 
-        loop {
-            let ld = LevelData::from_buffer(buffer, samp_per_pix);
-            let len = ld.data.len();
+        let do_from_buffer = false;
 
-            level_data.insert(samp_per_pix, ld);
-
-            if len <= config.min_nr_level_data_size || len == 1 {
-                break;
+        if !do_from_buffer {
+            let mut spp = config.samples_per_pixel_delta;
+            let mut ld = LevelData::from_buffer(buffer, spp);
+            loop {
+                let ld_len = ld.data.len();
+                if ld_len <= config.min_nr_level_data_size {
+                    level_data.insert(spp, ld);
+                    break;
+                }
+                spp *= 2;
+                let new_ld = LevelData::from_level_data(&ld, spp);
+                // This moves the data into level_data, so we have to calulate
+                // the new one before adding
+                level_data.insert(ld.samples_per_pixel as u64, ld);
+                ld = new_ld;
             }
+        } else {
+            let mut samp_per_pix = config.samples_per_pixel_delta;
 
-            samp_per_pix *= 2;
+            // PERF: use from_level_data on each result
+            // PERF: do all/multiple levels in one pass? Block-wise
+            // PERF: use threading
+            //  * maybe above this, each channel of a file can load in a different thread
+            //  * or split track in parts and process in parallel for each level (with min size per
+            //    work item)
+            loop {
+                let ld = LevelData::from_buffer(buffer, samp_per_pix);
+                let len = ld.data.len();
+
+                level_data.insert(samp_per_pix, ld);
+
+                if len <= config.min_nr_level_data_size || len == 1 {
+                    break;
+                }
+
+                samp_per_pix *= 2;
+            }
         }
 
-        Self { level_data }
+        let res = Self { level_data };
+        tracing::trace!("{res}");
+        res
     }
 }
 

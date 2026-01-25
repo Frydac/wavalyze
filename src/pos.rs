@@ -21,6 +21,12 @@ impl From<&egui::Pos2> for Pos {
     }
 }
 
+impl From<egui::Pos2> for Pos {
+    fn from(pos: egui::Pos2) -> Pos {
+        Pos::new(pos.x, pos.y)
+    }
+}
+
 impl From<&Pos> for egui::Pos2 {
     fn from(pos: &Pos) -> egui::Pos2 {
         egui::pos2(pos.x, pos.y)

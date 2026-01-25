@@ -72,6 +72,7 @@ impl App {
                 model.actions.push(Action::OpenFile(file_read_config.clone()));
             }
             model.actions.push(Action::ZoomToFull);
+            model.actions.push(Action::FillScreenHeight);
         };
         match args.command {
             None => {

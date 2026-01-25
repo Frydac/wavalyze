@@ -33,6 +33,17 @@ impl ReadConfig {
             sample_range: sample::OptIxRange::default(),
         }
     }
+
+    pub fn with_ch_ixs(self, ch_ixs: impl Into<Vec<ChIx>>) -> Self {
+        Self {
+            ch_ixs: Some(ch_ixs.into()),
+            ..self
+        }
+    }
+
+    pub fn with_sample_range(self, sample_range: sample::OptIxRange) -> Self {
+        Self { sample_range, ..self }
+    }
 }
 
 // TODO: think of better name :)

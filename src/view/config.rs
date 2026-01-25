@@ -15,5 +15,20 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
             );
         });
         ui.checkbox(&mut config.show_hover_info, "Show floating hover info");
+        {
+            ui.group(|ui| {
+                ui.label("Tracks");
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Min Height: ");
+                    ui.add(
+                        egui::DragValue::new(&mut config.track.min_height)
+                            .speed(0.1)
+                            .range(10.0..=200.0)
+                            .prefix(""),
+                    );
+                });
+            });
+        }
     });
 }

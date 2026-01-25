@@ -81,9 +81,9 @@ impl SampleRectE {
 
     pub fn val_rng(&self) -> Option<sample::ValRangeE> {
         match self {
-            SampleRectE::F32(rect) => rect.val_rng.map(|val_rng| sample::ValRangeE::F32(val_rng)),
-            SampleRectE::I32(rect) => rect.val_rng.map(|val_rng| sample::ValRangeE::PCM24(val_rng)),
-            SampleRectE::I16(rect) => rect.val_rng.map(|val_rng| sample::ValRangeE::PCM16(val_rng)),
+            SampleRectE::F32(rect) => rect.val_rng.map(sample::ValRangeE::F32),
+            SampleRectE::I32(rect) => rect.val_rng.map(sample::ValRangeE::PCM24),
+            SampleRectE::I16(rect) => rect.val_rng.map(sample::ValRangeE::PCM16),
         }
     }
 

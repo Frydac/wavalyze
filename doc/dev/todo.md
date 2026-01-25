@@ -30,3 +30,11 @@
 * □ There needs to be a limit to zooming out, it can cause i64 overflow, probably no need to zoom out that
   far..
     * probably best depend on content, like zoom out  to max 1x or 2x the content, or something
+
+* □ when zooming out, take care the samples_per_pixel doesn't overshoot into a negative value (same as above more or
+  less)
+* □ when loading a file, the tracks should be in order. they were not when e.g.:
+    ```bash
+    ~/aws/Content/_verified202303/AlainClark/LetSomeAirIn/Auro10_1/48k/Original 🕒 13:36:20 took 53s 
+    ❯ wv Ala
+    ```

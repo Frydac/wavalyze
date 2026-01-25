@@ -23,7 +23,7 @@ pub struct TrackConfig {
 
 impl Default for TrackConfig {
     fn default() -> Self {
-        Self { min_height: 150.0 }
+        Self { min_height: 10.0 }
     }
 }
 

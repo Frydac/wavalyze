@@ -1,19 +1,35 @@
-use std::ops::Range;
+use crate::pos;
 
-use crate::{audio::SampleBuffer, Pos};
-
-/// Stores information needed to render mouse hover position over the tracks
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct HoverInfo {
-    /// absolute (mouse) screen position in pixel coordinates
-    pub screen_pos: Pos,
+    pub screen_pos: pos::Pos,
+    pub sample_ix: f64,
+}
 
-    /// sample values rendedred at screen_pos.x
-    pub samples: SampleBuffer,
-    /// Range of samples that are rendered at screen_pos.x
-    pub sample_range: Range<u64>,
+#[derive(Debug, PartialEq, Clone, Default, Copy)]
+pub enum HoverInfoE {
+    #[default]
+    NotHovered,
+    IsHovered(HoverInfo),
+}
 
-    /// We have hover info's for each track when mouse is over a track,
-    /// but only one hover info is for the track with the mouse (x,y), the others only for (x)
-    pub contains_pointer: bool,
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct HoverInfo3 {
+    hover_info_current: HoverInfoE,  // while drawing, read this
+    hover_info_next: HoverInfoE, // while drawing, write this
+}
+
+impl HoverInfo3 {
+    pub fn update(&mut self, hover_info: HoverInfoE) {
+        self.hover_info_next = hover_info;
+    }
+
+    pub fn get(&self) -> HoverInfoE {
+        self.hover_info_current
+    }
+
+    pub fn next(&mut self) {
+        self.hover_info_current = self.hover_info_next;
+        self.hover_info_next = HoverInfoE::NotHovered;
+    }
 }

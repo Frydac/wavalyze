@@ -2,7 +2,7 @@ use crate::{
     audio::sample,
     model::{
         ruler::{ix_lattice::IxLattice, sample_ix_to_screen_x, screen_x_to_sample_ix},
-        IxZoomOffset, PixelCoord,
+        PixelCoord, SampleIxZoom,
     },
     rect,
 };
@@ -11,6 +11,11 @@ use crate::{
 pub struct HoverInfo {
     pub sample_ix: i64,
     pub screen_x: f32,
+}
+
+pub enum HoverInfoE {
+    HoverInfo(HoverInfo),
+    None,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -22,7 +27,7 @@ pub struct Time {
     screen_rect: rect::Rect,
 
     /// We (usually) set the time_line info when we have content to render
-    pub time_line: Option<IxZoomOffset>,
+    pub time_line: Option<SampleIxZoom>,
 
     /// The sample index ticks/lattice to draw for current screen rect/time_line
     pub ix_lattice: IxLattice,
@@ -42,7 +47,7 @@ impl Time {
 
     pub fn set_samples_per_pixel(&mut self, samples_per_pixel: f64) {
         let timeline = self.time_line.get_or_insert_with(Default::default);
-        timeline.samples_per_pixel = samples_per_pixel;
+        timeline.set_samples_per_pixel(samples_per_pixel);
     }
 
     // TODO: recalculates every time, maybe not so bad as we update the screen rect every time
@@ -58,7 +63,7 @@ impl Time {
 
     /// Check if fully initialized to something usable
     pub fn valid(&self) -> bool {
-        self.screen_rect.width() > 0.0 && self.time_line.is_some() && self.time_line.as_ref().unwrap().samples_per_pixel > 0.0
+        self.screen_rect.width() > 0.0 && self.time_line.is_some() && self.time_line.as_ref().unwrap().samples_per_pixel() > 0.0
     }
 
     /// The current sample index range
@@ -104,7 +109,7 @@ impl Time {
 impl Time {
     pub fn shift_x(&mut self, delta_pixels: PixelCoord) {
         if let Some(time_line) = self.time_line.as_mut() {
-            let delta_sample_ixs = delta_pixels * time_line.samples_per_pixel as f32;
+            let delta_sample_ixs = delta_pixels * time_line.samples_per_pixel() as f32;
             time_line.ix_start += delta_sample_ixs as f64;
             if let Some(mut hover_info) = self.hover_info {
                 hover_info.sample_ix = self.screen_x_to_sample_ix(hover_info.screen_x).unwrap().floor() as i64;
@@ -132,6 +137,6 @@ impl Time {
         };
         let Some(time_line) = self.time_line.as_mut() else { return };
         time_line.ix_start = new_min_ix;
-        time_line.samples_per_pixel = (new_max_ix - new_min_ix) / self.screen_rect.width() as f64;
+        self.set_samples_per_pixel((new_max_ix - new_min_ix) / self.screen_rect.width() as f64);
     }
 }

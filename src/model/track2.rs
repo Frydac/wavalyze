@@ -8,7 +8,7 @@ use slotmap::new_key_type;
 
 use crate::{
     audio::manager::{AudioManager, BufferId},
-    model::{self, hover_info, track::single::Single},
+    model::{self, track::hover_info, track::single::Single},
     rect::Rect,
 };
 

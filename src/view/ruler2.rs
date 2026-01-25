@@ -2,6 +2,7 @@ use crate::{
     audio::sample,
     model::{
         self,
+        hover_info::{HoverInfo, HoverInfoE},
         ruler::{self},
     },
 };
@@ -74,20 +75,32 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
                         // If mouse hovers over the ruler
                         ui.ctx().set_cursor_icon(egui::CursorIcon::None);
                         // hover_info could still be None if we don't have a sample_ix range yet
-                        let ruler = &mut model.tracks2.ruler;
-                        ruler.hover_info = ruler.screen_x_to_sample_ix(pos.x).map(|sample_ix| ruler::time::HoverInfo {
-                            sample_ix: sample_ix.round() as i64,
-                            screen_x: pos.x,
-                        });
+                        {
+                            let ruler = &mut model.tracks2.ruler;
+                            ruler.hover_info = ruler.screen_x_to_sample_ix(pos.x).map(|sample_ix| ruler::time::HoverInfo {
+                                sample_ix: sample_ix.round() as i64,
+                                screen_x: pos.x,
+                            });
+                        }
+                        {
+                            let hover_info = HoverInfoE::IsHovered(HoverInfo {
+                                screen_pos: pos.into(),
+                                sample_ix: model.tracks2.ruler.screen_x_to_sample_ix(pos.x).unwrap_or(0.0),
+                            });
+                            model.tracks2.hover_info.update(hover_info);
+                        }
                     }
                     None => {
                         model.tracks2.ruler.hover_info = None;
+                        // model.tracks2.hover_info = HoverInfoE::NotHovered;
                     }
                 }
 
-                let hover_text_rect = ui_hover_tick_label(ui, &model.tracks2.ruler);
+
+                // let hover_text_rect = ui_hover_tick_label(ui, &model.tracks2.ruler);
+                let hover_text_rect2 = ui_hover_tick_label2(ui, model.tracks2.hover_info.get());
                 // let begin_end_rects = ui_begin_end(ui, ruler);
-                ui_ix_lattice(ui, &mut model.tracks2.ruler, hover_text_rect);
+                ui_ix_lattice(ui, &mut model.tracks2.ruler, hover_text_rect2);
                 // NOTE: we want this later so that the triangle is on top of the ix_lattice ticks
                 ui_hover_tick_line_triangle(ui, &model.tracks2.ruler);
             });
@@ -98,6 +111,23 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
 fn ui_hover_tick_label(ui: &mut egui::Ui, ruler: &ruler::Time) -> Option<egui::Rect> {
     let &hover_info = ruler.hover_info.as_ref()?;
     ui_tick_label(ui, hover_info.screen_x, hover_info.sample_ix.separate_with_commas().into(), None)
+}
+
+fn ui_hover_tick_label2(ui: &mut egui::Ui, hover_info: HoverInfoE) -> Option<egui::Rect> {
+    match hover_info {
+        HoverInfoE::NotHovered => None,
+        HoverInfoE::IsHovered(hover_info) => {
+
+            let sample_ix = hover_info.sample_ix.round() as i64;
+
+            ui_tick_label(
+                ui,
+                hover_info.screen_pos.x,
+                sample_ix.separate_with_commas().into(),
+                None,
+            )
+        }
+    }
 }
 
 /// @return the pixel rect of the text label, so we can avoid drawing other text over it
@@ -342,13 +372,34 @@ pub fn ui_ruler_info_panel(ui: &mut egui::Ui, ruler: &ruler::Time) {
                 );
             }
             if let Some(time_line) = ruler.time_line.as_ref() {
-                grid.row("samples per pixel:", format!("{:.3}", time_line.samples_per_pixel));
+                grid.row("samples per pixel:", format!("{:.3}", time_line.samples_per_pixel()));
                 let ix_range = time_line.get_ix_range(ruler.screen_rect().width() as f64);
                 let ix_range_start = format!("{:.1}", ix_range.start).separate_with_commas();
                 let ix_range_end = format!("{:.1}", ix_range.end).separate_with_commas();
                 grid.row("ix range:", format!("[{ix_range_start}, {ix_range_end}]"));
             }
             grid.show(ui);
+        });
+    });
+}
+
+pub fn ui_hover_info_panel2(ui: &mut egui::Ui, hover_info: &HoverInfoE) {
+    ui.group(|ui| {
+        ui.vertical(|ui| {
+            ui.heading("Hover Info");
+            ui.separator();
+            match hover_info {
+                HoverInfoE::NotHovered => {
+                    ui.label("No hover info");
+                }
+                HoverInfoE::IsHovered(hover_info) => {
+                    let id: u64 = ui.id().with("hover_info_panel2").value();
+                    let mut grid = crate::view::grid::KeyValueGrid::new(id);
+                    grid.row("pos x:", format!("{:.1}", hover_info.screen_pos.x).separate_with_commas());
+                    grid.row("sample ix:", (hover_info.sample_ix.round() as i64).separate_with_commas());
+                    grid.show(ui);
+                }
+            }
         });
     });
 }
@@ -365,6 +416,10 @@ pub fn ui_hover_info_panel(ui: &mut egui::Ui, hover_info: Option<&ruler::time::H
                     grid.row("pos x:", format!("{:.1}", hover_info.screen_x).separate_with_commas());
                     // grid.row("sample ix:", format!("{:.1}", hover_info.sample_ix));
                     grid.row("sample ix:", hover_info.sample_ix.separate_with_commas());
+                    grid.row(
+                        "time 48k:",
+                        format!("{:.3}s", hover_info.sample_ix as f64 / 48000.0).separate_with_commas(),
+                    );
                     grid.show(ui);
                 }
                 None => {

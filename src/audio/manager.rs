@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Context, Result};
+use rayon::prelude::*;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
 
 new_key_type! { pub struct BufferId; }
@@ -33,14 +34,24 @@ impl AudioManager {
         // Read requested buffers and create a File instance to keep references
         let file = read_to_file(read_config, &mut self.buffers)?;
 
-        // Create thumbnails for each buffer
-        for (_ch_ix, channel) in file.channels.iter() {
-            let buffer = self
-                .buffers
-                .get(channel.buffer_id)
-                .ok_or(anyhow!("Buffer {:?} not found", channel.buffer_id))?;
-            let thumbnail = ThumbnailE::from_buffer_e(buffer, None);
-            self.thumbnails.insert(channel.buffer_id, thumbnail);
+        // Create thumbnails for each buffer in parallel
+        let results: Result<Vec<(BufferId, ThumbnailE)>, anyhow::Error> = file
+            .channels
+            .par_iter()
+            .map(|(_ch_ix, channel)| {
+                let buffer = self
+                    .buffers
+                    .get(channel.buffer_id)
+                    .ok_or_else(|| anyhow!("Buffer {:?} not found", channel.buffer_id))?;
+
+                let thumbnail = ThumbnailE::from_buffer_e(buffer, None);
+                Ok((channel.buffer_id, thumbnail))
+            })
+            .collect();
+
+        // Propagate any error from the parallel computation
+        for (buffer_id, thumbnail) in results? {
+            self.thumbnails.insert(buffer_id, thumbnail);
         }
 
         Ok(file)

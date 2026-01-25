@@ -7,9 +7,10 @@ pub mod track;
 pub mod track2;
 use std::collections::HashMap;
 
+use crate::model::hover_info::{HoverInfo, HoverInfoE};
 use crate::model::Action;
-use crate::util;
 use crate::view::track::Track;
+use crate::{pos, util};
 // use crate::view::track2::Track as Track2;
 use crate::{model, wav};
 use anyhow::Result;
@@ -44,15 +45,15 @@ impl View {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.handle_drag_and_drop_into_app(ctx);
-        let _ = self.model.process_actions();
-
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
         self.ui_right_side_panel(ctx);
         self.ui_left_side_panel(ctx);
         self.ui_bottom_side_panel(ctx);
         let _ = self.ui_central_panel(ctx); // central_panel should always come last
+
+        self.handle_drag_and_drop_into_app(ctx);
+        let _ = self.model.process_actions();
     }
 
     fn ui_bottom_side_panel(&mut self, ctx: &egui::Context) {
@@ -80,6 +81,8 @@ impl View {
                 ruler2::ui_ruler_info_panel(ui, &self.model.tracks2.ruler);
                 ui.add_space(5.0);
                 ruler2::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
+                ruler2::ui_hover_info_panel2(ui, &self.model.tracks2.hover_info.get());
+
             });
     }
 
@@ -154,8 +157,11 @@ impl View {
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
-            if ui.button("x-axis reset").clicked() {
+            if ui.button("reset x zoom").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
+            }
+            if ui.button("fill screen height").clicked() {
+                self.model.actions.push(Action::FillScreenHeight);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.style_mut().spacing.window_margin = egui::Margin::same(4.0);
@@ -171,6 +177,9 @@ impl View {
 
     fn ui_tracks2(&mut self, ui: &mut egui::Ui) -> Result<()> {
         let model = &mut self.model;
+
+        // Reset hover info (but keep/draw previous hover info)
+        model.tracks2.hover_info.next();
 
         // render view tracks in specified order
         {
@@ -241,6 +250,7 @@ impl View {
                 // NOTE: -20.0 seems needed if we fit the height of the tracks then there is no
                 // scrollbar
                 let height = ui.available_height() - 20.0;
+                self.model.tracks2.available_height = height;
                 ui.allocate_ui([width, height].into(), |ui| {
                     // let resp = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height() - 20.0), egui::Sense::hover());
                     let _ = self.ui_tracks2(ui);

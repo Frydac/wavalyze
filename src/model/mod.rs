@@ -1,21 +1,22 @@
 pub mod action;
 pub mod config;
-pub mod hover_info;
-pub mod ix_zoom_offset;
 pub mod ruler;
+pub mod sample_ix_zoom;
 pub mod track;
 pub mod track2;
 pub mod tracks;
 pub mod tracks2;
 pub mod types;
 pub mod view_buffer;
+pub mod hover_info;
 
 pub use self::config::Config;
-pub use self::ix_zoom_offset::IxZoomOffset;
+pub use self::sample_ix_zoom::SampleIxZoom;
 pub use self::track::Track;
 pub use self::tracks::Tracks;
 pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
+// pub use self::hover_info::HoverInfo;
 use crate::audio;
 use crate::model::track2::TrackId;
 pub use action::Action;
