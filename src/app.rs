@@ -80,7 +80,7 @@ impl App {
                 open_files(&args.files);
             }
             Some(ref command) => match command {
-                args::Commands::Open { ref files } => {
+                args::Commands::Open { files } => {
                     trace!("Open command");
                     open_files(files);
                 }

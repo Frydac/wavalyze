@@ -57,8 +57,8 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
     Ok(resp.response)
 }
 
-pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model) {
-    // let IsHovered(hover_info): crate::model::hover_info::HoverInfoE = model.tracks2.hover_info else { return };
+pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
+    // Draw hover info
     match &model.tracks2.hover_info.get() {
         HoverInfoE::NotHovered => {}
         HoverInfoE::IsHovered(hover_info) => {
@@ -73,10 +73,11 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model) {
         }
     }
 
-    // let height = ui.available_height();
-    // let width = ui.available_width();
-
-    // ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(pos_x, pos_y_min), egui::vec2(width, height)), 0.0, egui::Color32::LIGHT_BLUE);
+    // Do hover interaction
+    let rect = ui.min_rect();
+    let hover_response = ui
+        .interact(rect, egui::Id::new(track_id), egui::Sense::hover())
+        .on_hover_cursor(egui::CursorIcon::None);
 }
 
 // Wrap the waveform in a (manually implemented) resizable frame
@@ -100,7 +101,7 @@ pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackI
 
             let _ = ui_waveform(ui, model, track_id);
 
-            ui_hover(ui, model);
+            ui_hover(ui, model, track_id);
         });
     });
 

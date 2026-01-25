@@ -83,7 +83,7 @@ impl ViewData {
     pub fn as_min_max_mut(&mut self) -> Option<&mut Vec<MinMaxPos>> {
         match self {
             ViewData::Single(_) => None,
-            ViewData::MinMax(ref mut data) => Some(data),
+            ViewData::MinMax(data) => Some(data),
         }
     }
 }

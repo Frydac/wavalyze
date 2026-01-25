@@ -435,6 +435,8 @@ impl MouseHover {
         // the popup.
         if let Some(pos) = ui.ctx().pointer_hover_pos() {
             if canvas_rect.contains(pos) {
+                // if ui.ctx().pointer_hover_pos().is_some_and(|pos| canvas_rect.contains(pos)) {
+                // if let Some(pos) = ui.ctx().pointer_hover_pos() && canvas_rect.contains(pos) {
                 ui.ctx().input(|i| {
                     if i.modifiers.shift {
                         let scroll = i.raw_scroll_delta;
