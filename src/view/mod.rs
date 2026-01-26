@@ -178,9 +178,6 @@ impl View {
     fn ui_tracks2(&mut self, ui: &mut egui::Ui) -> Result<()> {
         let model = &mut self.model;
 
-        // Reset hover info (but keep/draw previous hover info)
-        model.tracks2.hover_info.next();
-
         // render view tracks in specified order
         {
             for track_ix in 0..model.tracks2.tracks_order.len() {
@@ -243,6 +240,11 @@ impl View {
     fn ui_central_panel(&mut self, ctx: &egui::Context) -> Result<()> {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui_top_panel_tool_bar(ui, ctx);
+
+            // Reset hover info (but keep/draw previous hover info)
+            // before ruler
+            self.model.tracks2.hover_info.next();
+
             // ruler::ui(ui, &self.model);
             let _ = ruler2::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {

@@ -97,7 +97,7 @@ impl Track {
 
             // This gets the absolute position of the canvas
             let canvas_rect = ui.min_rect(); // TODO: don't know for sure what min_rect means in this context
-                                             // dbg!(canvas_rect);
+            // dbg!(canvas_rect);
 
             // First do mouse interactions (scroll,..) so this track is also drawn with updated
             // view rect
@@ -376,15 +376,15 @@ impl MouseHover {
                 for (ix, sample) in hover_info.samples.iter() {
                     min_sample = min_sample.or(Some((*ix, *sample)));
                     max_sample = max_sample.or(Some((*ix, *sample)));
-                    if let Some(min_sample) = &mut min_sample {
-                        if min_sample.1 > *sample {
-                            min_sample.1 = *sample;
-                        }
+                    if let Some(min_sample) = &mut min_sample
+                        && min_sample.1 > *sample
+                    {
+                        min_sample.1 = *sample;
                     }
-                    if let Some(max_sample) = &mut max_sample {
-                        if max_sample.1 < *sample {
-                            max_sample.1 = *sample;
-                        }
+                    if let Some(max_sample) = &mut max_sample
+                        && max_sample.1 < *sample
+                    {
+                        max_sample.1 = *sample;
                     }
                 }
 
@@ -433,51 +433,53 @@ impl MouseHover {
         // NOTE: we don't check hovered or contains_pointer as the popup seems to overtake the
         // mouse event and when moving fast, the mouse can be over the popup, causing flickering of
         // the popup.
-        if let Some(pos) = ui.ctx().pointer_hover_pos() {
-            if canvas_rect.contains(pos) {
-                // if ui.ctx().pointer_hover_pos().is_some_and(|pos| canvas_rect.contains(pos)) {
-                // if let Some(pos) = ui.ctx().pointer_hover_pos() && canvas_rect.contains(pos) {
-                ui.ctx().input(|i| {
-                    if i.modifiers.shift {
-                        let scroll = i.raw_scroll_delta;
-                        if scroll.x != 0.0 {
-                            model.tracks.shift_x(scroll.x).unwrap();
-                        }
-                    } else if i.modifiers.ctrl {
-                        let scroll = i.raw_scroll_delta;
-                        if scroll.y != 0.0 {
-                            let factor = model.user_config.zoom_x_scroll_factor;
-                            model.tracks.zoom_x(pos.x, scroll.y * factor).unwrap();
-                        }
+        if let Some(pos) = ui.ctx().pointer_hover_pos()
+            && canvas_rect.contains(pos)
+        {
+            // if ui.ctx().pointer_hover_pos().is_some_and(|pos| canvas_rect.contains(pos)) {
+            // if let Some(pos) = ui.ctx().pointer_hover_pos() && canvas_rect.contains(pos) {
+            ui.ctx().input(|i| {
+                if i.modifiers.shift {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.x != 0.0 {
+                        model.tracks.shift_x(scroll.x).unwrap();
                     }
-                });
-                model.tracks.update_hover_info(track_id, (&pos).into());
-            }
-        }
-
-        if let Some(model_track) = model.tracks.track_mut(track_id) {
-            if let Some(hover_info) = model_track.hover_info() {
-                // --- Logging for debugging flickering ---
-                // dbg!(track_id, hover_info.samples.is_empty());
-                // --- End logging ---
-
-                // if let Some(hover_info) = model.tracks.tracks_hover_info.previous {
-
-                // Draw vertical line/sample info where mouse pointer is for all tracks, when mouse is
-                // over any track
-                if canvas_rect.x_range().contains(hover_info.screen_pos.x) {
-                    self.ui_mouse_pos_vline(ui, hover_info, &canvas_rect);
-
-                    // Draw horizontal line where mouse pointer is for only the track the mouse is over
-                    if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
-                        self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
-                    }
-
-                    if model.user_config.show_hover_info {
-                        self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
+                } else if i.modifiers.ctrl {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.y != 0.0 {
+                        let factor = model.user_config.zoom_x_scroll_factor;
+                        model.tracks.zoom_x(pos.x, scroll.y * factor).unwrap();
                     }
                 }
+            });
+            model.tracks.update_hover_info(track_id, (&pos).into());
+        }
+
+        if let Some(model_track) = model.tracks.track_mut(track_id)
+            && let Some(hover_info) = model_track.hover_info()
+        {
+            // if let Some(hover_info) = model_track.hover_info() {
+            // --- Logging for debugging flickering ---
+            // dbg!(track_id, hover_info.samples.is_empty());
+            // --- End logging ---
+
+            // if let Some(hover_info) = model.tracks.tracks_hover_info.previous {
+
+            // Draw vertical line/sample info where mouse pointer is for all tracks, when mouse is
+            // over any track
+            if canvas_rect.x_range().contains(hover_info.screen_pos.x) {
+                self.ui_mouse_pos_vline(ui, hover_info, &canvas_rect);
+
+                // Draw horizontal line where mouse pointer is for only the track the mouse is over
+                if canvas_rect.y_range().contains(hover_info.screen_pos.y) {
+                    self.ui_mouse_pos_hline(ui, hover_info, &canvas_rect);
+                }
+
+                if model.user_config.show_hover_info {
+                    self.ui_sample_info_floating_rect2(ui, track_id, hover_info);
+                }
             }
+            // }
         }
     }
 }

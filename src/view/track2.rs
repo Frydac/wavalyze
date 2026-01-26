@@ -1,6 +1,11 @@
 use crate::{
     audio::sample::view::ViewData,
-    model::{hover_info::HoverInfoE, ruler::sample_value_to_screen_y_e, track2::TrackId, Action, Model},
+    model::{
+        Action, Model,
+        hover_info::{HoverInfo, HoverInfoE},
+        ruler::sample_value_to_screen_y_e,
+        track2::TrackId,
+    },
 };
 use anyhow::Result;
 
@@ -62,22 +67,67 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
     match &model.tracks2.hover_info.get() {
         HoverInfoE::NotHovered => {}
         HoverInfoE::IsHovered(hover_info) => {
-            // ui_hover_info(ui, model, hover_info);
-            let pos_y_min = ui.min_rect().top();
-            let pos_y_max = ui.min_rect().bottom();
-            let pos_x = hover_info.screen_pos.x;
-            let pos_min = rpc(ui, egui::pos2(pos_x, pos_y_min));
-            let pos_max = rpc(ui, egui::pos2(pos_x, pos_y_max));
-            ui.painter().line_segment([pos_min, pos_max], egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
-            // ui.painter().line_segment([[pos_x, pos_y_min].into(), [pos_x, pos_y_max].into()], egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
+            // Draw vertical line always when hover info is present
+            {
+                let pos_y_min = ui.min_rect().top();
+                let pos_y_max = ui.min_rect().bottom();
+                let pos_x = hover_info.screen_pos.x;
+                let pos_min = rpc(ui, egui::pos2(pos_x, pos_y_min));
+                let pos_max = rpc(ui, egui::pos2(pos_x, pos_y_max));
+                ui.painter()
+                    .line_segment([pos_min, pos_max], egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
+            }
+
+            // Draw horizontal line only mouse is over the track
+            {
+                let rect = ui.min_rect();
+                if rect.contains((&hover_info.screen_pos).into()) {
+                    let pos_x_min = rect.left();
+                    let pos_x_max = rect.right();
+                    let pos_y = hover_info.screen_pos.y;
+                    let pos_min = rpc(ui, egui::pos2(pos_x_min, pos_y));
+                    let pos_max = rpc(ui, egui::pos2(pos_x_max, pos_y));
+                    ui.painter()
+                        .line_segment([pos_min, pos_max], egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
+                }
+            }
         }
     }
 
     // Do hover interaction
-    let rect = ui.min_rect();
-    let hover_response = ui
-        .interact(rect, egui::Id::new(track_id), egui::Sense::hover())
-        .on_hover_cursor(egui::CursorIcon::None);
+    {
+        let rect = ui.min_rect();
+        let hover_response = ui
+            .interact(rect, egui::Id::new(track_id), egui::Sense::hover())
+            .on_hover_cursor(egui::CursorIcon::None);
+
+        if let Some(pos) = ui.ctx().pointer_hover_pos()
+            && rect.contains(pos)
+        {
+            model.tracks2.hover_info.update(HoverInfoE::IsHovered(HoverInfo {
+                screen_pos: pos.into(),
+                sample_ix: model.tracks2.ruler.screen_x_to_sample_ix(pos.x).unwrap_or(0.0),
+            }));
+            ui.ctx().input(|i| {
+                if i.modifiers.shift && !i.modifiers.ctrl {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.x != 0.0 {
+                        let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
+                        model.actions.push(Action::ShiftX { nr_pixels: scroll.x });
+                    }
+                } else if i.modifiers.ctrl {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.y != 0.0 {
+                        let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
+                        model.actions.push(Action::ZoomX {
+                            nr_pixels: scroll.y * zoom_x_factor,
+                            center_x: pos.x,
+                        });
+                    }
+                }
+            });
+        }
+    }
 }
 
 // Wrap the waveform in a (manually implemented) resizable frame

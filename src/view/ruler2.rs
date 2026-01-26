@@ -96,13 +96,16 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
                     }
                 }
 
-
+                let mut hover_text_rect2 = None;
                 // let hover_text_rect = ui_hover_tick_label(ui, &model.tracks2.ruler);
-                let hover_text_rect2 = ui_hover_tick_label2(ui, model.tracks2.hover_info.get());
-                // let begin_end_rects = ui_begin_end(ui, ruler);
+                if let HoverInfoE::IsHovered(hover_info) = &model.tracks2.hover_info.get() {
+                    hover_text_rect2 = ui_hover_tick_label2(ui, hover_info);
+                    ui_hover_tick_line_triangle(ui, hover_info);
+                }
                 ui_ix_lattice(ui, &mut model.tracks2.ruler, hover_text_rect2);
+
+                // let begin_end_rects = ui_begin_end(ui, ruler);
                 // NOTE: we want this later so that the triangle is on top of the ix_lattice ticks
-                ui_hover_tick_line_triangle(ui, &model.tracks2.ruler);
             });
     });
     Ok(())
@@ -113,27 +116,17 @@ fn ui_hover_tick_label(ui: &mut egui::Ui, ruler: &ruler::Time) -> Option<egui::R
     ui_tick_label(ui, hover_info.screen_x, hover_info.sample_ix.separate_with_commas().into(), None)
 }
 
-fn ui_hover_tick_label2(ui: &mut egui::Ui, hover_info: HoverInfoE) -> Option<egui::Rect> {
-    match hover_info {
-        HoverInfoE::NotHovered => None,
-        HoverInfoE::IsHovered(hover_info) => {
+fn ui_hover_tick_label2(ui: &mut egui::Ui, hover_info: &HoverInfo) -> Option<egui::Rect> {
+    let sample_ix = hover_info.sample_ix.round() as i64;
 
-            let sample_ix = hover_info.sample_ix.round() as i64;
-
-            ui_tick_label(
-                ui,
-                hover_info.screen_pos.x,
-                sample_ix.separate_with_commas().into(),
-                None,
-            )
-        }
-    }
+    ui_tick_label(ui, hover_info.screen_pos.x, sample_ix.separate_with_commas().into(), None)
 }
 
 /// @return the pixel rect of the text label, so we can avoid drawing other text over it
-fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, ruler: &ruler::Time) {
-    let Some(&hover_info) = ruler.hover_info.as_ref() else { return };
-    let screen_x = hover_info.screen_x;
+// fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, ruler: &ruler::Time) {
+fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo) {
+    // let Some(&hover_info) = ruler.hover_info.as_ref() else { return };
+    let screen_x = hover_info.screen_pos.x;
     let rect_x_range = ui.min_rect().left()..ui.min_rect().right();
     if !rect_x_range.contains(&screen_x) {
         // anyhow::bail!("screen_x {} not in rect {:?}", screen_x, rect_x_range);

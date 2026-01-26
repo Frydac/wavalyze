@@ -1,3 +1,13 @@
+# Wavalyze
+
+**Wavalyze** is a WAV file viewer, with the long-term goal of becoming a full analysis and diff tool for audio software development.
+
+It is currently focused on visual inspection of waveforms and low-level audio data, and is built in Rust on top of `egui`.
+
+![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
+
+---
+
 # eframe template
 
 [![dependency status](https://deps.rs/repo/github/emilk/eframe_template/status.svg)](https://deps.rs/repo/github/emilk/eframe_template)
