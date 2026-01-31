@@ -20,7 +20,7 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let model = model::Model::default();
+        let model = model::Model::new();
         Self {
             view: view::View::new(model),
             cli_config: None,

@@ -3,12 +3,12 @@ use crate::audio::manager::Buffers;
 use crate::audio::sample;
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::wav::file2::{Channel, File};
-
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use hound;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use thousands::Separable;
 
 pub type ChIx = usize; // Channel index
 
@@ -59,9 +59,16 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
     let mut reader =
         hound::WavReader::open(&config.filepath).map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
     let spec = reader.spec();
+    tracing::trace!("{spec:?}");
+    tracing::trace!(
+        "Wav duration: {}s ({} samples/ch)",
+        format!("{:.1}", reader.duration() as f64 / spec.sample_rate as f64).separate_with_commas(),
+        reader.duration().separate_with_commas()
+        
+    );
 
     // read samples into appropriate type and associate with channel index
-    let chix_buffers: HashMap<ChIx, BufferE> = match spec.sample_format {
+    let chix_buffers: BTreeMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
             bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<f32>(&mut reader, config)?, BufferE::F32),
             _ => {
@@ -81,6 +88,7 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
         // move buffers to storage and store it's id in file
         channels: chix_buffers
             .into_iter()
+            // .sorted_by(|(ch_ix1, _), (ch_ix2, _)| ch_ix1.cmp(ch_ix2))
             .map(|(ch_ix, buffer)| {
                 (
                     ch_ix,
@@ -106,7 +114,7 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
 }
 
 // TODO: maybe use Vec<(ChIx, Vec<T>)> instead of HashMap<ChIx, Vec<T>>?
-fn convert_samples<T>(samples: HashMap<ChIx, T>, converter: impl Fn(T) -> BufferE) -> HashMap<ChIx, BufferE> {
+fn convert_samples<T>(samples: BTreeMap<ChIx, T>, converter: impl Fn(T) -> BufferE) -> BTreeMap<ChIx, BufferE> {
     samples.into_iter().map(|(index, sample)| (index, converter(sample))).collect()
 }
 
@@ -114,7 +122,7 @@ fn convert_samples<T>(samples: HashMap<ChIx, T>, converter: impl Fn(T) -> Buffer
 fn read_to_buffers<S>(
     reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>,
     config: &ReadConfig,
-) -> Result<HashMap<ChIx, Buffer<S>>>
+) -> Result<BTreeMap<ChIx, Buffer<S>>>
 where
     S: crate::audio::sample2::Sample + hound::Sample,
 {

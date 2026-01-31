@@ -21,6 +21,7 @@ pub struct Tracks {
     // selection
     // zoom
     pub available_height: f32,
+    pub width_info: f32,
 }
 
 // no screen rect:

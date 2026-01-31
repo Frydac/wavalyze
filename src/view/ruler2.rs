@@ -1,129 +1,116 @@
 use crate::{
     audio::sample,
     model::{
-        self,
-        hover_info::{HoverInfo, HoverInfoE},
-        ruler::{self},
-    },
+        self, hover_info::{HoverInfo, HoverInfoE}, ruler::{self}, Action
+    }, view::util::rpc,
 };
 use anyhow::Result;
 use thousands::Separable;
 
-/// round to pixel center (TODO: move to somehwere more general)
-pub fn rpc(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
-    let pos = ui.painter().round_pos_to_pixel_center(pos);
-    pos
-}
-
-pub fn interaction_handle_drag(ui: &mut egui::Ui, response: &egui::Response, model: &mut model::Model) {
-    if response.dragged() {
-        let delta = ui.input(|i| i.pointer.delta());
-        model.actions.push(model::action::Action::ShiftX { nr_pixels: -delta.x });
-    }
-}
-
-// TODO: can we get away with only passing the ruler?
 pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
-    let height = 50.0;
-    let width = ui.available_width();
-    ui.allocate_ui([width, height].into(), |ui| {
-        egui::Frame::default()
-            .inner_margin(egui::Margin::same(5.0))
-            .rounding(3.0)
-            .outer_margin(egui::Margin::symmetric(0.0, 5.0))
-            .stroke(ui.style().visuals.window_stroke())
-            .show(ui, |ui| {
-                // Don't let the size depend on the content
-                ui.set_min_size(ui.available_size());
-                //
-                let response = ui.allocate_rect(ui.min_rect(), egui::Sense::click_and_drag());
+    let container_rect = ui.min_rect();
+    let info_width = model.user_config.tracks_width_info.min(container_rect.width());
+    let mut info_rect = container_rect;
+    info_rect.set_width(info_width);
+    let ruler_rect = egui::Rect::from_min_size(
+        [info_rect.max.x, container_rect.min.y].into(),
+        [container_rect.width() - info_width, container_rect.height()].into(),
+    );
+    // println!("ruler_rect first: {}", ruler_rect);
 
-                // Not 100% sure this is the right way to get the actual rect, but it seems to work.
-                // porbably only works when we do the set_min_size() above?
-                let rect = ui.min_rect();
+    // debug_rect_text(ui, rect.shrink(1.0), egui::Color32::LIGHT_GREEN, "ruler container");
+    // debug_rect_text(ui, info_rect.shrink(1.0), egui::Color32::LIGHT_GRAY, "ruler info");
+    // debug_rect_text(ui, ruler_rect.shrink(1.0), egui::Color32::LIGHT_BLUE, "ruler");
 
-                // handle interactions
-                interaction_handle_drag(ui, &response, model);
+    let response = ui.allocate_rect(ruler_rect, egui::Sense::click_and_drag());
+    let mut ui_ruler = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(ruler_rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
+    ui_ruler.painter().rect(ruler_rect, 3.0, egui::Color32::TRANSPARENT, stroke);
+    ui_ruler.set_min_size(ruler_rect.size());
 
-                // Update the screen rect of the ruler
-                model.tracks2.ruler.set_screen_rect(rect.into());
+    // Update the screen rect of the ruler
+    model.tracks2.ruler.set_screen_rect(ruler_rect.into());
 
-                let pos_in_rect = ui.ctx().pointer_hover_pos().filter(|&pos| rect.contains(pos));
-                match pos_in_rect {
-                    Some(pos) => {
-                        ui.ctx().input(|i| {
-                            if i.modifiers.shift && !i.modifiers.ctrl {
-                                let scroll = i.raw_scroll_delta;
-                                if scroll.x != 0.0 {
-                                    let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                                    // model.actions.push(model::action::Action::ShiftX { nr_pixels: scroll.x });
-                                    model.actions.push(model::action::Action::ShiftX { nr_pixels: scroll.x });
-                                }
-                            } else if i.modifiers.ctrl && !i.modifiers.shift {
-                                let scroll = i.raw_scroll_delta;
-                                if scroll.y != 0.0 {
-                                    let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                                    // model.actions.push(model::action::Action::ZoomX {
-                                    model.actions.push(model::action::Action::ZoomX {
-                                        nr_pixels: scroll.y * zoom_x_factor,
-                                        center_x: pos.x,
-                                    });
-                                }
-                            }
-                        });
+    handle_drag_interaction(&mut ui_ruler, &response, &mut model.actions);
+    handle_scroll_interaction(&mut ui_ruler, &mut model.actions, model.user_config.zoom_x_scroll_factor);
 
-                        // If mouse hovers over the ruler
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::None);
-                        // hover_info could still be None if we don't have a sample_ix range yet
-                        {
-                            let ruler = &mut model.tracks2.ruler;
-                            ruler.hover_info = ruler.screen_x_to_sample_ix(pos.x).map(|sample_ix| ruler::time::HoverInfo {
-                                sample_ix: sample_ix.round() as i64,
-                                screen_x: pos.x,
-                            });
-                        }
-                        {
-                            let hover_info = HoverInfoE::IsHovered(HoverInfo {
-                                screen_pos: pos.into(),
-                                sample_ix: model.tracks2.ruler.screen_x_to_sample_ix(pos.x).unwrap_or(0.0),
-                            });
-                            model.tracks2.hover_info.update(hover_info);
-                        }
-                    }
-                    None => {
-                        model.tracks2.ruler.hover_info = None;
-                        // model.tracks2.hover_info = HoverInfoE::NotHovered;
-                    }
-                }
+    // We get the hover text rect so we can avoid it when drawing ix lattice labels
+    let hover_text_rect2 = ui_hover(&mut ui_ruler, model)?;
+    ui_ix_lattice(&mut ui_ruler, &mut model.tracks2.ruler, hover_text_rect2);
 
-                let mut hover_text_rect2 = None;
-                // let hover_text_rect = ui_hover_tick_label(ui, &model.tracks2.ruler);
-                if let HoverInfoE::IsHovered(hover_info) = &model.tracks2.hover_info.get() {
-                    hover_text_rect2 = ui_hover_tick_label2(ui, hover_info);
-                    ui_hover_tick_line_triangle(ui, hover_info);
-                }
-                ui_ix_lattice(ui, &mut model.tracks2.ruler, hover_text_rect2);
-
-                // let begin_end_rects = ui_begin_end(ui, ruler);
-                // NOTE: we want this later so that the triangle is on top of the ix_lattice ticks
-            });
-    });
     Ok(())
 }
 
-fn ui_hover_tick_label(ui: &mut egui::Ui, ruler: &ruler::Time) -> Option<egui::Rect> {
-    let &hover_info = ruler.hover_info.as_ref()?;
-    ui_tick_label(ui, hover_info.screen_x, hover_info.sample_ix.separate_with_commas().into(), None)
+pub fn handle_drag_interaction(ui: &mut egui::Ui, response: &egui::Response, actions: &mut Vec<Action>) {
+    if response.dragged() {
+        let delta = ui.input(|i| i.pointer.delta());
+        actions.push(model::action::Action::ShiftX { nr_pixels: -delta.x });
+    }
 }
 
-fn ui_hover_tick_label2(ui: &mut egui::Ui, hover_info: &HoverInfo) -> Option<egui::Rect> {
+pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, zoom_x_factor: f32) {
+    let rect = ui.min_rect();
+    let pos_in_rect = ui.ctx().pointer_hover_pos().filter(|&pos| rect.contains(pos));
+    if let Some(pos) = pos_in_rect {
+        ui.ctx().input(|i| {
+            if i.modifiers.shift && !i.modifiers.ctrl {
+                let scroll = i.raw_scroll_delta;
+                if scroll.x != 0.0 {
+                    actions.push(model::action::Action::ShiftX { nr_pixels: scroll.x });
+                }
+            } else if i.modifiers.ctrl && !i.modifiers.shift {
+                let scroll = i.raw_scroll_delta;
+                if scroll.y != 0.0 {
+                    actions.push(model::action::Action::ZoomX {
+                        nr_pixels: scroll.y * zoom_x_factor,
+                        center_x: pos.x,
+                    });
+                }
+            }
+        });
+    }
+}
+
+pub fn ui_hover(ui: &mut egui::Ui, model: &mut model::Model) -> Result<Option<egui::Rect>> {
+    let rect = ui.min_rect();
+    if let Some(pos_in_rect) = ui.ctx().pointer_hover_pos().filter(|&pos| rect.contains(pos)) {
+        // If mouse hovers over the ruler
+        // ui.ctx().set_cursor_icon(egui::CursorIcon::None);
+        {
+            // Set tracks to hovered state
+            let hover_info = HoverInfoE::IsHovered(HoverInfo {
+                screen_pos: pos_in_rect.into(),
+                sample_ix: model.tracks2.ruler.screen_x_to_sample_ix(pos_in_rect.x).unwrap_or(0.0),
+            });
+            model.tracks2.hover_info.update(hover_info);
+        }
+        {
+            // We get the hover_info from the trakcs2, as we also draw when hovered over the
+            // tracks.
+            let mut hover_text_rect2 = None;
+            if let HoverInfoE::IsHovered(hover_info) = &model.tracks2.hover_info.get() {
+                hover_text_rect2 = ui_hover_tick_label(ui, hover_info);
+                ui_hover_tick_line_triangle(ui, hover_info);
+            }
+            Ok(hover_text_rect2)
+        }
+    } else {
+        // Reset hover info
+        model.tracks2.ruler.hover_info = None;
+        Ok(None)
+    }
+}
+
+fn ui_hover_tick_label(ui: &mut egui::Ui, hover_info: &HoverInfo) -> Option<egui::Rect> {
     let sample_ix = hover_info.sample_ix.round() as i64;
 
     ui_tick_label(ui, hover_info.screen_pos.x, sample_ix.separate_with_commas().into(), None)
 }
 
-/// @return the pixel rect of the text label, so we can avoid drawing other text over it
-// fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, ruler: &ruler::Time) {
 fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo) {
     // let Some(&hover_info) = ruler.hover_info.as_ref() else { return };
     let screen_x = hover_info.screen_pos.x;

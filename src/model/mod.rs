@@ -42,6 +42,12 @@ pub struct Model {
 }
 
 impl Model {
+    pub fn new() -> Self {
+        let mut res = Self::default();
+        res.tracks2.width_info = res.user_config.tracks_width_info;
+        res
+    }
+
     pub fn load_wav(&mut self, wav_read_config: &wav::ReadConfig) -> Result<()> {
         trace!("Loading wav file: {wav_read_config:?}");
 

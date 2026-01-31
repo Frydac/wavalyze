@@ -3,7 +3,7 @@ use crate::{
     wav::read::ChIx,
 };
 use slotmap::new_key_type;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 // Accociate a channel id with a buffer
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,7 +13,7 @@ pub struct Channel {
     pub channel_id: Option<audio::Id>,
 }
 
-pub type Channels = HashMap<ChIx, Channel>;
+pub type Channels = BTreeMap<ChIx, Channel>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {

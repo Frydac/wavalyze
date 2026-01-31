@@ -13,6 +13,7 @@ pub struct Config {
     /// mouse position
     pub show_hover_info: bool,
 
+    pub tracks_width_info: f32,
     pub track: TrackConfig,
 }
 
@@ -32,6 +33,7 @@ impl Default for Config {
         Self {
             zoom_x_scroll_factor: 4.0,
             show_hover_info: true,
+            tracks_width_info: 150.0,
             track: TrackConfig::default(),
         }
     }

@@ -1,5 +1,5 @@
 use crate::{model::track2::TrackId, model::PixelCoord, wav};
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Action {
@@ -56,8 +56,8 @@ impl Action {
                 model.tracks2.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
-                // TODO: give extra info about the file?
-                model.load_wav(read_config)?;
+                model.load_wav(read_config).context("Action::OpenFile failed")?;
+                // model.load_wav(read_config)?;
                 model.actions.push(Action::ZoomToFull);
             }
             Action::ZoomToFull => {

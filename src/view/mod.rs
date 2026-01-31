@@ -1,16 +1,15 @@
 pub mod config;
 pub mod fps;
 pub mod grid;
-pub mod ruler;
 pub mod ruler2;
 pub mod track;
 pub mod track2;
+pub mod util;
 use std::collections::HashMap;
 
-use crate::model::hover_info::{HoverInfo, HoverInfoE};
+// use crate::view::util::*;
 use crate::model::Action;
 use crate::view::track::Track;
-use crate::{pos, util};
 // use crate::view::track2::Track as Track2;
 use crate::{model, wav};
 use anyhow::Result;
@@ -21,7 +20,7 @@ use egui;
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
-    tracks: HashMap<util::Id, Track>,
+    tracks: HashMap<crate::util::Id, Track>,
     // tracks2: SlotMap<TrackId, Track2>,
     fps: fps::Fps,
 }
@@ -50,10 +49,22 @@ impl View {
         self.ui_right_side_panel(ctx);
         self.ui_left_side_panel(ctx);
         self.ui_bottom_side_panel(ctx);
-        let _ = self.ui_central_panel(ctx); // central_panel should always come last
+
+        // central_panel should always come last
+        if let Err(e) = self.ui_central_panel(ctx) {
+            tracing::error!("Error drawing central panel");
+            tracing::error!("{:#?}", e);
+            tracing::error!("{}", e.backtrace());
+        }
 
         self.handle_drag_and_drop_into_app(ctx);
-        let _ = self.model.process_actions();
+
+        // We don't stop the program when something fails, like opening a wav file.
+        if let Err(e) = self.model.process_actions() {
+            tracing::error!("Error processing actions");
+            tracing::error!("{:#?}", e);
+            tracing::error!("{}", e.backtrace());
+        }
     }
 
     fn ui_bottom_side_panel(&mut self, ctx: &egui::Context) {
@@ -82,7 +93,6 @@ impl View {
                 ui.add_space(5.0);
                 ruler2::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
                 ruler2::ui_hover_info_panel2(ui, &self.model.tracks2.hover_info.get());
-
             });
     }
 
@@ -125,10 +135,10 @@ impl View {
     fn handle_drag_and_drop_into_app(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             for file in &i.raw.dropped_files {
-                if let Some(path) = &file.path {
-                    if path.extension() == Some(std::ffi::OsStr::new("wav")) {
-                        self.model.actions.push(Action::OpenFile(wav::ReadConfig::new(path)));
-                    }
+                if let Some(path) = &file.path
+                    && path.extension() == Some(std::ffi::OsStr::new("wav"))
+                {
+                    self.model.actions.push(Action::OpenFile(wav::ReadConfig::new(path)));
                 }
             }
         });
@@ -182,6 +192,7 @@ impl View {
         {
             for track_ix in 0..model.tracks2.tracks_order.len() {
                 let track_id = model.tracks2.tracks_order[track_ix];
+                ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
                 crate::view::track2::ui(ui, model, track_id)?;
             }
         }
@@ -239,23 +250,35 @@ impl View {
 
     fn ui_central_panel(&mut self, ctx: &egui::Context) -> Result<()> {
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.ui_top_panel_tool_bar(ui, ctx);
+            ui.allocate_ui([ui.available_width(), 50.0].into(), |ui| {
+                self.ui_top_panel_tool_bar(ui, ctx);
+                // ui.painter().rect(ui.min_rect().shrink(1.0), 0.0, egui::Color32::TRANSPARENT, egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
+                // ui.separator();
+            });
+
+            ui.allocate_ui([ui.available_width(), 50.0].into(), |ui| {
+                let size = ui.available_size();
+                ui.set_min_size(size);
+                let _ = ruler2::ui(ui, &mut self.model);
+            });
 
             // Reset hover info (but keep/draw previous hover info)
             // before ruler
             self.model.tracks2.hover_info.next();
+            // self.ui_top_panel_tool_bar(ui, ctx);
 
             // ruler::ui(ui, &self.model);
-            let _ = ruler2::ui(ui, &mut self.model);
+            // let _ = ruler2::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
-                let width = ui.available_width();
-                // NOTE: -20.0 seems needed if we fit the height of the tracks then there is no
-                // scrollbar
-                let height = ui.available_height() - 20.0;
-                self.model.tracks2.available_height = height;
-                ui.allocate_ui([width, height].into(), |ui| {
+                let size = ui.available_size();
+                self.model.tracks2.available_height = size.y;
+                ui.allocate_ui(size, |ui| {
+                    ui.set_min_width(size.x);
+
                     // let resp = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height() - 20.0), egui::Sense::hover());
                     let _ = self.ui_tracks2(ui);
+
+                    // util::debug_rect_text(ui, ui.min_rect().shrink(1.0), egui::Color32::LIGHT_GREEN, "tracks");
                 });
             });
         });

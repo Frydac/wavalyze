@@ -33,6 +33,7 @@ impl AudioManager {
     pub fn load_file(&mut self, read_config: &ReadConfig) -> Result<File> {
         // Read requested buffers and create a File instance to keep references
         let file = read_to_file(read_config, &mut self.buffers)?;
+        dbg!(&file);
 
         // Create thumbnails for each buffer in parallel
         let results: Result<Vec<(BufferId, ThumbnailE)>, anyhow::Error> = file
