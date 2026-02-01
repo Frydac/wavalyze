@@ -155,6 +155,47 @@ impl Tracks {
         Ok(())
     }
 
+    pub fn zoom_track_value_range(
+        &mut self,
+        track_id: TrackId,
+        delta_pixels: f32,
+        center_y: f32,
+    ) -> Result<()> {
+        if delta_pixels == 0.0 {
+            return Ok(());
+        }
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+        let screen_rect = track
+            .screen_rect
+            .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+        let mut sample_rect = track
+            .sample_rect
+            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        let Some(val_rng) = sample_rect.val_rng() else {
+            return Ok(());
+        };
+        if !screen_rect.contains_y(center_y) {
+            return Ok(());
+        }
+        // Invert Y so higher sample values map toward the top of the screen.
+        let center_frac = (screen_rect.max.y - center_y) / screen_rect.height();
+        let delta_val = ruler::value::pixels_to_value_delta(delta_pixels, val_rng, screen_rect);
+        let range_len = ruler::value::val_range_len(val_rng);
+        if delta_val < 0.0 && delta_val.abs() >= range_len {
+            return Ok(());
+        }
+        let zoomed = ruler::value::zoom_val_range(val_rng, delta_val, center_frac as f64);
+        if zoomed.is_empty() {
+            return Ok(());
+        }
+        sample_rect.set_val_rng(zoomed);
+        track.set_sample_rect(sample_rect);
+        Ok(())
+    }
+
     /// Update the sample ranges of all tracks to match the ruler zoom level
     /// Should be called after each change to the ruler zoom level/position
     /// TODO: enforce this somehow?

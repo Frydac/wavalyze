@@ -57,15 +57,13 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
             if let Some(track) = model.tracks2.get_track(track_id) {
                 let hover_info = model.tracks2.hover_info;
-                value_ruler2::ui(
-                    ui,
-                    track,
-                    track_id,
-                    ruler_rect,
-                    &mut model.actions,
-                    &hover_info,
-                    &model.audio,
-                );
+                let mut value_ruler_ctx = value_ruler2::ValueRulerContext {
+                    actions: &mut model.actions,
+                    hover_info: &hover_info,
+                    audio: &model.audio,
+                    zoom_y_factor: model.user_config.zoom_x_scroll_factor,
+                };
+                value_ruler2::ui(ui, track, track_id, ruler_rect, &mut value_ruler_ctx);
             }
         });
 
@@ -233,23 +231,33 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                         .unwrap_or(0.0),
                 })));
             ui.ctx().input(|i| {
-                if i.modifiers.shift && !i.modifiers.ctrl {
-                    let scroll = i.raw_scroll_delta;
-                    if scroll.x != 0.0 {
+                let scroll = i.raw_scroll_delta;
+                if i.modifiers.alt {
+                    if i.modifiers.shift && !i.modifiers.ctrl && scroll.y != 0.0 {
+                        model.actions.push(Action::PanY {
+                            track_id,
+                            nr_pixels: scroll.y,
+                        });
+                    } else if i.modifiers.ctrl && scroll.y != 0.0 {
                         let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
+                        model.actions.push(Action::ZoomY {
+                            track_id,
+                            nr_pixels: scroll.y * zoom_x_factor,
+                            center_y: pos.y,
+                        });
+                    }
+                } else if i.modifiers.shift && !i.modifiers.ctrl {
+                    if scroll.x != 0.0 {
                         model.actions.push(Action::PanX {
                             nr_pixels: scroll.x,
                         });
                     }
-                } else if i.modifiers.ctrl {
-                    let scroll = i.raw_scroll_delta;
-                    if scroll.y != 0.0 {
-                        let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                        model.actions.push(Action::ZoomX {
-                            nr_pixels: scroll.y * zoom_x_factor,
-                            center_x: pos.x,
-                        });
-                    }
+                } else if i.modifiers.ctrl && scroll.y != 0.0 {
+                    let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
+                    model.actions.push(Action::ZoomX {
+                        nr_pixels: scroll.y * zoom_x_factor,
+                        center_x: pos.x,
+                    });
                 }
             });
         }

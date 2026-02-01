@@ -7,6 +7,13 @@ use crate::model::track2::Track;
 use crate::model::{Action, track2::TrackId};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
 
+pub struct ValueRulerContext<'a> {
+    pub actions: &'a mut Vec<Action>,
+    pub hover_info: &'a HoverInfoE,
+    pub audio: &'a crate::audio::manager::AudioManager,
+    pub zoom_y_factor: f32,
+}
+
 /// Draw a value ruler for a track using its sample_rect and screen_rect mapping.
 /// For now we only draw a zero tick centered via the current value range.
 pub fn ui(
@@ -14,9 +21,7 @@ pub fn ui(
     track: &Track,
     track_id: TrackId,
     rect: Rect,
-    actions: &mut Vec<Action>,
-    hover_info: &HoverInfoE,
-    audio: &crate::audio::manager::AudioManager,
+    ctx: &mut ValueRulerContext<'_>,
 ) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
@@ -75,16 +80,59 @@ pub fn ui(
     );
     if response.dragged() {
         let delta = ui.input(|i| i.pointer.delta());
-        actions.push(Action::PanY {
+        ctx.actions.push(Action::PanY {
             track_id,
             nr_pixels: delta.y,
         });
     }
+    handle_value_ruler_scroll(ui, rect, track_id, ctx);
 
     let mut occupied: Vec<Rect> = Vec::new();
-    draw_hover_value_from_y(ui, hover_info, track, rect, &mut occupied);
-    draw_hover_value(ui, hover_info, audio, track, track_id, rect, &mut occupied);
+    draw_hover_value_from_y(ui, ctx.hover_info, track, rect, &mut occupied);
+    draw_hover_value(
+        ui,
+        ctx.hover_info,
+        ctx.audio,
+        track,
+        track_id,
+        rect,
+        &mut occupied,
+    );
     draw_lattice_labels(ui, rect, val_rng, &mut occupied);
+}
+
+fn handle_value_ruler_scroll(
+    ui: &egui::Ui,
+    rect: Rect,
+    track_id: TrackId,
+    ctx: &mut ValueRulerContext<'_>,
+) {
+    let hovered = ui
+        .ctx()
+        .pointer_hover_pos()
+        .map(|pos| rect.contains(pos))
+        .unwrap_or(false);
+    if !hovered {
+        return;
+    }
+    let (scroll, modifiers, hover_pos) = ui
+        .ctx()
+        .input(|i| (i.raw_scroll_delta, i.modifiers, i.pointer.hover_pos()));
+    // Some systems emit horizontal scroll for shift-wheel; use whichever axis is non-zero.
+    let scroll_y = if scroll.y != 0.0 { scroll.y } else { scroll.x };
+    if modifiers.shift && !modifiers.ctrl && scroll_y != 0.0 {
+        ctx.actions.push(Action::PanY {
+            track_id,
+            nr_pixels: scroll_y,
+        });
+    } else if modifiers.ctrl && scroll_y != 0.0 {
+        // Zoom around the mouse Y position for intuitive value scaling.
+        ctx.actions.push(Action::ZoomY {
+            track_id,
+            nr_pixels: scroll_y * ctx.zoom_y_factor,
+            center_y: hover_pos.map(|p| p.y).unwrap_or(rect.center().y),
+        });
+    }
 }
 
 fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {

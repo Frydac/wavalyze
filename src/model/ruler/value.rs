@@ -53,3 +53,56 @@ pub fn pan_val_range(val_range: sample::ValRangeE, delta: f64) -> sample::ValRan
         }
     }
 }
+
+/// Zoom a value range by a delta, around a normalized center (0.0..=1.0).
+pub fn zoom_val_range(
+    val_range: sample::ValRangeE,
+    delta: f64,
+    center_frac: f64,
+) -> sample::ValRangeE {
+    let center_frac = center_frac.clamp(0.0, 1.0);
+    let delta_min = delta * center_frac;
+    let delta_max = delta * (1.0 - center_frac);
+    match val_range {
+        sample::ValRangeE::PCM16(mut range) => {
+            let shift_min = delta_min.round() as i16;
+            let shift_max = delta_max.round() as i16;
+            range.min = range.min.saturating_sub(shift_min);
+            range.max = range.max.saturating_add(shift_max);
+            if range.min > range.max {
+                range.min = range.max;
+            }
+            sample::ValRangeE::PCM16(range)
+        }
+        sample::ValRangeE::PCM24(mut range) => {
+            let shift_min = delta_min.round() as i32;
+            let shift_max = delta_max.round() as i32;
+            range.min = range.min.saturating_sub(shift_min);
+            range.max = range.max.saturating_add(shift_max);
+            if range.min > range.max {
+                range.min = range.max;
+            }
+            sample::ValRangeE::PCM24(range)
+        }
+        sample::ValRangeE::PCM32(mut range) => {
+            let shift_min = delta_min.round() as i32;
+            let shift_max = delta_max.round() as i32;
+            range.min = range.min.saturating_sub(shift_min);
+            range.max = range.max.saturating_add(shift_max);
+            if range.min > range.max {
+                range.min = range.max;
+            }
+            sample::ValRangeE::PCM32(range)
+        }
+        sample::ValRangeE::F32(mut range) => {
+            let shift_min = delta_min as f32;
+            let shift_max = delta_max as f32;
+            range.min -= shift_min;
+            range.max += shift_max;
+            if range.min > range.max {
+                range.min = range.max;
+            }
+            sample::ValRangeE::F32(range)
+        }
+    }
+}

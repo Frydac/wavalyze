@@ -180,7 +180,11 @@ impl Action {
                 track_id,
                 nr_pixels,
                 center_y,
-            } => todo!(),
+            } => {
+                model
+                    .tracks2
+                    .zoom_track_value_range(*track_id, *nr_pixels, *center_y)?;
+            }
             Action::SetHoverInfo(hover_info) => {
                 model.tracks2.hover_info = *hover_info;
             }
