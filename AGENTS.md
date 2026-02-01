@@ -2,6 +2,7 @@
 
 ### Build, Lint, and Test
 
+- **After (larger) code edits:** run `./check.sh`
 - **Build:** `cargo build`
 - **Build (WASM):** `trunk build`
 - **Lint:** `cargo fmt --all -- --check` and `cargo clippy --quiet --workspace --all-targets --all-features --  -D warnings -W clippy::all`

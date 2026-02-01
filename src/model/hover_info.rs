@@ -13,23 +13,4 @@ pub enum HoverInfoE {
     IsHovered(HoverInfo),
 }
 
-#[derive(Debug, PartialEq, Clone, Default)]
-pub struct HoverInfo3 {
-    hover_info_current: HoverInfoE, // while drawing, read this
-    hover_info_next: HoverInfoE,    // while drawing, write this
-}
-
-impl HoverInfo3 {
-    pub fn update(&mut self, hover_info: HoverInfoE) {
-        self.hover_info_next = hover_info;
-    }
-
-    pub fn get(&self) -> HoverInfoE {
-        self.hover_info_current
-    }
-
-    pub fn next(&mut self) {
-        self.hover_info_current = self.hover_info_next;
-        self.hover_info_next = HoverInfoE::NotHovered;
-    }
-}
+// HoverInfoE is the single source of truth for hover rendering state.

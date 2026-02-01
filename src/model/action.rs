@@ -1,4 +1,4 @@
-use crate::{model::PixelCoord, model::track2::TrackId, wav};
+use crate::{model::PixelCoord, model::hover_info::HoverInfoE, model::track2::TrackId, wav};
 use anyhow::{Context, Result};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -40,6 +40,8 @@ pub enum Action {
         nr_pixels: PixelCoord,
         center_y: PixelCoord,
     },
+    /// Update hover info on the next frame so all views stay in sync.
+    SetHoverInfo(HoverInfoE),
     // TODO: zoom rect?
 }
 
@@ -97,6 +99,9 @@ impl Action {
                 nr_pixels,
                 center_y,
             } => todo!(),
+            Action::SetHoverInfo(hover_info) => {
+                model.tracks2.hover_info = *hover_info;
+            }
         }
 
         Ok(())

@@ -8,7 +8,7 @@ pub mod util;
 use std::collections::HashMap;
 
 // use crate::view::util::*;
-use crate::model::Action;
+use crate::model::{Action, hover_info::HoverInfoE};
 use crate::view::track::Track;
 // use crate::view::track2::Track as Track2;
 use crate::{model, wav};
@@ -48,6 +48,11 @@ impl View {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Clear hover by default; hover interactions in this frame can override it.
+        self.model
+            .actions
+            .push(Action::SetHoverInfo(HoverInfoE::NotHovered));
+
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
         self.ui_right_side_panel(ctx);
@@ -96,7 +101,7 @@ impl View {
                 ruler2::ui_ruler_info_panel(ui, &self.model.tracks2.ruler);
                 ui.add_space(5.0);
                 ruler2::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
-                ruler2::ui_hover_info_panel2(ui, &self.model.tracks2.hover_info.get());
+                ruler2::ui_hover_info_panel2(ui, &self.model.tracks2.hover_info);
             });
     }
 
@@ -271,10 +276,6 @@ impl View {
                 ui.set_min_size(size);
                 let _ = ruler2::ui(ui, &mut self.model);
             });
-
-            // Reset hover info (but keep/draw previous hover info)
-            // before ruler
-            self.model.tracks2.hover_info.next();
             // self.ui_top_panel_tool_bar(ui, ctx);
 
             // ruler::ui(ui, &self.model);

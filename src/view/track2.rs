@@ -158,7 +158,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
 
 pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
     // Draw hover info
-    match &model.tracks2.hover_info.get() {
+    match &model.tracks2.hover_info {
         HoverInfoE::NotHovered => {}
         HoverInfoE::IsHovered(hover_info) => {
             // Draw vertical line always when hover info is present
@@ -203,16 +203,15 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
             && rect.contains(pos)
         {
             model
-                .tracks2
-                .hover_info
-                .update(HoverInfoE::IsHovered(HoverInfo {
+                .actions
+                .push(Action::SetHoverInfo(HoverInfoE::IsHovered(HoverInfo {
                     screen_pos: pos.into(),
                     sample_ix: model
                         .tracks2
                         .ruler
                         .screen_x_to_sample_ix(pos.x)
                         .unwrap_or(0.0),
-                }));
+                })));
             ui.ctx().input(|i| {
                 if i.modifiers.shift && !i.modifiers.ctrl {
                     let scroll = i.raw_scroll_delta;

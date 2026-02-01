@@ -107,33 +107,25 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut model::Model) -> Result<Option<eg
     {
         // If mouse hovers over the ruler
         // ui.ctx().set_cursor_icon(egui::CursorIcon::None);
-        {
-            // Set tracks to hovered state
-            let hover_info = HoverInfoE::IsHovered(HoverInfo {
-                screen_pos: pos_in_rect.into(),
-                sample_ix: model
-                    .tracks2
-                    .ruler
-                    .screen_x_to_sample_ix(pos_in_rect.x)
-                    .unwrap_or(0.0),
-            });
-            model.tracks2.hover_info.update(hover_info);
-        }
-        {
-            // We get the hover_info from the trakcs2, as we also draw when hovered over the
-            // tracks.
-            let mut hover_text_rect2 = None;
-            if let HoverInfoE::IsHovered(hover_info) = &model.tracks2.hover_info.get() {
-                hover_text_rect2 = ui_hover_tick_label(ui, hover_info);
-                ui_hover_tick_line_triangle(ui, hover_info);
-            }
-            Ok(hover_text_rect2)
-        }
-    } else {
-        // Reset hover info
-        model.tracks2.ruler.hover_info = None;
-        Ok(None)
+        // Set tracks to hovered state (next frame, via action)
+        let hover_info = HoverInfoE::IsHovered(HoverInfo {
+            screen_pos: pos_in_rect.into(),
+            sample_ix: model
+                .tracks2
+                .ruler
+                .screen_x_to_sample_ix(pos_in_rect.x)
+                .unwrap_or(0.0),
+        });
+        model.actions.push(Action::SetHoverInfo(hover_info));
     }
+
+    // We get the hover_info from the tracks2, as we also draw when hovered over the tracks.
+    let mut hover_text_rect2 = None;
+    if let HoverInfoE::IsHovered(hover_info) = &model.tracks2.hover_info {
+        hover_text_rect2 = ui_hover_tick_label(ui, hover_info);
+        ui_hover_tick_line_triangle(ui, hover_info);
+    }
+    Ok(hover_text_rect2)
 }
 
 fn ui_hover_tick_label(ui: &mut egui::Ui, hover_info: &HoverInfo) -> Option<egui::Rect> {

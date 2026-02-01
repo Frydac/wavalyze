@@ -1,6 +1,6 @@
 use crate::{
     audio::{self, BufferId},
-    model::{config::TrackConfig, hover_info::HoverInfo3, ruler},
+    model::{config::TrackConfig, hover_info::HoverInfoE, ruler},
 };
 use anyhow::Result;
 use slotmap::SlotMap;
@@ -17,7 +17,7 @@ pub struct Tracks {
     pub tracks: SlotMap<TrackId, Track>,
     pub tracks_order: Vec<TrackId>,
     // hover
-    pub hover_info: HoverInfo3,
+    pub hover_info: HoverInfoE,
     // selection
     // zoom
     pub available_height: f32,
