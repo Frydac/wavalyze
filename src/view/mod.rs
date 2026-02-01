@@ -36,6 +36,10 @@ impl View {
     }
 
     pub fn ui_measured(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if cfg!(target_arch = "wasm32") {
+            self.ui(ctx, frame);
+            return;
+        }
         self.fps.start_frame();
 
         self.ui(ctx, frame);
@@ -172,6 +176,9 @@ impl View {
             }
             if ui.button("fill screen height").clicked() {
                 self.model.actions.push(Action::FillScreenHeight);
+            }
+            if cfg!(target_arch = "wasm32") && ui.button("load demo").clicked() {
+                self.model.actions.push(Action::LoadDemo);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.style_mut().spacing.window_margin = egui::Margin::same(4.0);

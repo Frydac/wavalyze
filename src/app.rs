@@ -55,7 +55,10 @@ impl eframe::App for App {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        self.view.model().user_config.save_to_storage();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.view.model().user_config.save_to_storage();
+        }
         // self.save_user_config();
         // self.model.save_to_storage(storage);
     }
@@ -95,6 +98,19 @@ impl App {
             view: view::View::new(model),
             cli_config: None,
             args: Some(args),
+        }
+    }
+
+    pub fn new_web(_cc: &eframe::CreationContext<'_>) -> Self {
+        let mut model = model::Model::new();
+        model.actions.push(Action::LoadDemo);
+        model.actions.push(Action::ZoomToFull);
+        model.actions.push(Action::FillScreenHeight);
+
+        Self {
+            view: view::View::new(model),
+            cli_config: None,
+            args: None,
         }
     }
     // pub fn new(_cc: &eframe::CreationContext<'_>, cli_config: AppCliConfig, user_config: model::Config) -> Self {

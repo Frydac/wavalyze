@@ -1,5 +1,6 @@
 pub mod action;
 pub mod config;
+pub mod demo;
 pub mod hover_info;
 pub mod ruler;
 pub mod sample_ix_zoom;
@@ -65,6 +66,10 @@ impl Model {
         self.files2.push(file);
 
         Ok(())
+    }
+
+    pub fn load_demo_waveform(&mut self) -> Result<()> {
+        demo::load_demo_waveform(self)
     }
 
     pub fn get_file_channel_for_track(&self, track_id: TrackId) -> Option<(&wav::file2::File, &wav::file2::Channel)> {

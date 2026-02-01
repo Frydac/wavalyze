@@ -8,6 +8,7 @@ pub enum Action {
     RemoveTrack(TrackId),
 
     OpenFile(wav::ReadConfig),
+    LoadDemo,
 
     /// Set x-zoom so the longest track is full width
     /// Set y-zoom to fill the screen, with a minimum height per track
@@ -59,6 +60,11 @@ impl Action {
                 model.load_wav(read_config).context("Action::OpenFile failed")?;
                 // model.load_wav(read_config)?;
                 model.actions.push(Action::ZoomToFull);
+            }
+            Action::LoadDemo => {
+                model.load_demo_waveform().context("Action::LoadDemo failed")?;
+                model.actions.push(Action::ZoomToFull);
+                model.actions.push(Action::FillScreenHeight);
             }
             Action::ZoomToFull => {
                 model.tracks2.zoom_to_full(&model.audio)?;
