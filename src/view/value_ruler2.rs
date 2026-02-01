@@ -1,7 +1,8 @@
+use crate::audio::sample;
 use crate::model::ruler::sample_value_to_screen_y_e;
 use crate::model::track2::Track;
 use crate::model::{Action, track2::TrackId};
-use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke};
+use egui::{Color32, FontId, Pos2, Rect, Stroke};
 
 /// Draw a value ruler for a track using its sample_rect and screen_rect mapping.
 /// For now we only draw a zero tick centered via the current value range.
@@ -36,14 +37,20 @@ pub fn ui(
     const TICK_LEN: f32 = 10.0;
     const MINOR_TICK_LEN: f32 = 6.0;
 
-    // Simple lattice: three short guide ticks.
-    for frac in [0.25_f32, 0.5_f32, 0.75_f32] {
-        let y = rect.top() + rect.height() * frac;
-        let line = [
-            Pos2::new(rect.right() - MINOR_TICK_LEN, y),
-            Pos2::new(rect.right(), y),
-        ];
-        painter.line_segment(line, minor_stroke);
+    // Value ticks at -1.0, -0.5, 0.5, 1.0 (mapped to PCM ranges when needed).
+    for value in [-1.0_f32, -0.5_f32, 0.5_f32, 1.0_f32] {
+        let Some(y) = sample_value_to_screen_y_e(value, val_rng, rect.into()) else {
+            continue;
+        };
+        if (rect.top()..=rect.bottom()).contains(&y) {
+            let line = [
+                Pos2::new(rect.right() - MINOR_TICK_LEN, y),
+                Pos2::new(rect.right(), y),
+            ];
+            painter.line_segment(line, minor_stroke);
+
+            draw_value_label(ui, rect, y, format_tick_label(value, val_rng));
+        }
     }
 
     // Zero tick line (short, like the time ruler ticks).
@@ -57,14 +64,7 @@ pub fn ui(
         painter.line_segment(zero_line, zero_stroke);
 
         // Label for zero tick.
-        let label_pos = Pos2::new(rect.left() + 4.0, zero_y);
-        painter.text(
-            label_pos,
-            Align2::LEFT_CENTER,
-            "0",
-            FontId::proportional(12.0),
-            ui.style().visuals.text_color(),
-        );
+        draw_value_label(ui, rect, zero_y, format_tick_label(0.0, val_rng));
     }
 
     // Dragging the value ruler pans the value range of this track.
@@ -80,4 +80,32 @@ pub fn ui(
             nr_pixels: delta.y,
         });
     }
+}
+
+fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {
+    match val_rng {
+        sample::ValRangeE::PCM16(_) => {
+            let scaled = (value * i16::MAX as f32).round() as i16;
+            format!("{scaled}")
+        }
+        sample::ValRangeE::PCM24(_) | sample::ValRangeE::PCM32(_) => {
+            let scaled = (value * 8_388_607.0).round() as i32;
+            format!("{scaled}")
+        }
+        sample::ValRangeE::F32(_) => format!("{value:.2}"),
+    }
+}
+
+fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) {
+    let font_id = FontId::proportional(12.0);
+    let color = ui.style().visuals.text_color();
+    let galley = ui.fonts(|fonts| fonts.layout_no_wrap(text, font_id, color));
+    let text_size = galley.size();
+    let mut text_pos = Pos2::new(rect.left() + 4.0, y - text_size.y / 2.0);
+    if text_pos.y + text_size.y > rect.bottom() {
+        text_pos.y = rect.bottom() - text_size.y - 2.0;
+    } else if text_pos.y < rect.top() {
+        text_pos.y = rect.top() + 2.0;
+    }
+    ui.painter().galley(text_pos, galley, color);
 }
