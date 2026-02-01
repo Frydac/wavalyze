@@ -232,17 +232,18 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                 })));
             ui.ctx().input(|i| {
                 let scroll = i.raw_scroll_delta;
+                let scroll_y = if scroll.y != 0.0 { scroll.y } else { scroll.x };
                 if i.modifiers.alt {
-                    if i.modifiers.shift && !i.modifiers.ctrl && scroll.y != 0.0 {
+                    if i.modifiers.shift && !i.modifiers.ctrl && scroll_y != 0.0 {
                         model.actions.push(Action::PanY {
                             track_id,
-                            nr_pixels: scroll.y,
+                            nr_pixels: scroll_y,
                         });
-                    } else if i.modifiers.ctrl && scroll.y != 0.0 {
+                    } else if i.modifiers.ctrl && scroll_y != 0.0 {
                         let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
                         model.actions.push(Action::ZoomY {
                             track_id,
-                            nr_pixels: scroll.y * zoom_x_factor,
+                            nr_pixels: scroll_y * zoom_x_factor,
                             center_y: pos.y,
                         });
                     }
@@ -264,8 +265,6 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
     }
 }
 
-// Wrap the waveform in a (manually implemented) resizable frame
-// TODO: see if we can extrac like a resizable canvas or something
 pub fn ui_waveform_canvas(
     ui: &mut egui::Ui,
     model: &mut Model,
@@ -296,14 +295,25 @@ fn handle_pan_drag(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect
         egui::Sense::drag(),
     );
     if response.dragged_by(egui::PointerButton::Secondary) {
-        let delta = ui.input(|i| i.pointer.delta());
-        model.actions.push(Action::PanX {
-            nr_pixels: -delta.x,
-        });
-        model.actions.push(Action::PanY {
-            track_id,
-            nr_pixels: delta.y,
-        });
+        let (delta, modifiers) = ui.input(|i| (i.pointer.delta(), i.modifiers));
+        if modifiers.ctrl {
+            model.actions.push(Action::PanX {
+                nr_pixels: -delta.x,
+            });
+            model.actions.push(Action::PanY {
+                track_id,
+                nr_pixels: delta.y,
+            });
+        } else if modifiers.shift {
+            model.actions.push(Action::PanY {
+                track_id,
+                nr_pixels: delta.y,
+            });
+        } else {
+            model.actions.push(Action::PanX {
+                nr_pixels: -delta.x,
+            });
+        }
     }
 }
 
