@@ -112,6 +112,16 @@ fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) -> Rect {
     text_rect
 }
 
+fn draw_hover_label(ui: &egui::Ui, rect: Rect, y: f32, text: String, tick_color: Color32) -> Rect {
+    let tick_line = [
+        Pos2::new(rect.right() - 10.0, y),
+        Pos2::new(rect.right(), y),
+    ];
+    ui.painter()
+        .line_segment(tick_line, Stroke::new(1.0, tick_color));
+    draw_value_label(ui, rect, y, text)
+}
+
 fn layout_value_label(
     ui: &egui::Ui,
     rect: Rect,
@@ -197,9 +207,10 @@ fn draw_hover_value(
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
+            let db = crate::audio::db::gain_to_db_exact(sample_value.abs());
             (
                 sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
-                format!("{sample_value:.3}"),
+                format!("{sample_value:.3}\n{db:.3} dB"),
             )
         }
         (
@@ -212,9 +223,11 @@ fn draw_hover_value(
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
+            let scaled = crate::audio::sample::convert::pcm162flt(*sample_value) as f32;
+            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
             (
                 sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
-                format!("{sample_value}"),
+                format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
             )
         }
         (
@@ -227,9 +240,19 @@ fn draw_hover_value(
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
+            let scaled = match sample_rect.val_rng() {
+                Some(sample::ValRangeE::PCM24(_)) => {
+                    crate::audio::sample::convert::pcm242flt(*sample_value) as f32
+                }
+                Some(sample::ValRangeE::PCM32(_)) => {
+                    crate::audio::sample::convert::pcm322flt(*sample_value) as f32
+                }
+                _ => *sample_value as f32,
+            };
+            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
             (
                 sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
-                format!("{sample_value}"),
+                format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
             )
         }
         _ => return,
@@ -241,13 +264,7 @@ fn draw_hover_value(
         return;
     }
 
-    let tick_line = [
-        Pos2::new(rect.right() - 10.0, y),
-        Pos2::new(rect.right(), y),
-    ];
-    ui.painter()
-        .line_segment(tick_line, Stroke::new(1.0, Color32::LIGHT_BLUE));
-    let label_rect = draw_value_label(ui, rect, y, label);
+    let label_rect = draw_hover_label(ui, rect, y, label, Color32::LIGHT_BLUE);
     occupied.push(label_rect);
 }
 
@@ -289,8 +306,8 @@ fn draw_hover_value_from_y(
             let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
                 return;
             };
-            let db = crate::audio::db::gain_to_db(sample_value.abs());
-            Some((y_ruler, format!("{sample_value:.3}\n{db:.0} dB")))
+            let db = crate::audio::db::gain_to_db_exact(sample_value.abs());
+            Some((y_ruler, format!("{sample_value:.3}\n{db:.3} dB")))
         }
         crate::audio::sample_rect2::SampleRectE::I16(rect_t) => {
             let Some(val_rng) = rect_t.val_rng else {
@@ -304,8 +321,8 @@ fn draw_hover_value_from_y(
                 return;
             };
             let scaled = crate::audio::sample::convert::pcm162flt(sample_value) as f32;
-            let db = crate::audio::db::gain_to_db(scaled.abs());
-            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.0} dB")))
+            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
+            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.3} dB")))
         }
         crate::audio::sample_rect2::SampleRectE::I32(rect_t) => {
             let Some(val_rng) = rect_t.val_rng else {
@@ -327,8 +344,8 @@ fn draw_hover_value_from_y(
                 }
                 _ => sample_value as f32,
             };
-            let db = crate::audio::db::gain_to_db(scaled.abs());
-            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.0} dB")))
+            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
+            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.3} dB")))
         }
     };
 
@@ -339,14 +356,8 @@ fn draw_hover_value_from_y(
         return;
     }
 
-    let tick_line = [
-        Pos2::new(rect.right() - 10.0, y_ruler),
-        Pos2::new(rect.right(), y_ruler),
-    ];
     let tick_color = ui.style().visuals.text_color();
-    ui.painter()
-        .line_segment(tick_line, Stroke::new(1.0, tick_color));
-    let label_rect = draw_value_label(ui, rect, y_ruler, label);
+    let label_rect = draw_hover_label(ui, rect, y_ruler, label, tick_color);
     occupied.push(label_rect);
 }
 

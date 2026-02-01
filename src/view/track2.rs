@@ -56,7 +56,16 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             ui.painter()
                 .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
             if let Some(track) = model.tracks2.get_track(track_id) {
-                value_ruler2::ui(ui, track, track_id, ruler_rect, &mut model.actions);
+                let hover_info = model.tracks2.hover_info;
+                value_ruler2::ui(
+                    ui,
+                    track,
+                    track_id,
+                    ruler_rect,
+                    &mut model.actions,
+                    &hover_info,
+                    &model.audio,
+                );
             }
         });
 

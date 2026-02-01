@@ -8,6 +8,11 @@ pub fn gain_to_db(gain: f32) -> f32 {
     (gain.log10() / factor).round()
 }
 
+pub fn gain_to_db_exact(gain: f32) -> f32 {
+    let factor = 0.05;
+    gain.log10() / factor
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -35,5 +40,12 @@ mod tests {
         let act_db = gain_to_db(0.0);
         assert!(act_db.is_infinite());
         assert!(act_db.is_sign_negative());
+    }
+
+    #[test]
+    fn test_gain_to_db_exact() {
+        let act_db = gain_to_db_exact(1.0);
+        let exp_db = 0.0;
+        assert!(compare::near_relative(act_db, exp_db, 0.001));
     }
 }
