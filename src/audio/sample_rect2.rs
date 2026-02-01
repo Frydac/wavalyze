@@ -87,6 +87,26 @@ impl SampleRectE {
         }
     }
 
+    pub fn set_val_rng(&mut self, val_range: sample::ValRangeE) {
+        match self {
+            SampleRectE::F32(rect) => {
+                if let sample::ValRangeE::F32(range) = val_range {
+                    rect.val_rng = Some(range);
+                }
+            }
+            SampleRectE::I32(rect) => {
+                if let sample::ValRangeE::PCM24(range) = val_range {
+                    rect.val_rng = Some(range);
+                }
+            }
+            SampleRectE::I16(rect) => {
+                if let sample::ValRangeE::PCM16(range) = val_range {
+                    rect.val_rng = Some(range);
+                }
+            }
+        }
+    }
+
     // pub fn val_rng<T: Sample>(&self) -> Option<sample::ValRange<T>> {
     // match self {
     //     SampleRectE::F32(sample_rect) => sample_rect.get_f32().ok().map(|rect| rect.val_rng),

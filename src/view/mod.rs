@@ -5,6 +5,7 @@ pub mod ruler2;
 pub mod track;
 pub mod track2;
 pub mod util;
+pub mod value_ruler2;
 use std::collections::HashMap;
 
 // use crate::view::util::*;

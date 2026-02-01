@@ -6,7 +6,7 @@ use crate::{
         ruler::sample_value_to_screen_y_e,
         track2::TrackId,
     },
-    view::util::rpc,
+    view::{util::rpc, value_ruler2},
 };
 use anyhow::Result;
 const HEADER_HEIGHT: f32 = 20.0;
@@ -52,9 +52,10 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
             let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
             ui.painter()
-                .rect(ruler_rect, 0.0, egui::Color32::TRANSPARENT, stroke);
-            ui.painter()
                 .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
+            if let Some(track) = model.tracks2.get_track(track_id) {
+                value_ruler2::ui(ui, track, track_id, ruler_rect, &mut model.actions);
+            }
         });
 
         // Draw track waveform + header
@@ -307,7 +308,9 @@ fn ui_waveform(
         .screen_rect
         .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
     let sample_rect = track
-        .sample_rect
+        .single
+        .item
+        .sample_rect()
         .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
 
     match sample_view.data {
@@ -315,6 +318,9 @@ fn ui_waveform(
             if sample_view.samples_per_pixel < 0.25 {
                 positions.iter().for_each(|pos| {
                     let pos = rpc(ui, pos.into());
+                    if !screen_rect.contains(pos.into()) {
+                        return;
+                    }
                     let circle_size = 2.0;
                     let circle_color = color;
                     ui.painter().circle_filled(pos, circle_size, circle_color);
@@ -322,12 +328,18 @@ fn ui_waveform(
                         && let Some(y_mid) = sample_value_to_screen_y_e(0.0, val_rng, screen_rect)
                     {
                         let pos_mid = rpc(ui, egui::pos2(pos.x, y_mid));
-                        ui.painter()
-                            .line_segment([pos_mid, pos], egui::Stroke::new(1.0, line_color));
+                        if screen_rect.contains(pos_mid.into()) {
+                            ui.painter()
+                                .line_segment([pos_mid, pos], egui::Stroke::new(1.0, line_color));
+                        }
                     }
                 });
             } else {
-                let positions = positions.iter().map(|pos| rpc(ui, pos.into())).collect();
+                let positions = positions
+                    .iter()
+                    .map(|pos| rpc(ui, pos.into()))
+                    .filter(|pos| screen_rect.contains((*pos).into()))
+                    .collect();
                 ui.painter()
                     .line(positions, egui::Stroke::new(1.0, line_color));
             }
@@ -336,6 +348,9 @@ fn ui_waveform(
             mix_max_positions.iter().for_each(|pos| {
                 let min = rpc(ui, (&pos.min).into());
                 let max = rpc(ui, (&pos.max).into());
+                if !screen_rect.contains(min.into()) && !screen_rect.contains(max.into()) {
+                    return;
+                }
                 let color = egui::Color32::LIGHT_RED;
                 ui.painter()
                     .line_segment([min, max], egui::Stroke::new(1.0, color));

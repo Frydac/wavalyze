@@ -106,6 +106,29 @@ impl Tracks {
         }
     }
 
+    pub fn shift_track_value_range(&mut self, track_id: TrackId, delta_pixels: f32) -> Result<()> {
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+        let screen_rect = track
+            .screen_rect
+            .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+        let sample_rect = track
+            .sample_rect
+            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        let Some(val_rng) = sample_rect.val_rng() else {
+            return Ok(());
+        };
+
+        let delta_val = ruler::value::pixels_to_value_delta(delta_pixels, val_rng, screen_rect);
+        let shifted = ruler::value::shift_val_range(val_rng, delta_val);
+        let mut sample_rect = sample_rect;
+        sample_rect.set_val_rng(shifted);
+        track.set_sample_rect(sample_rect);
+        Ok(())
+    }
+
     /// Update the sample ranges of all tracks to match the ruler zoom level
     /// Should be called after each change to the ruler zoom level/position
     /// TODO: enforce this somehow?

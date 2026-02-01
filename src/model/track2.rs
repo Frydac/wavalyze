@@ -89,6 +89,7 @@ impl Track {
         if self.sample_rect != Some(sample_rect) {
             self.update_view_buffer_ = true;
             self.sample_rect = Some(sample_rect);
+            self.single.item.set_sample_rect(sample_rect);
         }
     }
 
@@ -122,7 +123,9 @@ impl Track {
             .screen_rect
             .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
         let sample_rect = self
-            .sample_rect
+            .single
+            .item
+            .sample_rect()
             .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
         let buffer_id = self.single.item.buffer_id;
 

@@ -161,7 +161,11 @@ impl Action {
             Action::ShiftY {
                 track_id,
                 nr_pixels,
-            } => todo!(),
+            } => {
+                model
+                    .tracks2
+                    .shift_track_value_range(*track_id, *nr_pixels)?;
+            }
             Action::ZoomY {
                 track_id,
                 nr_pixels,

@@ -86,4 +86,12 @@ impl Item {
 
         Ok(())
     }
+
+    pub fn sample_rect(&self) -> Option<SampleRectE> {
+        self.sample_rect
+    }
+
+    pub fn set_sample_rect(&mut self, sample_rect: SampleRectE) {
+        self.sample_rect = Some(sample_rect);
+    }
 }
