@@ -259,11 +259,30 @@ pub fn ui_waveform_canvas(
     let stroke = ui.visuals().window_stroke();
     // let stroke = egui::Stroke::NONE;
     ui.painter().rect(rect, 0.0, bg_color, stroke);
+    handle_pan_drag(ui, model, track_id, rect);
     let _ = ui_waveform(ui, model, track_id, rect);
     ui_hover(ui, model, track_id);
 
     // Ok(resp.response)
     Ok(())
+}
+
+fn handle_pan_drag(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
+    let response = ui.interact(
+        rect,
+        ui.id().with(("pan_drag", track_id)),
+        egui::Sense::drag(),
+    );
+    if response.dragged_by(egui::PointerButton::Secondary) {
+        let delta = ui.input(|i| i.pointer.delta());
+        model.actions.push(Action::PanX {
+            nr_pixels: -delta.x,
+        });
+        model.actions.push(Action::PanY {
+            track_id,
+            nr_pixels: delta.y,
+        });
+    }
 }
 
 fn resize_handle(ui: &mut egui::Ui, id: egui::Id, rect: egui::Rect) -> egui::Response {
