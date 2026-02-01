@@ -68,24 +68,24 @@ impl Track {
     }
 
     pub fn handle_interaction(&mut self, ui: &mut egui::Ui, model: &mut model::Model, track_id: Id) {
-        if let Some(pos) = ui.ctx().pointer_hover_pos() {
-            if ui.min_rect().contains(pos) {
-                ui.ctx().input(|i| {
-                    if i.modifiers.shift {
-                        let scroll = i.raw_scroll_delta;
-                        if scroll.x != 0.0 {
-                            let _ = model.tracks.shift_x(scroll.x);
-                        }
-                    } else if i.modifiers.ctrl {
-                        let scroll = i.raw_scroll_delta;
-                        if scroll.y != 0.0 {
-                            let factor = model.user_config.zoom_x_scroll_factor;
-                            let _ = model.tracks.zoom_x(pos.x, scroll.y * factor);
-                        }
+        if let Some(pos) = ui.ctx().pointer_hover_pos()
+            && ui.min_rect().contains(pos)
+        {
+            ui.ctx().input(|i| {
+                if i.modifiers.shift {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.x != 0.0 {
+                        let _ = model.tracks.shift_x(scroll.x);
                     }
-                });
-                model.tracks.update_hover_info(track_id, (&pos).into());
-            }
+                } else if i.modifiers.ctrl {
+                    let scroll = i.raw_scroll_delta;
+                    if scroll.y != 0.0 {
+                        let factor = model.user_config.zoom_x_scroll_factor;
+                        let _ = model.tracks.zoom_x(pos.x, scroll.y * factor);
+                    }
+                }
+            });
+            model.tracks.update_hover_info(track_id, (&pos).into());
         }
     }
 
@@ -295,11 +295,11 @@ impl MouseHover {
         let mut popup_pos = egui::pos2(hover_info.screen_pos.x + offset_x, canvas_rect.top());
 
         // If we have the size from the last frame, use it to check for screen overflow.
-        if let Some(size) = last_size {
-            if hover_info.screen_pos.x + offset_x + size.x > canvas_rect.right() {
-                // It would overflow, so place it to the left of the cursor instead.
-                popup_pos.x = hover_info.screen_pos.x - size.x - offset_x;
-            }
+        if let Some(size) = last_size
+            && hover_info.screen_pos.x + offset_x + size.x > canvas_rect.right()
+        {
+            // It would overflow, so place it to the left of the cursor instead.
+            popup_pos.x = hover_info.screen_pos.x - size.x - offset_x;
         }
 
         // Use an egui::Area to place the popup at the calculated position.
@@ -314,15 +314,15 @@ impl MouseHover {
                     for (ix, sample) in hover_info.samples.iter() {
                         min_sample = min_sample.or(Some((*ix, *sample)));
                         max_sample = max_sample.or(Some((*ix, *sample)));
-                        if let Some(min_sample) = &mut min_sample {
-                            if min_sample.1 > *sample {
-                                min_sample.1 = *sample;
-                            }
+                        if let Some(min_sample) = &mut min_sample
+                            && min_sample.1 > *sample
+                        {
+                            min_sample.1 = *sample;
                         }
-                        if let Some(max_sample) = &mut max_sample {
-                            if max_sample.1 < *sample {
-                                max_sample.1 = *sample;
-                            }
+                        if let Some(max_sample) = &mut max_sample
+                            && max_sample.1 < *sample
+                        {
+                            max_sample.1 = *sample;
                         }
                     }
 

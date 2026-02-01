@@ -1,8 +1,11 @@
 use crate::{
     audio::sample,
     model::{
-        self, hover_info::{HoverInfo, HoverInfoE}, ruler::{self}, Action
-    }, view::util::rpc,
+        self, Action,
+        hover_info::{HoverInfo, HoverInfoE},
+        ruler::{self},
+    },
+    view::util::rpc,
 };
 use anyhow::Result;
 use thousands::Separable;

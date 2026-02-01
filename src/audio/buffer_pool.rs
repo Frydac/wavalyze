@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::audio::buffer2::Buffer;
-use slotmap::{new_key_type, SlotMap};
+use slotmap::{SlotMap, new_key_type};
 
 // TODO: move somewhere, also name? ok I guess
 #[derive(Debug, PartialEq, Clone)]

@@ -32,11 +32,7 @@ impl<T: Sample> Channel<T> {
     }
 
     pub fn at(&self, index: i64) -> Option<&T> {
-        if index < 0 {
-            None
-        } else {
-            self.data.get(index as usize)
-        }
+        if index < 0 { None } else { self.data.get(index as usize) }
     }
 }
 

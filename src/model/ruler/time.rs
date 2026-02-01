@@ -1,8 +1,8 @@
 use crate::{
     audio::sample,
     model::{
-        ruler::{ix_lattice::IxLattice, sample_ix_to_screen_x, screen_x_to_sample_ix},
         PixelCoord, SampleIxZoom,
+        ruler::{ix_lattice::IxLattice, sample_ix_to_screen_x, screen_x_to_sample_ix},
     },
     rect,
 };

@@ -1,5 +1,5 @@
 use crate::audio::{self, buffer2::BufferE, sample, sample2::Sample};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 ///
 /// A 2D 'camera' view expressed in terms of sample indices and sample values.

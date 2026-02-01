@@ -1,18 +1,18 @@
 use crate::{
+    Pos,
     audio::{
+        SampleRectE,
         buffer2::{Buffer, BufferE},
         sample,
-        sample2::Sample,
         sample_rect2::SampleRect,
+        sample2::Sample,
         thumbnail::{LevelData, LevelDataERef},
-        SampleRectE,
     },
     model::ruler::{sample_ix_to_screen_x, sample_value_to_screen_y},
     pos,
     rect::Rect,
-    Pos,
 };
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{Result, anyhow, ensure};
 
 /// Represents a pixel column defined by 2 positions with the same x coordinate.
 #[derive(Debug, PartialEq, Clone)]

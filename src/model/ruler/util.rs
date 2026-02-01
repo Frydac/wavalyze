@@ -86,11 +86,7 @@ where
 // smallest multiple of m that is >= x
 // e.g. -120, 50 -> -100
 pub fn ceil_to_multiple(x: i64, m: i64) -> i64 {
-    if x % m == 0 {
-        x
-    } else {
-        x + (m - x.rem_euclid(m))
-    }
+    if x % m == 0 { x } else { x + (m - x.rem_euclid(m)) }
 }
 
 // largest multiple of m that is <= x

@@ -1,6 +1,6 @@
 use super::channel::Channel;
 use super::sample::{Sample, SampleType};
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{Result, anyhow, ensure};
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 

@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::{audio::SampleBuffer, Pos};
+use crate::{Pos, audio::SampleBuffer};
 
 /// Stores information needed to render mouse hover position over the tracks
 #[derive(Debug, PartialEq, Clone)]

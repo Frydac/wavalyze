@@ -64,7 +64,6 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
         "Wav duration: {}s ({} samples/ch)",
         format!("{:.1}", reader.duration() as f64 / spec.sample_rate as f64).separate_with_commas(),
         reader.duration().separate_with_commas()
-        
     );
 
     // read samples into appropriate type and associate with channel index

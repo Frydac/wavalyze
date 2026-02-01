@@ -3,7 +3,7 @@ use crate::{
     model::config::TrackConfig,
     wav,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use slotmap::new_key_type;
 
 use crate::{

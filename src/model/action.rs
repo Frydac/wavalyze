@@ -1,4 +1,4 @@
-use crate::{model::track2::TrackId, model::PixelCoord, wav};
+use crate::{model::PixelCoord, model::track2::TrackId, wav};
 use anyhow::{Context, Result};
 
 #[derive(Debug, PartialEq, Clone)]

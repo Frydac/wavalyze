@@ -7,7 +7,7 @@ use crate::{
     },
     rect::Rect,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Rerpesents a time domain view on an audio buffer
 #[derive(Debug, PartialEq, Clone)]

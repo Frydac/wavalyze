@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -73,10 +73,10 @@ fn parse_sample_ix_range(s: &str) -> Result<sample::OptIxRange> {
         anyhow::bail!("Invalid sample range specification: {s}");
     }
 
-    if let (Some(start), Some(end)) = (start, end) {
-        if start >= end {
-            anyhow::bail!("Sample range start must be less than end");
-        }
+    if let (Some(start), Some(end)) = (start, end)
+        && start >= end
+    {
+        anyhow::bail!("Sample range start must be less than end");
     }
 
     Ok(sample::OptIxRange { start, end })

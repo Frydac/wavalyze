@@ -11,8 +11,8 @@ use crate::model;
 use crate::pos;
 use crate::rect;
 use crate::util;
-use anyhow::ensure;
 use anyhow::Result;
+use anyhow::ensure;
 use itertools::Itertools;
 
 use audio::SampleIx;
@@ -377,7 +377,7 @@ impl Track {
             .map(|(sample_ix, sample)| {
                 let pixel_x = (sample_ix as f32 / *samples_per_pixel).floor() + total_offset;
                 let pixel_offset = 0.5; // to get them at the middle of pixel columns, vertical
-                                        // lines then draw exactly on the pixel
+                // lines then draw exactly on the pixel
                 pos::Pos::new(pixel_x + pixel_offset, *sample)
             });
 

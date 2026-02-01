@@ -15,8 +15,8 @@ pub enum HoverInfoE {
 
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct HoverInfo3 {
-    hover_info_current: HoverInfoE,  // while drawing, read this
-    hover_info_next: HoverInfoE, // while drawing, write this
+    hover_info_current: HoverInfoE, // while drawing, read this
+    hover_info_next: HoverInfoE,    // while drawing, write this
 }
 
 impl HoverInfo3 {

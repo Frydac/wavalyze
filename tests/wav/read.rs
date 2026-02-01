@@ -1,6 +1,6 @@
 use wavalyze::audio::buffer2::BufferE;
 use wavalyze::audio::manager::Buffers;
-use wavalyze::wav::read::{read_to_file, ReadConfig};
+use wavalyze::wav::read::{ReadConfig, read_to_file};
 
 // #[test]
 // fn test_read_to_file() {

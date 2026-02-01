@@ -1,5 +1,6 @@
 pub mod action;
 pub mod config;
+pub mod hover_info;
 pub mod ruler;
 pub mod sample_ix_zoom;
 pub mod track;
@@ -8,7 +9,6 @@ pub mod tracks;
 pub mod tracks2;
 pub mod types;
 pub mod view_buffer;
-pub mod hover_info;
 
 pub use self::config::Config;
 pub use self::sample_ix_zoom::SampleIxZoom;

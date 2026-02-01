@@ -84,7 +84,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             egui::pos2(track_rect.left(), track_rect.bottom() - RESIZE_HANDLE_HEIGHT),
             egui::vec2(track_rect.width(), RESIZE_HANDLE_HEIGHT),
         );
-        let response = track_ui.interact(resize_handle_rect, track_ui.id().with(track_id), egui::Sense::drag());
+        let resize_id = track_ui.id().with(track_id);
+        let response = resize_handle(&mut track_ui, resize_id, resize_handle_rect);
         if response.dragged() {
             let modifiers = track_ui.input(|i| i.modifiers);
             let track = model
@@ -101,7 +102,6 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 model.tracks2.set_tracks_height(new_height);
             }
         }
-        response.on_hover_cursor(egui::CursorIcon::ResizeVertical);
     }
 
     Ok(())
@@ -228,6 +228,14 @@ pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackI
 
     // Ok(resp.response)
     Ok(())
+}
+
+fn resize_handle(ui: &mut egui::Ui, id: egui::Id, rect: egui::Rect) -> egui::Response {
+    let response = ui.interact(rect, id, egui::Sense::drag());
+    if response.hovered() || response.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+    }
+    response
 }
 
 fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) -> Result<()> {

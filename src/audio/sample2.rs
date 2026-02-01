@@ -33,11 +33,7 @@ impl Sample for f32 {
         if other.is_nan() {
             return self;
         }
-        if self < other {
-            self
-        } else {
-            other
-        }
+        if self < other { self } else { other }
     }
 
     fn max(self, other: Self) -> Self {
@@ -47,11 +43,7 @@ impl Sample for f32 {
         if other.is_nan() {
             return self;
         }
-        if self > other {
-            self
-        } else {
-            other
-        }
+        if self > other { self } else { other }
     }
 
     fn val_range(_bit_depth: u16) -> ValRange<Self> {

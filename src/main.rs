@@ -41,17 +41,16 @@ fn main() -> anyhow::Result<()> {
 #[cfg(target_arch = "wasm32")]
 fn main() {
     use eframe::wasm_bindgen::JsCast as _;
-    use wavalyze::{self, model};
 
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
-    let web_options = eframe::WebOptions::default();
+    let _web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
         let document = web_sys::window().expect("No window").document().expect("No document");
 
-        let canvas = document
+        let _canvas = document
             .get_element_by_id("the_canvas_id")
             .expect("Failed to find the_canvas_id")
             .dyn_into::<web_sys::HtmlCanvasElement>()

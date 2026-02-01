@@ -2,20 +2,20 @@
 
 use crate::{
     audio::{
+        SampleRectE,
         buffer2::BufferE,
         sample::{self},
         thumbnail::ThumbnailE,
-        SampleRectE,
     },
     rect::Rect,
     wav::{
         file2::File,
-        read::{read_to_file, ReadConfig},
+        read::{ReadConfig, read_to_file},
     },
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use rayon::prelude::*;
-use slotmap::{new_key_type, SecondaryMap, SlotMap};
+use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 new_key_type! { pub struct BufferId; }
 
@@ -81,14 +81,13 @@ impl AudioManager {
         let thumbnail_spp = thumbnail
             .and_then(|thumbnail| thumbnail.get_smallest_samples_per_pixel())
             .map(|spp| spp as f32);
-        let sv = if thumbnail_spp.is_none() || thumbnail_spp.unwrap() > target_spp {
+        if thumbnail_spp.is_none() || thumbnail_spp.unwrap() > target_spp {
             let buffere = self.get_buffer(buffer_id)?;
             sample::View::from_buffere(buffere, sample_rect, screen_rect)
         } else {
             let thumbnail = thumbnail.unwrap();
             let level_data = thumbnail.get_level_data(target_spp).ok_or(anyhow!("level_data not found"))?;
             sample::View::from_level_data_e(&level_data, sample_rect, screen_rect)
-        };
-        sv
+        }
     }
 }

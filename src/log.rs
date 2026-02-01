@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use tracing::trace;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 /// Initializes the global tracing subscriber.
 ///
