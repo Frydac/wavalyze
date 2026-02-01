@@ -1,4 +1,5 @@
 use crate::{
+    audio,
     audio::sample::view::ViewData,
     model::{
         Action, Model,
@@ -6,6 +7,7 @@ use crate::{
         ruler::sample_value_to_screen_y_e,
         track2::TrackId,
     },
+    rect::Rect,
     view::{util::rpc, value_ruler2},
 };
 use anyhow::Result;
@@ -299,9 +301,6 @@ fn ui_waveform(
     track_id: TrackId,
     rect: egui::Rect,
 ) -> Result<()> {
-    // TODO: middle line also dependson sample_rect
-    // ui_middle_line(ui);
-
     let sample_ix_range = {
         let time_line = model
             .tracks2
@@ -331,6 +330,7 @@ fn ui_waveform(
         .item
         .sample_rect()
         .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+    draw_value_grid(ui, sample_rect, screen_rect);
 
     match sample_view.data {
         ViewData::Single(ref positions) => {
@@ -380,13 +380,31 @@ fn ui_waveform(
     Ok(())
 }
 
-fn ui_middle_line(ui: &mut egui::Ui) {
-    let rect = ui.min_rect();
-    let y = rect.center().y;
-    let left = rpc(ui, egui::pos2(rect.left(), y));
-    let right = rpc(ui, egui::pos2(rect.right(), y));
-    ui.painter()
-        .line_segment([left, right], egui::Stroke::new(1.0, egui::Color32::GRAY));
+fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRectE, screen_rect: Rect) {
+    let Some(val_rng) = sample_rect.val_rng() else {
+        return;
+    };
 
-    // ui.painter().line_segment([min_x, max_x], ui.visuals().widgets.inactive.bg_stroke);
+    let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
+    let faint = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.35));
+    let mid = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.6));
+
+    for (value, is_mid) in [
+        (-1.0_f32, false),
+        (-0.5_f32, false),
+        (0.0_f32, true),
+        (0.5_f32, false),
+        (1.0_f32, false),
+    ] {
+        let Some(y) = sample_value_to_screen_y_e(value, val_rng, screen_rect) else {
+            continue;
+        };
+        if y < screen_rect.top() || y > screen_rect.bottom() {
+            continue;
+        }
+        let left = rpc(ui, egui::pos2(screen_rect.left(), y));
+        let right = rpc(ui, egui::pos2(screen_rect.right(), y));
+        ui.painter()
+            .line_segment([left, right], if is_mid { mid } else { faint });
+    }
 }
