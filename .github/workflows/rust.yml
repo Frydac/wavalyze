@@ -12,11 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.93.0
         with:
-          profile: minimal
-          toolchain: 1.93.0
-          override: true
+          components: rustfmt, clippy
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -27,12 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.93.0
         with:
-          profile: minimal
-          toolchain: 1.93.0
-          target: wasm32-unknown-unknown
-          override: true
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -43,11 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.93.0
         with:
-          profile: minimal
-          toolchain: 1.93.0
-          override: true
+          components: rustfmt, clippy
       - run: sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
       - uses: actions-rs/cargo@v1
         with:
@@ -59,11 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.93.0
         with:
-          profile: minimal
-          toolchain: 1.93.0
-          override: true
           components: rustfmt
       - uses: actions-rs/cargo@v1
         with:
@@ -75,11 +66,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.93.0
         with:
-          profile: minimal
-          toolchain: 1.93.0
-          override: true
           components: clippy
       - uses: actions-rs/cargo@v1
         with:
@@ -91,12 +79,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.93.0
         with:
-          profile: minimal
-          toolchain: 1.93.0
-          target: wasm32-unknown-unknown
-          override: true
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
       - name: Download and install Trunk binary
         run: wget -qO- https://github.com/thedodd/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
       - name: Build

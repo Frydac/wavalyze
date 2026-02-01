@@ -19,12 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # repo checkout
-      - name: Setup toolchain for wasm
-        run: |
-          rustup toolchain install 1.93.0
-          rustup default 1.93.0
-          rustup set profile minimal
-          rustup target add wasm32-unknown-unknown
+      - uses: dtolnay/rust-toolchain@1.93.0
+        with:
+          targets: wasm32-unknown-unknown
       - name: Rust Cache # cache the rust build artefacts
         uses: Swatinem/rust-cache@v2
       - name: Download and install Trunk binary
