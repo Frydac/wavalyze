@@ -151,7 +151,11 @@ impl Track {
 }
 
 impl Track {
-    pub fn new(buffer: Rc<RefCell<audio::Buffer<f32>>>, channel_ix: usize, name: &str) -> Result<Self> {
+    pub fn new(
+        buffer: Rc<RefCell<audio::Buffer<f32>>>,
+        channel_ix: usize,
+        name: &str,
+    ) -> Result<Self> {
         ensure!(
             channel_ix < buffer.borrow().nr_channels(),
             "channel out of range, nr_channels: {}, channel ix: {}",
@@ -189,7 +193,10 @@ impl Track {
     }
 
     pub fn hover(&mut self, sample_ix: SampleIx, view_buffer_y: Option<f32>) -> Result<()> {
-        self.hover_info2 = Some(HoverInfo2 { sample_ix, view_buffer_y });
+        self.hover_info2 = Some(HoverInfo2 {
+            sample_ix,
+            view_buffer_y,
+        });
         Ok(())
     }
     pub fn unhover(&mut self) {
@@ -233,7 +240,9 @@ impl Track {
         let end = sample_ix_range.end.ceil() as usize;
         for sample_ix in start..end {
             let sample_val = channel.at(sample_ix.try_into().unwrap()).unwrap_or(&0.0);
-            hover_info.samples.push((sample_ix.try_into().unwrap(), *sample_val))
+            hover_info
+                .samples
+                .push((sample_ix.try_into().unwrap(), *sample_val))
         }
         self.hover_info = Some(hover_info);
     }
@@ -328,14 +337,19 @@ impl Track {
         }
 
         // Zoom level
-        let samples_per_pixel = self.samples_per_pixel.get_or_insert(self.get_zoom_for_full_buffer());
+        let samples_per_pixel = self
+            .samples_per_pixel
+            .get_or_insert(self.get_zoom_for_full_buffer());
         ensure!(
             *samples_per_pixel != 0.0,
             "We should have non-zero screen_rect width due to guard clause"
         );
 
         let nr_samples = self.sample_rect.ix_rng.positive_len();
-        assert!(nr_samples > 0, "We should have non-zero sample_rect width due to guard clause");
+        assert!(
+            nr_samples > 0,
+            "We should have non-zero sample_rect width due to guard clause"
+        );
         let screen_pixel_width = self.screen_rect.width();
         // self.samples_per_pixel = nr_samples as f32 / screen_pixel_width;
 
@@ -351,13 +365,15 @@ impl Track {
         if *samples_per_pixel <= 0.5 {
             // 0.3 -> 0.7
             // -0.3 -> 0.3
-            let distance_to_next_integer = distance_to_next_integer(self.sample_rect.ix_rng.start());
+            let distance_to_next_integer =
+                distance_to_next_integer(self.sample_rect.ix_rng.start());
             fractional_offset = distance_to_next_integer / *samples_per_pixel as audio::SampleIx;
         }
         // NOTE: 'integer' offset
         let mut first_sample_offset = 0.0;
         if self.sample_rect.ix_rng.start() < 0.0 {
-            first_sample_offset = self.sample_rect.ix_rng.start().ceil().abs() as f32 / *samples_per_pixel;
+            first_sample_offset =
+                self.sample_rect.ix_rng.start().ceil().abs() as f32 / *samples_per_pixel;
         }
         let pixels_per_sample = 1.0 / *samples_per_pixel;
         // dbg!(*samples_per_pixel);
@@ -398,10 +414,14 @@ impl Track {
                         .chunk_by(|&pos| pos.x)
                         .into_iter()
                         .map(|(pixel_x, chunk)| {
-                            let (min_sample, max_sample) = chunk.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), pos| {
-                                (min.min(pos.y), max.max(pos.y))
-                            });
-                            [pos::Pos::new(pixel_x, min_sample), pos::Pos::new(pixel_x, max_sample)]
+                            let (min_sample, max_sample) = chunk
+                                .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), pos| {
+                                    (min.min(pos.y), max.max(pos.y))
+                                });
+                            [
+                                pos::Pos::new(pixel_x, min_sample),
+                                pos::Pos::new(pixel_x, max_sample),
+                            ]
                         })
                         .collect(),
                 )
@@ -443,7 +463,8 @@ impl Track {
         // center normalized to x=[0,width]
         let center_view_x = center_screen_x - self.screen_rect.min.x;
         // center as sample ix
-        let center_sample_ix = self.view_x_to_sample_ix(center_view_x) + self.sample_rect.ix_rng.start();
+        let center_sample_ix =
+            self.view_x_to_sample_ix(center_view_x) + self.sample_rect.ix_rng.start();
 
         // println!("\n\n\n\n");
         // dbg!(center_screen_x);
@@ -462,7 +483,8 @@ impl Track {
 
         // recalculate samples per pixel based on new sample rect
         // dbg!(self.samples_per_pixel);
-        self.samples_per_pixel = Some(self.sample_rect.ix_rng.len() as f32 / self.screen_rect.width());
+        self.samples_per_pixel =
+            Some(self.sample_rect.ix_rng.len() as f32 / self.screen_rect.width());
         // dbg!(self.samples_per_pixel);
 
         self.update_view_buffer()
@@ -476,7 +498,8 @@ pub fn sample_x_range(screen_x: i32, samples_per_pixel: f32) -> std::ops::Range<
     let mut first_sample_ix = (screen_x as f32 * samples_per_pixel).ceil() as audio::SampleIx;
     // dbg!(first_sample_ix);
     // one past the last sample ix
-    let mut last_sample_ix = ((screen_x as f32 + 1.0) * samples_per_pixel).floor() as audio::SampleIx;
+    let mut last_sample_ix =
+        ((screen_x as f32 + 1.0) * samples_per_pixel).floor() as audio::SampleIx;
     // dbg!(last_sample_ix);
 
     // due to float chenanigans, the start and end may be off by (at least?) one
@@ -560,7 +583,13 @@ mod tests {
             let start = 0.2;
             let end = 20.0;
             let step = 2.0;
-            let samples_per_pixel_iter = std::iter::successors(Some(start), move |&x| if x + step <= end { Some(x + step) } else { None });
+            let samples_per_pixel_iter = std::iter::successors(Some(start), move |&x| {
+                if x + step <= end {
+                    Some(x + step)
+                } else {
+                    None
+                }
+            });
             for samples_per_pixel in samples_per_pixel_iter {
                 // println!("\n==> {}: {}", "samples_per_pixel", samples_per_pixel);
                 // for sample_x in 0..1000000 {

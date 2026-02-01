@@ -26,7 +26,9 @@ pub fn init_tracing(log_level: Option<&str>) -> Result<()> {
 
             filter = filter.add_directive(fallback_directive);
 
-            eprintln!("Warning: invalid log level '{wavalyze_level}'. Falling back to '{DEFAULT_LEVEL}'.");
+            eprintln!(
+                "Warning: invalid log level '{wavalyze_level}'. Falling back to '{DEFAULT_LEVEL}'."
+            );
         }
     }
 
@@ -36,7 +38,8 @@ pub fn init_tracing(log_level: Option<&str>) -> Result<()> {
 
     let subscriber = fmt().with_env_filter(filter).finish();
 
-    tracing::subscriber::set_global_default(subscriber).context("failed to set global tracing subscriber")?;
+    tracing::subscriber::set_global_default(subscriber)
+        .context("failed to set global tracing subscriber")?;
 
     trace!("tracing initialized!");
     Ok(())

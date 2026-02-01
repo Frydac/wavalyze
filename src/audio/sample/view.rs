@@ -100,7 +100,11 @@ pub struct View {
 }
 
 impl View {
-    pub fn from_buffere(buffere: &BufferE, sample_rect: SampleRectE, screen_rect: Rect) -> Result<Self> {
+    pub fn from_buffere(
+        buffere: &BufferE,
+        sample_rect: SampleRectE,
+        screen_rect: Rect,
+    ) -> Result<Self> {
         match buffere {
             BufferE::F32(buffer) => {
                 let sr = sample_rect.get_f32()?;
@@ -125,7 +129,9 @@ impl View {
         ensure!(screen_rect.width() > 0.0, "screen_rect emtpy");
         ensure!(sample_rect.width() > 0.0, "sample_rect empty");
 
-        let val_rng = sample_rect.val_rng.ok_or_else(|| anyhow!("val_rng is missing"))?;
+        let val_rng = sample_rect
+            .val_rng
+            .ok_or_else(|| anyhow!("val_rng is missing"))?;
         ensure!(!val_rng.is_empty(), "val_rng is empty");
 
         let samples_per_pixel = sample_rect.width() / screen_rect.width();
@@ -140,7 +146,8 @@ impl View {
         let get_pos = |ix: usize, sample: T| -> Result<Pos> {
             let pos_x = sample_ix_to_screen_x(ix as f64, sample_rect.ix_rng, screen_rect);
             let pos_x = pos_x.floor();
-            let pos_y = sample_value_to_screen_y(sample, val_rng, screen_rect).ok_or(anyhow!("sample_value_to_screen_y failed"))?;
+            let pos_y = sample_value_to_screen_y(sample, val_rng, screen_rect)
+                .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             Ok(Pos::new(pos_x, pos_y))
         };
 
@@ -165,7 +172,12 @@ impl View {
                     let pos = get_pos(start_ix, val)?;
                     cur_min_max_pos = MinMaxPos::from_pos(pos);
                 }
-                for (ix, sample) in buffer.iter().enumerate().skip(start_ix + 1).take(nr_samples - 1) {
+                for (ix, sample) in buffer
+                    .iter()
+                    .enumerate()
+                    .skip(start_ix + 1)
+                    .take(nr_samples - 1)
+                {
                     let pos = get_pos(ix, *sample)?;
                     if cur_min_max_pos.min.x == pos.x {
                         cur_min_max_pos.include_y(pos.y);
@@ -189,11 +201,21 @@ impl View {
             sample_ix_start: sample_rect.ix_rng.start,
         })
     }
-    pub fn from_level_data_e(level_data: &LevelDataERef<'_>, sample_rect: SampleRectE, screen_rect: Rect) -> Result<Self> {
+    pub fn from_level_data_e(
+        level_data: &LevelDataERef<'_>,
+        sample_rect: SampleRectE,
+        screen_rect: Rect,
+    ) -> Result<Self> {
         match level_data {
-            LevelDataERef::F32(level_data) => Self::from_level_data(level_data, *sample_rect.get_f32()?, screen_rect),
-            LevelDataERef::I32(level_data) => Self::from_level_data(level_data, *sample_rect.get_i32()?, screen_rect),
-            LevelDataERef::I16(level_data) => Self::from_level_data(level_data, *sample_rect.get_i16()?, screen_rect),
+            LevelDataERef::F32(level_data) => {
+                Self::from_level_data(level_data, *sample_rect.get_f32()?, screen_rect)
+            }
+            LevelDataERef::I32(level_data) => {
+                Self::from_level_data(level_data, *sample_rect.get_i32()?, screen_rect)
+            }
+            LevelDataERef::I16(level_data) => {
+                Self::from_level_data(level_data, *sample_rect.get_i16()?, screen_rect)
+            }
         }
     }
 
@@ -204,7 +226,9 @@ impl View {
     ) -> Result<Self> {
         ensure!(screen_rect.width() > 0.0, "screen_rect emtpy");
         ensure!(sample_rect.width() > 0.0, "sample_rect empty");
-        let val_rng = sample_rect.val_rng.ok_or_else(|| anyhow!("val_rng is missing"))?;
+        let val_rng = sample_rect
+            .val_rng
+            .ok_or_else(|| anyhow!("val_rng is missing"))?;
         ensure!(!val_rng.is_empty(), "val_rng is empty");
 
         // target zoom level
@@ -229,14 +253,16 @@ impl View {
         let nr_samples = end_ix - start_ix;
 
         // Get screen positions for min/max sample, with floored x coordinate.
-        let get_min_max_pos = |ix_in_level_data: usize, min_max_val: sample::ValRange<T>| -> Result<MinMaxPos> {
+        let get_min_max_pos = |ix_in_level_data: usize,
+                               min_max_val: sample::ValRange<T>|
+         -> Result<MinMaxPos> {
             let sample_ix = level_data.ix_to_sample_ix(ix_in_level_data);
             let pos_x = sample_ix_to_screen_x(sample_ix as f64, sample_rect.ix_rng, screen_rect);
             // NOTE: y screen coordinates go from top to bottom, so we need to invert the min/max values
-            let pos_y_min =
-                sample_value_to_screen_y(min_max_val.max, val_rng, screen_rect).ok_or(anyhow!("sample_value_to_screen_y failed"))?;
-            let pos_y_max =
-                sample_value_to_screen_y(min_max_val.min, val_rng, screen_rect).ok_or(anyhow!("sample_value_to_screen_y failed"))?;
+            let pos_y_min = sample_value_to_screen_y(min_max_val.max, val_rng, screen_rect)
+                .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
+            let pos_y_max = sample_value_to_screen_y(min_max_val.min, val_rng, screen_rect)
+                .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             Ok(MinMaxPos {
                 min: Pos::new(pos_x, pos_y_min),
                 max: Pos::new(pos_x, pos_y_max),
@@ -247,10 +273,19 @@ impl View {
             let mut data = Vec::<MinMaxPos>::with_capacity(nr_samples / ratio as usize);
             let mut cur_min_max_pos;
             {
-                let val = *level_data.data.get(start_ix).ok_or(anyhow!("level_data not in range"))?;
+                let val = *level_data
+                    .data
+                    .get(start_ix)
+                    .ok_or(anyhow!("level_data not in range"))?;
                 cur_min_max_pos = get_min_max_pos(start_ix, val)?;
             }
-            for (ix_in_level_data, val) in level_data.data.iter().enumerate().skip(start_ix + 1).take(nr_samples - 1) {
+            for (ix_in_level_data, val) in level_data
+                .data
+                .iter()
+                .enumerate()
+                .skip(start_ix + 1)
+                .take(nr_samples - 1)
+            {
                 let min_max_pos = get_min_max_pos(ix_in_level_data, *val)?;
                 if cur_min_max_pos.min.x == min_max_pos.min.x {
                     cur_min_max_pos.include_y(min_max_pos.max.y);
@@ -413,14 +448,26 @@ mod tests {
     fn test_clip_view_data_2_contained_not_overlapping() {
         let screen_rect = rect_001();
         {
-            let mut view_data_act = vec![MinMaxPos::new(10.0, 10.0, 12.0), MinMaxPos::new(11.0, 14.0, 17.0)];
-            let view_data_exp = vec![MinMaxPos::new(10.0, 10.0, 13.0), MinMaxPos::new(11.0, 13.0, 17.0)];
+            let mut view_data_act = vec![
+                MinMaxPos::new(10.0, 10.0, 12.0),
+                MinMaxPos::new(11.0, 14.0, 17.0),
+            ];
+            let view_data_exp = vec![
+                MinMaxPos::new(10.0, 10.0, 13.0),
+                MinMaxPos::new(11.0, 13.0, 17.0),
+            ];
             clip_view_data(&mut view_data_act, screen_rect);
             assert_eq!(view_data_act, view_data_exp);
         }
         {
-            let mut view_data_act = vec![MinMaxPos::new(10.0, 14.0, 17.0), MinMaxPos::new(11.0, 10.0, 12.0)];
-            let view_data_exp = vec![MinMaxPos::new(10.0, 13.0, 17.0), MinMaxPos::new(11.0, 10.0, 13.0)];
+            let mut view_data_act = vec![
+                MinMaxPos::new(10.0, 14.0, 17.0),
+                MinMaxPos::new(11.0, 10.0, 12.0),
+            ];
+            let view_data_exp = vec![
+                MinMaxPos::new(10.0, 13.0, 17.0),
+                MinMaxPos::new(11.0, 10.0, 13.0),
+            ];
             clip_view_data(&mut view_data_act, screen_rect);
             assert_eq!(view_data_act, view_data_exp);
         }
@@ -430,8 +477,14 @@ mod tests {
     fn test_clip_view_data_1_contained_1_outside() {
         let screen_rect = rect_001();
         {
-            let mut view_data_act = vec![MinMaxPos::new(10.0, 13.0, 17.0), MinMaxPos::new(10.0, 22.0, 25.0)];
-            let view_data_exp = vec![MinMaxPos::new(10.0, 13.0, 20.0), MinMaxPos::new(10.0, 22.0, 25.0)];
+            let mut view_data_act = vec![
+                MinMaxPos::new(10.0, 13.0, 17.0),
+                MinMaxPos::new(10.0, 22.0, 25.0),
+            ];
+            let view_data_exp = vec![
+                MinMaxPos::new(10.0, 13.0, 20.0),
+                MinMaxPos::new(10.0, 22.0, 25.0),
+            ];
             clip_view_data(&mut view_data_act, screen_rect);
             assert_eq!(view_data_act, view_data_exp);
         }

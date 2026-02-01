@@ -61,7 +61,10 @@ fn parse_sample_ix_range(s: &str) -> Result<sample::OptIxRange> {
             Ok(None)
         } else {
             // s.parse().map_err(|e| anyhow!("Invalid sample index: {e}"))
-            Ok(Some(s.parse().map_err(|e| anyhow!("Invalid sample index: {e}"))?))
+            Ok(Some(
+                s.parse()
+                    .map_err(|e| anyhow!("Invalid sample index: {e}"))?,
+            ))
         }
     };
 

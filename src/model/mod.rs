@@ -57,7 +57,10 @@ impl Model {
         info!("Loaded file: {file}");
 
         // Add tracks for the loaded buffers in the file
-        if let Err(e) = self.tracks2.add_tracks_from_file(&file, &self.user_config.track) {
+        if let Err(e) = self
+            .tracks2
+            .add_tracks_from_file(&file, &self.user_config.track)
+        {
             tracing::error!("Error adding tracks from file: {e}");
             return Err(e);
         }
@@ -72,7 +75,10 @@ impl Model {
         demo::load_demo_waveform(self)
     }
 
-    pub fn get_file_channel_for_track(&self, track_id: TrackId) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
+    pub fn get_file_channel_for_track(
+        &self,
+        track_id: TrackId,
+    ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
         let track = self.tracks2.get_track(track_id)?;
         let buffer_id = track.single.item.buffer_id;
         for file in self.files2.iter() {

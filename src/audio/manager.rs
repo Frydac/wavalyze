@@ -75,7 +75,12 @@ impl AudioManager {
             .with_context(|| format!("Buffer {:?} not found", buffer_id))
     }
 
-    pub fn get_sample_view(&self, buffer_id: BufferId, sample_rect: SampleRectE, screen_rect: Rect) -> Result<sample::View> {
+    pub fn get_sample_view(
+        &self,
+        buffer_id: BufferId,
+        sample_rect: SampleRectE,
+        screen_rect: Rect,
+    ) -> Result<sample::View> {
         let target_spp = sample_rect.width() / screen_rect.width();
         let thumbnail = self.thumbnails.get(buffer_id);
         let thumbnail_spp = thumbnail
@@ -86,7 +91,9 @@ impl AudioManager {
             sample::View::from_buffere(buffere, sample_rect, screen_rect)
         } else {
             let thumbnail = thumbnail.unwrap();
-            let level_data = thumbnail.get_level_data(target_spp).ok_or(anyhow!("level_data not found"))?;
+            let level_data = thumbnail
+                .get_level_data(target_spp)
+                .ok_or(anyhow!("level_data not found"))?;
             sample::View::from_level_data_e(&level_data, sample_rect, screen_rect)
         }
     }

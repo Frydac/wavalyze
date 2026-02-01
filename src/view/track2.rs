@@ -15,10 +15,14 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     let min_height: f32 = model.user_config.track.min_height;
     let width = ui.available_width();
     let width_info = model.user_config.tracks_width_info.min(width);
-    let height = model.tracks2.get_track_height(track_id).unwrap_or(min_height);
+    let height = model
+        .tracks2
+        .get_track_height(track_id)
+        .unwrap_or(min_height);
 
     // reserves space in the parent ui, moves the parent cursor
-    let (track_rect, _) = ui.allocate_exact_size(egui::Vec2::new(width, height), egui::Sense::hover());
+    let (track_rect, _) =
+        ui.allocate_exact_size(egui::Vec2::new(width, height), egui::Sense::hover());
 
     // crate::view::util::debug_rect_text(ui, track_rect, egui::Color32::RED, "track_rect");
 
@@ -46,8 +50,10 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             let ruler_size = egui::vec2(ruler_width, ruler_height);
             let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
             let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-            ui.painter().rect(ruler_rect, 0.0, egui::Color32::TRANSPARENT, stroke);
-            ui.painter().rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
+            ui.painter()
+                .rect(ruler_rect, 0.0, egui::Color32::TRANSPARENT, stroke);
+            ui.painter()
+                .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
         });
 
         // Draw track waveform + header
@@ -81,7 +87,10 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
         const RESIZE_HANDLE_HEIGHT: f32 = 3.0;
         let min_height: f32 = model.user_config.track.min_height + HEADER_HEIGHT;
         let resize_handle_rect = egui::Rect::from_min_size(
-            egui::pos2(track_rect.left(), track_rect.bottom() - RESIZE_HANDLE_HEIGHT),
+            egui::pos2(
+                track_rect.left(),
+                track_rect.bottom() - RESIZE_HANDLE_HEIGHT,
+            ),
             egui::vec2(track_rect.width(), RESIZE_HANDLE_HEIGHT),
         );
         let resize_id = track_ui.id().with(track_id);
@@ -122,7 +131,11 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
 
                 // TODO: store hover text in model.. *smh*
                 if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
-                    let path = file.path.as_ref().and_then(|p| p.to_str()).unwrap_or("unknown");
+                    let path = file
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.to_str())
+                        .unwrap_or("unknown");
                     text = format!("{} - ch {}", path, channel.ch_ix);
                     hover_text = Some(format!("{file}"));
                 }
@@ -155,8 +168,10 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                 let pos_x = hover_info.screen_pos.x;
                 let pos_min = rpc(ui, egui::pos2(pos_x, pos_y_min));
                 let pos_max = rpc(ui, egui::pos2(pos_x, pos_y_max));
-                ui.painter()
-                    .line_segment([pos_min, pos_max], egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
+                ui.painter().line_segment(
+                    [pos_min, pos_max],
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE),
+                );
             }
 
             // Draw horizontal line only mouse is over the track
@@ -168,8 +183,10 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                     let pos_y = hover_info.screen_pos.y;
                     let pos_min = rpc(ui, egui::pos2(pos_x_min, pos_y));
                     let pos_max = rpc(ui, egui::pos2(pos_x_max, pos_y));
-                    ui.painter()
-                        .line_segment([pos_min, pos_max], egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
+                    ui.painter().line_segment(
+                        [pos_min, pos_max],
+                        egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE),
+                    );
                 }
             }
         }
@@ -185,16 +202,25 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
         if let Some(pos) = ui.ctx().pointer_hover_pos()
             && rect.contains(pos)
         {
-            model.tracks2.hover_info.update(HoverInfoE::IsHovered(HoverInfo {
-                screen_pos: pos.into(),
-                sample_ix: model.tracks2.ruler.screen_x_to_sample_ix(pos.x).unwrap_or(0.0),
-            }));
+            model
+                .tracks2
+                .hover_info
+                .update(HoverInfoE::IsHovered(HoverInfo {
+                    screen_pos: pos.into(),
+                    sample_ix: model
+                        .tracks2
+                        .ruler
+                        .screen_x_to_sample_ix(pos.x)
+                        .unwrap_or(0.0),
+                }));
             ui.ctx().input(|i| {
                 if i.modifiers.shift && !i.modifiers.ctrl {
                     let scroll = i.raw_scroll_delta;
                     if scroll.x != 0.0 {
                         let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                        model.actions.push(Action::ShiftX { nr_pixels: scroll.x });
+                        model.actions.push(Action::ShiftX {
+                            nr_pixels: scroll.x,
+                        });
                     }
                 } else if i.modifiers.ctrl {
                     let scroll = i.raw_scroll_delta;
@@ -213,7 +239,12 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
 
 // Wrap the waveform in a (manually implemented) resizable frame
 // TODO: see if we can extrac like a resizable canvas or something
-pub fn ui_waveform_canvas(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) -> Result<()> {
+pub fn ui_waveform_canvas(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    rect: egui::Rect,
+) -> Result<()> {
     let size = ui.available_size();
     ui.set_max_size(size);
     ui.set_min_size(size);
@@ -238,12 +269,22 @@ fn resize_handle(ui: &mut egui::Ui, id: egui::Id, rect: egui::Rect) -> egui::Res
     response
 }
 
-fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) -> Result<()> {
+fn ui_waveform(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    rect: egui::Rect,
+) -> Result<()> {
     // TODO: middle line also dependson sample_rect
     // ui_middle_line(ui);
 
     let sample_ix_range = {
-        let time_line = model.tracks2.ruler.time_line.as_ref().ok_or(anyhow::anyhow!("No time line"))?;
+        let time_line = model
+            .tracks2
+            .ruler
+            .time_line
+            .as_ref()
+            .ok_or(anyhow::anyhow!("No time line"))?;
         time_line.get_ix_range(ui.min_rect().width() as f64)
     };
     let track = model
@@ -258,8 +299,12 @@ fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: eg
 
     let color = egui::Color32::LIGHT_RED;
     let line_color = color.linear_multiply(0.7);
-    let screen_rect = track.screen_rect.ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
-    let sample_rect = track.sample_rect.ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+    let screen_rect = track
+        .screen_rect
+        .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+    let sample_rect = track
+        .sample_rect
+        .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
 
     match sample_view.data {
         ViewData::Single(ref positions) => {
@@ -273,12 +318,14 @@ fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: eg
                         && let Some(y_mid) = sample_value_to_screen_y_e(0.0, val_rng, screen_rect)
                     {
                         let pos_mid = rpc(ui, egui::pos2(pos.x, y_mid));
-                        ui.painter().line_segment([pos_mid, pos], egui::Stroke::new(1.0, line_color));
+                        ui.painter()
+                            .line_segment([pos_mid, pos], egui::Stroke::new(1.0, line_color));
                     }
                 });
             } else {
                 let positions = positions.iter().map(|pos| rpc(ui, pos.into())).collect();
-                ui.painter().line(positions, egui::Stroke::new(1.0, line_color));
+                ui.painter()
+                    .line(positions, egui::Stroke::new(1.0, line_color));
             }
         }
         ViewData::MinMax(ref mix_max_positions) => {
@@ -286,7 +333,8 @@ fn ui_waveform(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: eg
                 let min = rpc(ui, (&pos.min).into());
                 let max = rpc(ui, (&pos.max).into());
                 let color = egui::Color32::LIGHT_RED;
-                ui.painter().line_segment([min, max], egui::Stroke::new(1.0, color));
+                ui.painter()
+                    .line_segment([min, max], egui::Stroke::new(1.0, color));
             });
         }
     };

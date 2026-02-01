@@ -57,12 +57,16 @@ impl Action {
                 model.tracks2.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
-                model.load_wav(read_config).context("Action::OpenFile failed")?;
+                model
+                    .load_wav(read_config)
+                    .context("Action::OpenFile failed")?;
                 // model.load_wav(read_config)?;
                 model.actions.push(Action::ZoomToFull);
             }
             Action::LoadDemo => {
-                model.load_demo_waveform().context("Action::LoadDemo failed")?;
+                model
+                    .load_demo_waveform()
+                    .context("Action::LoadDemo failed")?;
                 model.actions.push(Action::ZoomToFull);
                 model.actions.push(Action::FillScreenHeight);
             }
@@ -78,10 +82,16 @@ impl Action {
             Action::ShiftX { nr_pixels } => {
                 model.tracks2.ruler.shift_x(*nr_pixels);
             }
-            Action::ZoomX { nr_pixels, center_x } => {
+            Action::ZoomX {
+                nr_pixels,
+                center_x,
+            } => {
                 model.tracks2.ruler.zoom_x(*nr_pixels, *center_x);
             }
-            Action::ShiftY { track_id, nr_pixels } => todo!(),
+            Action::ShiftY {
+                track_id,
+                nr_pixels,
+            } => todo!(),
             Action::ZoomY {
                 track_id,
                 nr_pixels,

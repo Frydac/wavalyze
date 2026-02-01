@@ -30,7 +30,9 @@ impl Fps {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn end_frame(&mut self) {
-        let Some(start_time) = self.start_time else { return };
+        let Some(start_time) = self.start_time else {
+            return;
+        };
         let duration = std::time::Instant::now() - start_time;
         self.durations.push_back(duration);
 

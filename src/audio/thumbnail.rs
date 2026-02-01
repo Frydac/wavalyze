@@ -23,9 +23,15 @@ impl ThumbnailE {
     /// Get the level data for the given samples per pixel (closest smaller or equal)
     pub fn get_level_data(&self, samples_per_pixel: f32) -> Option<LevelDataERef<'_>> {
         match self {
-            ThumbnailE::F32(thumbnail) => pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::F32),
-            ThumbnailE::I32(thumbnail) => pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::I32),
-            ThumbnailE::I16(thumbnail) => pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::I16),
+            ThumbnailE::F32(thumbnail) => {
+                pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::F32)
+            }
+            ThumbnailE::I32(thumbnail) => {
+                pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::I32)
+            }
+            ThumbnailE::I16(thumbnail) => {
+                pick_level(thumbnail, samples_per_pixel as u64).map(LevelDataERef::I16)
+            }
         }
     }
     pub fn from_buffer_e(buffer: &BufferE, config: Option<ThumbnailConfig>) -> Self {
@@ -74,7 +80,10 @@ impl<T: Sample> LevelData<T> {
             data: vec![],
         };
         for chunk in &buffer.iter().chunks(samples_per_pixel as usize) {
-            let mut min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
+            let mut min_max = sample::ValRange::<T> {
+                min: T::MAX,
+                max: T::MIN,
+            };
             for &sample in chunk {
                 min_max.include(sample);
             }
@@ -100,7 +109,10 @@ impl<T: Sample> LevelData<T> {
         };
         result.data.reserve(level_data.data.len() / ratio as usize);
         for chunk in &level_data.data.iter().chunks(ratio as usize) {
-            let mut min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
+            let mut min_max = sample::ValRange::<T> {
+                min: T::MAX,
+                max: T::MIN,
+            };
             for val_range in chunk {
                 min_max.min = min_max.min.min(val_range.min);
                 min_max.max = min_max.max.max(val_range.max);
@@ -109,7 +121,11 @@ impl<T: Sample> LevelData<T> {
         }
         result
     }
-    pub fn from_buffer_fractional_2(buffer: &[T], sample_ix_range: sample::IxRange, samples_per_pixel: f64) -> Self {
+    pub fn from_buffer_fractional_2(
+        buffer: &[T],
+        sample_ix_range: sample::IxRange,
+        samples_per_pixel: f64,
+    ) -> Self {
         let mut res = Self {
             samples_per_pixel,
             data: vec![],
@@ -118,7 +134,12 @@ impl<T: Sample> LevelData<T> {
         res
     }
 
-    pub fn from_buffer_fractional(&mut self, buffer: &[T], sample_ix_range: sample::IxRange, samples_per_pixel: f64) {
+    pub fn from_buffer_fractional(
+        &mut self,
+        buffer: &[T],
+        sample_ix_range: sample::IxRange,
+        samples_per_pixel: f64,
+    ) {
         let start_ix = sample_ix_range.start.max(0) as usize;
         let end_ix = sample_ix_range.end.max(0).min(buffer.len() as i64) as usize;
 
@@ -126,9 +147,13 @@ impl<T: Sample> LevelData<T> {
             return;
         }
 
-        let mut cur_min_max = sample::ValRange::<T> { min: T::MAX, max: T::MIN };
+        let mut cur_min_max = sample::ValRange::<T> {
+            min: T::MAX,
+            max: T::MIN,
+        };
         self.data.clear();
-        self.data.reserve((end_ix - start_ix) / samples_per_pixel as usize);
+        self.data
+            .reserve((end_ix - start_ix) / samples_per_pixel as usize);
 
         let mut cur_ix_out = 0;
         buffer
@@ -143,7 +168,10 @@ impl<T: Sample> LevelData<T> {
                     cur_min_max.include(*val);
                 } else {
                     self.data.push(cur_min_max);
-                    cur_min_max = sample::ValRange { min: *val, max: *val };
+                    cur_min_max = sample::ValRange {
+                        min: *val,
+                        max: *val,
+                    };
                     cur_ix_out = ix_out;
                 }
             });
@@ -230,7 +258,10 @@ impl<T: Sample> Thumbnail<T> {
         let config = config.unwrap_or_default();
         let mut level_data = BTreeMap::new();
 
-        tracing::trace!("Creating Thumbnail from buffer with nr_samples: {}", buffer.nr_samples());
+        tracing::trace!(
+            "Creating Thumbnail from buffer with nr_samples: {}",
+            buffer.nr_samples()
+        );
 
         let do_from_buffer = false;
 
@@ -309,7 +340,12 @@ impl<T: Sample> fmt::Display for Thumbnail<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Thumbnail:")?;
         for (samples_per_pixel, level_data) in &self.level_data {
-            writeln!(f, "  samples_per_pixel {}: {} values", samples_per_pixel, level_data.data.len())?;
+            writeln!(
+                f,
+                "  samples_per_pixel {}: {} values",
+                samples_per_pixel,
+                level_data.data.len()
+            )?;
         }
         Ok(())
     }

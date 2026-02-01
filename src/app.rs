@@ -72,7 +72,9 @@ impl App {
         };
         let mut open_files = |files: &[ReadConfig]| {
             for file_read_config in files {
-                model.actions.push(Action::OpenFile(file_read_config.clone()));
+                model
+                    .actions
+                    .push(Action::OpenFile(file_read_config.clone()));
             }
             model.actions.push(Action::ZoomToFull);
             model.actions.push(Action::FillScreenHeight);

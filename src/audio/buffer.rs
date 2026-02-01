@@ -82,13 +82,26 @@ impl<T: Sample + std::fmt::Debug + std::fmt::Display> fmt::Display for Buffer<T>
 
             match (width, precision) {
                 (Some(width), Some(precision)) => {
-                    writeln!(f, "    {}: {:width$.precision$}", i, channel, width = width, precision = precision)?;
+                    writeln!(
+                        f,
+                        "    {}: {:width$.precision$}",
+                        i,
+                        channel,
+                        width = width,
+                        precision = precision
+                    )?;
                 }
                 (Some(width), None) => {
                     writeln!(f, "    {}: {:width$}", i, channel, width = width)?;
                 }
                 (None, Some(precision)) => {
-                    writeln!(f, "    {}: {:.precision$}", i, channel, precision = precision)?;
+                    writeln!(
+                        f,
+                        "    {}: {:.precision$}",
+                        i,
+                        channel,
+                        precision = precision
+                    )?;
                 }
                 (None, None) => {
                     writeln!(f, "    {}: {}", i, channel)?;
@@ -153,10 +166,16 @@ impl BufferBuilder {
     }
 
     pub fn build<T: Sample>(self) -> Result<Buffer<T>> {
-        let nr_channels = self.nr_channels.ok_or_else(|| anyhow!("Number of channels not set"))?;
-        let nr_samples = self.nr_samples.ok_or_else(|| anyhow!("Number of samples not set"))?;
+        let nr_channels = self
+            .nr_channels
+            .ok_or_else(|| anyhow!("Number of channels not set"))?;
+        let nr_samples = self
+            .nr_samples
+            .ok_or_else(|| anyhow!("Number of samples not set"))?;
         let mut bit_depth = self.bit_depth;
-        let sample_rate = self.sample_rate.ok_or_else(|| anyhow!("Sample rate not set"))?;
+        let sample_rate = self
+            .sample_rate
+            .ok_or_else(|| anyhow!("Sample rate not set"))?;
 
         // Derive sample_type from T if not provided
         let sample_type: SampleType = self.sample_type.unwrap_or_else(|| {
@@ -179,7 +198,10 @@ impl BufferBuilder {
             );
         } else if sample_type == SampleType::Int {
             let nr_bits_storage_type = std::mem::size_of::<T>() * 8;
-            ensure!(bit_depth.is_some(), "Bit depth must be set for integer audio");
+            ensure!(
+                bit_depth.is_some(),
+                "Bit depth must be set for integer audio"
+            );
             ensure!(
                 nr_bits_storage_type >= bit_depth.unwrap() as usize,
                 "Bit depth too large for storage type. Bit depth: {:?}, storage type: {}",

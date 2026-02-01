@@ -47,7 +47,10 @@ impl Sample for f32 {
     }
 
     fn val_range(_bit_depth: u16) -> ValRange<Self> {
-        ValRange { min: -1.0, max: 1.0 }
+        ValRange {
+            min: -1.0,
+            max: 1.0,
+        }
     }
 
     fn distance(self, other: Self) -> f64 {

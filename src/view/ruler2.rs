@@ -12,7 +12,10 @@ use thousands::Separable;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     let container_rect = ui.min_rect();
-    let info_width = model.user_config.tracks_width_info.min(container_rect.width());
+    let info_width = model
+        .user_config
+        .tracks_width_info
+        .min(container_rect.width());
     let mut info_rect = container_rect;
     info_rect.set_width(info_width);
     let ruler_rect = egui::Rect::from_min_size(
@@ -32,14 +35,20 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-    ui_ruler.painter().rect(ruler_rect, 3.0, egui::Color32::TRANSPARENT, stroke);
+    ui_ruler
+        .painter()
+        .rect(ruler_rect, 3.0, egui::Color32::TRANSPARENT, stroke);
     ui_ruler.set_min_size(ruler_rect.size());
 
     // Update the screen rect of the ruler
     model.tracks2.ruler.set_screen_rect(ruler_rect.into());
 
     handle_drag_interaction(&mut ui_ruler, &response, &mut model.actions);
-    handle_scroll_interaction(&mut ui_ruler, &mut model.actions, model.user_config.zoom_x_scroll_factor);
+    handle_scroll_interaction(
+        &mut ui_ruler,
+        &mut model.actions,
+        model.user_config.zoom_x_scroll_factor,
+    );
 
     // We get the hover text rect so we can avoid it when drawing ix lattice labels
     let hover_text_rect2 = ui_hover(&mut ui_ruler, model)?;
@@ -48,22 +57,33 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_drag_interaction(ui: &mut egui::Ui, response: &egui::Response, actions: &mut Vec<Action>) {
+pub fn handle_drag_interaction(
+    ui: &mut egui::Ui,
+    response: &egui::Response,
+    actions: &mut Vec<Action>,
+) {
     if response.dragged() {
         let delta = ui.input(|i| i.pointer.delta());
-        actions.push(model::action::Action::ShiftX { nr_pixels: -delta.x });
+        actions.push(model::action::Action::ShiftX {
+            nr_pixels: -delta.x,
+        });
     }
 }
 
 pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, zoom_x_factor: f32) {
     let rect = ui.min_rect();
-    let pos_in_rect = ui.ctx().pointer_hover_pos().filter(|&pos| rect.contains(pos));
+    let pos_in_rect = ui
+        .ctx()
+        .pointer_hover_pos()
+        .filter(|&pos| rect.contains(pos));
     if let Some(pos) = pos_in_rect {
         ui.ctx().input(|i| {
             if i.modifiers.shift && !i.modifiers.ctrl {
                 let scroll = i.raw_scroll_delta;
                 if scroll.x != 0.0 {
-                    actions.push(model::action::Action::ShiftX { nr_pixels: scroll.x });
+                    actions.push(model::action::Action::ShiftX {
+                        nr_pixels: scroll.x,
+                    });
                 }
             } else if i.modifiers.ctrl && !i.modifiers.shift {
                 let scroll = i.raw_scroll_delta;
@@ -80,14 +100,22 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
 
 pub fn ui_hover(ui: &mut egui::Ui, model: &mut model::Model) -> Result<Option<egui::Rect>> {
     let rect = ui.min_rect();
-    if let Some(pos_in_rect) = ui.ctx().pointer_hover_pos().filter(|&pos| rect.contains(pos)) {
+    if let Some(pos_in_rect) = ui
+        .ctx()
+        .pointer_hover_pos()
+        .filter(|&pos| rect.contains(pos))
+    {
         // If mouse hovers over the ruler
         // ui.ctx().set_cursor_icon(egui::CursorIcon::None);
         {
             // Set tracks to hovered state
             let hover_info = HoverInfoE::IsHovered(HoverInfo {
                 screen_pos: pos_in_rect.into(),
-                sample_ix: model.tracks2.ruler.screen_x_to_sample_ix(pos_in_rect.x).unwrap_or(0.0),
+                sample_ix: model
+                    .tracks2
+                    .ruler
+                    .screen_x_to_sample_ix(pos_in_rect.x)
+                    .unwrap_or(0.0),
             });
             model.tracks2.hover_info.update(hover_info);
         }
@@ -111,7 +139,12 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut model::Model) -> Result<Option<eg
 fn ui_hover_tick_label(ui: &mut egui::Ui, hover_info: &HoverInfo) -> Option<egui::Rect> {
     let sample_ix = hover_info.sample_ix.round() as i64;
 
-    ui_tick_label(ui, hover_info.screen_pos.x, sample_ix.separate_with_commas().into(), None)
+    ui_tick_label(
+        ui,
+        hover_info.screen_pos.x,
+        sample_ix.separate_with_commas().into(),
+        None,
+    )
 }
 
 fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo) {
@@ -142,8 +175,11 @@ fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo) {
         .collect();
         // let color = ui.style().visuals.text_color();
         // let color = egui::Color32::LightBLUE;
-        ui.painter()
-            .add(egui::Shape::convex_polygon(points, color, egui::Stroke::new(0.0, color)));
+        ui.painter().add(egui::Shape::convex_polygon(
+            points,
+            color,
+            egui::Stroke::new(0.0, color),
+        ));
     }
 
     // ui_tick_label(ui, hover_info.screen_x, hover_info.sample_ix.separate_with_commas().into(), None)
@@ -217,7 +253,12 @@ impl From<String> for TickLabel {
 /// Draws the text label for a tick, makes sure it doesn't go out of bounds.
 /// Returns `None` if the text would overlap with an existing rect
 // fn ui_tick_label(ui: &mut egui::Ui, tick: &Tick, existing_rects: Option<&[egui::Rect]>) -> Option<egui::Rect> {
-fn ui_tick_label(ui: &mut egui::Ui, screen_x: f32, text: TickLabel, existing_rects: Option<&[egui::Rect]>) -> Option<egui::Rect> {
+fn ui_tick_label(
+    ui: &mut egui::Ui,
+    screen_x: f32,
+    text: TickLabel,
+    existing_rects: Option<&[egui::Rect]>,
+) -> Option<egui::Rect> {
     let font_id = egui::FontId::proportional(14.0);
     let color = ui.style().visuals.text_color();
     // let text = sample_ix.separate_with_commas();
@@ -229,7 +270,8 @@ fn ui_tick_label(ui: &mut egui::Ui, screen_x: f32, text: TickLabel, existing_rec
     // let text = sample_ix.to_string();
     let galley = ui.fonts(|fonts| fonts.layout_no_wrap(text, font_id, color));
     let text_size = galley.size();
-    let mut text_pos: egui::Pos2 = [screen_x - (text_size.x / 2.0), ui.min_rect().top() - 2.0].into();
+    let mut text_pos: egui::Pos2 =
+        [screen_x - (text_size.x / 2.0), ui.min_rect().top() - 2.0].into();
     if text_pos.x + text_size.x > ui.min_rect().right() {
         // it would overflow, so place it to the left of the cursor instead.
         text_pos.x = ui.min_rect().right() - text_size.x - 2.0;
@@ -256,7 +298,8 @@ fn ui_tick_line(ui: &mut egui::Ui, screen_x: f32, height: f32, color: Option<egu
     // let width = height == TICK_HEIGHT_LONG ? 2.0 : 1.0;
     // let width = if height == TICK_HEIGHT_LONG { 1.5 } else { 1.0 };
     let width = 1.0;
-    ui.painter().line_segment([pos_top, pos_bottom], (width, color));
+    ui.painter()
+        .line_segment([pos_top, pos_bottom], (width, color));
 }
 
 const TICK_HEIGHT_LONG: f32 = 13.0;
@@ -299,8 +342,14 @@ fn ui_start_end(ui: &mut egui::Ui, ix_range: sample::FracIxRange) {
 /// Indicates how many pixels apart the grid lines should be (at least)
 pub const NR_PIXELS_PER_TICK: f32 = 50.0;
 
-fn ui_ix_lattice(ui: &mut egui::Ui, ruler: &mut model::ruler::Time, hover_text_rect: Option<egui::Rect>) {
-    let Some(ix_lattice) = ruler.ix_lattice() else { return };
+fn ui_ix_lattice(
+    ui: &mut egui::Ui,
+    ruler: &mut model::ruler::Time,
+    hover_text_rect: Option<egui::Rect>,
+) {
+    let Some(ix_lattice) = ruler.ix_lattice() else {
+        return;
+    };
 
     let mut existing_rects = Vec::new();
     if let Some(hover_text_rect) = hover_text_rect {
@@ -318,7 +367,12 @@ fn ui_ix_lattice(ui: &mut egui::Ui, ruler: &mut model::ruler::Time, hover_text_r
 
         // draw tick label if needed
         if tick.tick_type == ruler::TickType::Labeled {
-            let rect = ui_tick_label(ui, tick.screen_x, tick.sample_ix.into(), Some(existing_rects.as_slice()));
+            let rect = ui_tick_label(
+                ui,
+                tick.screen_x,
+                tick.sample_ix.into(),
+                Some(existing_rects.as_slice()),
+            );
             if let Some(rect) = rect {
                 existing_rects.push(rect);
             }
@@ -328,7 +382,12 @@ fn ui_ix_lattice(ui: &mut egui::Ui, ruler: &mut model::ruler::Time, hover_text_r
     // after drawing all the ticks with labels, lets see if we can draw more labels that fit
     for tick in &ix_lattice.ticks {
         if tick.tick_type == ruler::TickType::Mid {
-            let rect = ui_tick_label(ui, tick.screen_x, tick.sample_ix.into(), Some(existing_rects.as_slice()));
+            let rect = ui_tick_label(
+                ui,
+                tick.screen_x,
+                tick.sample_ix.into(),
+                Some(existing_rects.as_slice()),
+            );
             if let Some(rect) = rect {
                 existing_rects.push(rect);
             }
@@ -351,11 +410,17 @@ pub fn ui_ruler_info_panel(ui: &mut egui::Ui, ruler: &ruler::Time) {
                 let rect = ruler.screen_rect();
                 grid.row(
                     "screen rect:",
-                    format!("[{:.1}, {:.1}, {:.1}, {:.1}]", rect.min.x, rect.min.y, rect.max.x, rect.max.y),
+                    format!(
+                        "[{:.1}, {:.1}, {:.1}, {:.1}]",
+                        rect.min.x, rect.min.y, rect.max.x, rect.max.y
+                    ),
                 );
             }
             if let Some(time_line) = ruler.time_line.as_ref() {
-                grid.row("samples per pixel:", format!("{:.3}", time_line.samples_per_pixel()));
+                grid.row(
+                    "samples per pixel:",
+                    format!("{:.3}", time_line.samples_per_pixel()),
+                );
                 let ix_range = time_line.get_ix_range(ruler.screen_rect().width() as f64);
                 let ix_range_start = format!("{:.1}", ix_range.start).separate_with_commas();
                 let ix_range_end = format!("{:.1}", ix_range.end).separate_with_commas();
@@ -378,8 +443,14 @@ pub fn ui_hover_info_panel2(ui: &mut egui::Ui, hover_info: &HoverInfoE) {
                 HoverInfoE::IsHovered(hover_info) => {
                     let id: u64 = ui.id().with("hover_info_panel2").value();
                     let mut grid = crate::view::grid::KeyValueGrid::new(id);
-                    grid.row("pos x:", format!("{:.1}", hover_info.screen_pos.x).separate_with_commas());
-                    grid.row("sample ix:", (hover_info.sample_ix.round() as i64).separate_with_commas());
+                    grid.row(
+                        "pos x:",
+                        format!("{:.1}", hover_info.screen_pos.x).separate_with_commas(),
+                    );
+                    grid.row(
+                        "sample ix:",
+                        (hover_info.sample_ix.round() as i64).separate_with_commas(),
+                    );
                     grid.show(ui);
                 }
             }
@@ -396,12 +467,16 @@ pub fn ui_hover_info_panel(ui: &mut egui::Ui, hover_info: Option<&ruler::time::H
                 Some(hover_info) => {
                     let id: u64 = ui.id().with("hover_info_panel").value();
                     let mut grid = crate::view::grid::KeyValueGrid::new(id);
-                    grid.row("pos x:", format!("{:.1}", hover_info.screen_x).separate_with_commas());
+                    grid.row(
+                        "pos x:",
+                        format!("{:.1}", hover_info.screen_x).separate_with_commas(),
+                    );
                     // grid.row("sample ix:", format!("{:.1}", hover_info.sample_ix));
                     grid.row("sample ix:", hover_info.sample_ix.separate_with_commas());
                     grid.row(
                         "time 48k:",
-                        format!("{:.3}s", hover_info.sample_ix as f64 / 48000.0).separate_with_commas(),
+                        format!("{:.3}s", hover_info.sample_ix as f64 / 48000.0)
+                            .separate_with_commas(),
                     );
                     grid.show(ui);
                 }

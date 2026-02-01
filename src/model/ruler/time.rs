@@ -56,19 +56,27 @@ impl Time {
         let time_line = self.time_line.as_ref()?;
         let ix_range = self.ix_range()?;
         self.ix_lattice
-            .compute_ticks(ix_range, self.screen_rect, crate::view::ruler2::NR_PIXELS_PER_TICK)
+            .compute_ticks(
+                ix_range,
+                self.screen_rect,
+                crate::view::ruler2::NR_PIXELS_PER_TICK,
+            )
             .ok()?;
         Some(&self.ix_lattice)
     }
 
     /// Check if fully initialized to something usable
     pub fn valid(&self) -> bool {
-        self.screen_rect.width() > 0.0 && self.time_line.is_some() && self.time_line.as_ref().unwrap().samples_per_pixel() > 0.0
+        self.screen_rect.width() > 0.0
+            && self.time_line.is_some()
+            && self.time_line.as_ref().unwrap().samples_per_pixel() > 0.0
     }
 
     /// The current sample index range
     pub fn ix_range(&self) -> Option<sample::FracIxRange> {
-        self.time_line.as_ref().map(|tl| tl.get_ix_range(self.screen_rect.width() as f64))
+        self.time_line
+            .as_ref()
+            .map(|tl| tl.get_ix_range(self.screen_rect.width() as f64))
     }
 
     pub fn zoom_to_ix_range(&mut self, ix_range: sample::FracIxRange) {
@@ -112,7 +120,10 @@ impl Time {
             let delta_sample_ixs = delta_pixels * time_line.samples_per_pixel() as f32;
             time_line.ix_start += delta_sample_ixs as f64;
             if let Some(mut hover_info) = self.hover_info {
-                hover_info.sample_ix = self.screen_x_to_sample_ix(hover_info.screen_x).unwrap().floor() as i64;
+                hover_info.sample_ix = self
+                    .screen_x_to_sample_ix(hover_info.screen_x)
+                    .unwrap()
+                    .floor() as i64;
                 self.hover_info = Some(hover_info);
             }
         }
@@ -135,7 +146,9 @@ impl Time {
         let Some(new_max_ix) = self.screen_x_to_sample_ix(new_max_x) else {
             return;
         };
-        let Some(time_line) = self.time_line.as_mut() else { return };
+        let Some(time_line) = self.time_line.as_mut() else {
+            return;
+        };
         time_line.ix_start = new_min_ix;
         self.set_samples_per_pixel((new_max_ix - new_min_ix) / self.screen_rect.width() as f64);
     }

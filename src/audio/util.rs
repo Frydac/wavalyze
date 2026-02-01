@@ -4,7 +4,12 @@ use crate::{
 };
 
 // Create a 'test' audio::Buffer with a sine wave per channel
-pub fn buffer_sine_float(nr_channels: usize, nr_samples: usize, amplitude: f32, sample_rate: u32) -> Buffer<f32> {
+pub fn buffer_sine_float(
+    nr_channels: usize,
+    nr_samples: usize,
+    amplitude: f32,
+    sample_rate: u32,
+) -> Buffer<f32> {
     let mut ab = BufferBuilder::new()
         .nr_channels(nr_channels)
         .sample_rate(sample_rate)
@@ -17,7 +22,8 @@ pub fn buffer_sine_float(nr_channels: usize, nr_samples: usize, amplitude: f32, 
 
     for (index, channel) in ab.channels_mut().enumerate() {
         let sample_period = 20 + index * 5;
-        let mut sine_gen = generator::Sine::new_with_sample_period(sample_period, amplitude, sample_rate);
+        let mut sine_gen =
+            generator::Sine::new_with_sample_period(sample_period, amplitude, sample_rate);
 
         for sample in channel.iter_mut() {
             *sample = sine_gen.next().unwrap();

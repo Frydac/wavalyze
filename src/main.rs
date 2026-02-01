@@ -20,7 +20,10 @@ fn main() -> anyhow::Result<()> {
             .with_inner_size([1280.0, 720.0])
             .with_min_inner_size([480.0, 320.0])
             .with_icon(
-                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/wavalyze_icon_001.png")[..]).expect("Failed to load icon"),
+                eframe::icon_data::from_png_bytes(
+                    &include_bytes!("../assets/wavalyze_icon_001.png")[..],
+                )
+                .expect("Failed to load icon"),
             ),
         ..Default::default()
     };
@@ -50,7 +53,10 @@ fn main() {
     let web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
-        let document = web_sys::window().expect("No window").document().expect("No document");
+        let document = web_sys::window()
+            .expect("No window")
+            .document()
+            .expect("No document");
 
         let _canvas = document
             .get_element_by_id("the_canvas_id")
@@ -59,7 +65,11 @@ fn main() {
             .expect("the_canvas_id was not a HtmlCanvasElement");
 
         let start_result = eframe::WebRunner::new()
-            .start(_canvas, web_options, Box::new(|cc| Ok(Box::new(wavalyze::App::new_web(cc)))))
+            .start(
+                _canvas,
+                web_options,
+                Box::new(|cc| Ok(Box::new(wavalyze::App::new_web(cc)))),
+            )
             .await;
 
         // Remove the loading text and spinner:
@@ -69,7 +79,9 @@ fn main() {
                     loading_text.remove();
                 }
                 Err(e) => {
-                    loading_text.set_inner_html("<p> The app has crashed. See the developer console for details. </p>");
+                    loading_text.set_inner_html(
+                        "<p> The app has crashed. See the developer console for details. </p>",
+                    );
                     panic!("Failed to start eframe: {e:?}");
                 }
             }

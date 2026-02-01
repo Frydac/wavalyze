@@ -121,7 +121,9 @@ pub struct IxRangeG<T: IxTrait> {
     pub end: T,
 }
 
-impl<T: IxTrait + std::ops::Sub<Output = T> + std::ops::Add<Output = T> + std::ops::AddAssign> IxRangeG<T> {
+impl<T: IxTrait + std::ops::Sub<Output = T> + std::ops::Add<Output = T> + std::ops::AddAssign>
+    IxRangeG<T>
+{
     pub fn len(&self) -> T {
         self.end - self.start
     }
@@ -155,7 +157,10 @@ where
 pub const PCM16_RANGE: ValRange<i16> = sample_range_i16(16);
 pub const PCM24_RANGE: ValRange<i32> = sample_range_i32(24);
 pub const PCM32_RANGE: ValRange<i32> = sample_range_i32(32);
-pub const FLOAT_RANGE: ValRange<f32> = ValRange::<f32> { min: -1.0, max: 1.0 };
+pub const FLOAT_RANGE: ValRange<f32> = ValRange::<f32> {
+    min: -1.0,
+    max: 1.0,
+};
 
 const fn sample_range_i16(bit_depth: u32) -> ValRange<i16> {
     assert!(bit_depth <= 16);

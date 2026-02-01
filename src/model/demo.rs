@@ -34,7 +34,10 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
         let s1 = (TAU * 220.0 * t).sin();
 
         // 2) Sine + harmonics (stable but richer)
-        let s2 = (0.7 * (TAU * 220.0 * t).sin() + 0.2 * (TAU * 440.0 * t).sin() + 0.1 * (TAU * 880.0 * t).sin()).clamp(-1.0, 1.0);
+        let s2 = (0.7 * (TAU * 220.0 * t).sin()
+            + 0.2 * (TAU * 440.0 * t).sin()
+            + 0.1 * (TAU * 880.0 * t).sin())
+        .clamp(-1.0, 1.0);
 
         // 3) Chirp (linear sweep 80Hz -> 880Hz)
         let f0 = 80.0;
@@ -112,7 +115,9 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
         nr_samples: nr_samples as u64,
     };
 
-    model.tracks2.add_tracks_from_file(&file, &model.user_config.track)?;
+    model
+        .tracks2
+        .add_tracks_from_file(&file, &model.user_config.track)?;
     model.files2.push(file);
 
     Ok(())

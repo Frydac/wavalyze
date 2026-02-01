@@ -121,7 +121,10 @@ impl SampleValueRange {
 
     pub fn from_sample_type(sample_type: audio::SampleType, bit_depth: u32) -> Self {
         match sample_type {
-            audio::SampleType::Float => Self { min: -1.0, max: 1.0 },
+            audio::SampleType::Float => Self {
+                min: -1.0,
+                max: 1.0,
+            },
             audio::SampleType::Int => {
                 assert!(bit_depth <= 24);
                 let max = 1i32 << (bit_depth - 1);

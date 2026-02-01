@@ -5,14 +5,22 @@ use crate::{
 use num_traits::{FromPrimitive, ToPrimitive};
 
 // assumes both ranges are valid
-pub fn sample_ix_to_screen_x(sample_ix: f64, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> f32 {
+pub fn sample_ix_to_screen_x(
+    sample_ix: f64,
+    sample_ix_range: sample::FracIxRange,
+    screen_rect: Rect,
+) -> f32 {
     let sample_ix_offset = sample_ix - sample_ix_range.start;
     let sample_ix_frac = sample_ix_offset / sample_ix_range.len();
     screen_rect.left() + sample_ix_frac as f32 * screen_rect.width()
 }
 
 // assumes both ranges are valid
-pub fn screen_x_to_sample_ix(screen_x: f32, sample_ix_range: sample::FracIxRange, screen_rect: Rect) -> f64 {
+pub fn screen_x_to_sample_ix(
+    screen_x: f32,
+    sample_ix_range: sample::FracIxRange,
+    screen_rect: Rect,
+) -> f64 {
     let screen_x_offset = screen_x - screen_rect.left();
     let sample_ix_frac = screen_x_offset / screen_rect.width();
     sample_ix_range.start + sample_ix_frac as f64 * sample_ix_range.len()
@@ -22,7 +30,11 @@ pub fn screen_x_to_sample_ix(screen_x: f32, sample_ix_range: sample::FracIxRange
 
 // PERF: remove range_len check, this can be in a per sample basis, while the range should be
 // checked per buffer.
-pub fn sample_value_to_screen_y<T>(sample_value: T, val_range: sample::ValRange<T>, screen_rect: Rect) -> Option<f32>
+pub fn sample_value_to_screen_y<T>(
+    sample_value: T,
+    val_range: sample::ValRange<T>,
+    screen_rect: Rect,
+) -> Option<f32>
 where
     T: Sample + Copy + ToPrimitive,
 {
@@ -42,7 +54,11 @@ where
     Some(screen_rect.bottom() - frac * screen_rect.height())
 }
 
-pub fn sample_value_to_screen_y_e(sample_value: f32, val_range: sample::ValRangeE, screen_rect: Rect) -> Option<f32> {
+pub fn sample_value_to_screen_y_e(
+    sample_value: f32,
+    val_range: sample::ValRangeE,
+    screen_rect: Rect,
+) -> Option<f32> {
     match val_range {
         sample::ValRangeE::PCM16(val_range) => {
             let sv_i16 = sample::convert::flt2pcm16(sample_value);
@@ -63,7 +79,11 @@ pub fn sample_value_to_screen_y_e(sample_value: f32, val_range: sample::ValRange
     }
 }
 
-pub fn screen_y_to_sample_value<T>(screen_y: f32, val_range: sample::ValRange<T>, screen_rect: Rect) -> Option<T>
+pub fn screen_y_to_sample_value<T>(
+    screen_y: f32,
+    val_range: sample::ValRange<T>,
+    screen_rect: Rect,
+) -> Option<T>
 where
     T: Sample + Copy + ToPrimitive + FromPrimitive,
 {
@@ -86,7 +106,11 @@ where
 // smallest multiple of m that is >= x
 // e.g. -120, 50 -> -100
 pub fn ceil_to_multiple(x: i64, m: i64) -> i64 {
-    if x % m == 0 { x } else { x + (m - x.rem_euclid(m)) }
+    if x % m == 0 {
+        x
+    } else {
+        x + (m - x.rem_euclid(m))
+    }
 }
 
 // largest multiple of m that is <= x
@@ -123,7 +147,10 @@ mod tests {
     #[test]
     fn sample_extremes_map_to_screen_extremes() {
         let rect = Rect::new(0.0, 10.0, 100.0, 110.0);
-        let range = sample::ValRange { min: -1.0f32, max: 1.0 };
+        let range = sample::ValRange {
+            min: -1.0f32,
+            max: 1.0,
+        };
 
         let y_top = sample_value_to_screen_y(1.0, range, rect).unwrap();
         let y_bottom = sample_value_to_screen_y(-1.0, range, rect).unwrap();
@@ -148,7 +175,10 @@ mod tests {
     #[test]
     fn screen_to_sample_round_trip_is_reasonable() {
         let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
-        let range = sample::ValRange { min: -1.0f32, max: 1.0 };
+        let range = sample::ValRange {
+            min: -1.0f32,
+            max: 1.0,
+        };
 
         let original_y = 42.0;
         let sample = screen_y_to_sample_value(original_y, range, rect).unwrap();

@@ -50,7 +50,8 @@ impl IxLattice {
         self.ticks.clear();
 
         let min_nr_samples_per_label_tick: f64 = sample_width / max_nr_ticks as f64;
-        let nr_samples_per_label_tick: u64 = round_up_to_power_of_10(min_nr_samples_per_label_tick) as u64;
+        let nr_samples_per_label_tick: u64 =
+            round_up_to_power_of_10(min_nr_samples_per_label_tick) as u64;
         // When very zoomed in, this could be smaller than 1 (i.e. 0), but we want to have at least
         // 1 tick per sample
         let nr_samples_per_label_tick: u64 = nr_samples_per_label_tick.max(1);
@@ -60,8 +61,11 @@ impl IxLattice {
         let multiple = nr_samples_per_small_tick as i64;
         let start_sample_ix = ceil_to_multiple(sample_ix_range.start.ceil() as i64, multiple);
         let end_sample_ix = floor_to_multiple(sample_ix_range.end.floor() as i64, multiple);
-        for cur_sample_ix in (start_sample_ix..=end_sample_ix).step_by(nr_samples_per_small_tick as usize) {
-            let screen_x = sample_ix_to_screen_x(cur_sample_ix as f64, sample_ix_range, screen_rect);
+        for cur_sample_ix in
+            (start_sample_ix..=end_sample_ix).step_by(nr_samples_per_small_tick as usize)
+        {
+            let screen_x =
+                sample_ix_to_screen_x(cur_sample_ix as f64, sample_ix_range, screen_rect);
             if !screen_rect.contains_x(screen_x) {
                 continue;
             };
@@ -90,9 +94,14 @@ mod tests {
     #[test]
     fn test_ticks() {
         let mut lattice = IxLattice::default();
-        let sample_ix_range = sample::FracIxRange { start: -120.0, end: 100.0 };
+        let sample_ix_range = sample::FracIxRange {
+            start: -120.0,
+            end: 100.0,
+        };
         let screen_rect = rect::Rect::new(0.0, 0.0, 1000.0, 0.0);
-        lattice.compute_ticks(sample_ix_range, screen_rect, 100.0).unwrap();
+        lattice
+            .compute_ticks(sample_ix_range, screen_rect, 100.0)
+            .unwrap();
         dbg!(lattice);
     }
 }

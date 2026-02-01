@@ -87,7 +87,10 @@ impl Rect {
     }
 
     pub fn center(&self) -> Pos {
-        Pos::new(self.left() + self.width() / 2.0, self.top() + self.height() / 2.0)
+        Pos::new(
+            self.left() + self.width() / 2.0,
+            self.top() + self.height() / 2.0,
+        )
     }
 
     pub fn x_range_inc(&self) -> std::ops::RangeInclusive<f32> {
@@ -109,7 +112,10 @@ impl Rect {
 // Conversion traits from and to egui::Rect
 impl From<Rect> for egui::Rect {
     fn from(rect: Rect) -> Self {
-        egui::Rect::from_min_max(egui::pos2(rect.min.x, rect.min.y), egui::pos2(rect.max.x, rect.max.y))
+        egui::Rect::from_min_max(
+            egui::pos2(rect.min.x, rect.min.y),
+            egui::pos2(rect.max.x, rect.max.y),
+        )
     }
 }
 

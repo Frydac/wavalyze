@@ -42,7 +42,10 @@ impl ReadConfig {
     }
 
     pub fn with_sample_range(self, sample_range: sample::OptIxRange) -> Self {
-        Self { sample_range, ..self }
+        Self {
+            sample_range,
+            ..self
+        }
     }
 }
 
@@ -56,8 +59,8 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
     let start = std::time::Instant::now();
 
     // open wav file with hound
-    let mut reader =
-        hound::WavReader::open(&config.filepath).map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
+    let mut reader = hound::WavReader::open(&config.filepath)
+        .map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
     let spec = reader.spec();
     tracing::trace!("{spec:?}");
     tracing::trace!(
@@ -69,16 +72,28 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
     // read samples into appropriate type and associate with channel index
     let chix_buffers: BTreeMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<f32>(&mut reader, config)?, BufferE::F32),
+            bit_depth if bit_depth <= 32 => {
+                convert_samples(read_to_buffers::<f32>(&mut reader, config)?, BufferE::F32)
+            }
             _ => {
-                return Err(anyhow::anyhow!("Unsupported bit depth for float: {}", spec.bits_per_sample));
+                return Err(anyhow::anyhow!(
+                    "Unsupported bit depth for float: {}",
+                    spec.bits_per_sample
+                ));
             }
         },
         hound::SampleFormat::Int => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 16 => convert_samples(read_to_buffers::<i16>(&mut reader, config)?, BufferE::I16),
-            bit_depth if bit_depth <= 32 => convert_samples(read_to_buffers::<i32>(&mut reader, config)?, BufferE::I32),
+            bit_depth if bit_depth <= 16 => {
+                convert_samples(read_to_buffers::<i16>(&mut reader, config)?, BufferE::I16)
+            }
+            bit_depth if bit_depth <= 32 => {
+                convert_samples(read_to_buffers::<i32>(&mut reader, config)?, BufferE::I32)
+            }
             _ => {
-                return Err(anyhow::anyhow!("Unsupported bit depth for int: {}", spec.bits_per_sample));
+                return Err(anyhow::anyhow!(
+                    "Unsupported bit depth for int: {}",
+                    spec.bits_per_sample
+                ));
             }
         },
     };
@@ -113,8 +128,14 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
 }
 
 // TODO: maybe use Vec<(ChIx, Vec<T>)> instead of HashMap<ChIx, Vec<T>>?
-fn convert_samples<T>(samples: BTreeMap<ChIx, T>, converter: impl Fn(T) -> BufferE) -> BTreeMap<ChIx, BufferE> {
-    samples.into_iter().map(|(index, sample)| (index, converter(sample))).collect()
+fn convert_samples<T>(
+    samples: BTreeMap<ChIx, T>,
+    converter: impl Fn(T) -> BufferE,
+) -> BTreeMap<ChIx, BufferE> {
+    samples
+        .into_iter()
+        .map(|(index, sample)| (index, converter(sample)))
+        .collect()
 }
 
 // read samples into buffers knowing the sample type S
@@ -141,7 +162,10 @@ where
     }
 
     // Read the desired number of interleaved samples
-    let interleaved_samples: Result<Vec<S>, _> = reader.samples::<S>().take(sample_range.len() as usize * nr_channels).collect();
+    let interleaved_samples: Result<Vec<S>, _> = reader
+        .samples::<S>()
+        .take(sample_range.len() as usize * nr_channels)
+        .collect();
     let interleaved_samples = interleaved_samples?;
 
     // channel indices we want to deinterleave
@@ -171,12 +195,19 @@ where
 // Deinterleave specified channels
 // TODO: make version that doesn't allocate new buffers, we might want to reuse the same buffers
 // when deinterleaving a large file in batches
-fn deinterleave<S>(interleaved_samples: &[S], nr_channels: usize, channel_indices: &[ChIx]) -> Result<HashMap<ChIx, Vec<S>>>
+fn deinterleave<S>(
+    interleaved_samples: &[S],
+    nr_channels: usize,
+    channel_indices: &[ChIx],
+) -> Result<HashMap<ChIx, Vec<S>>>
 where
     S: Copy,
 {
     let nr_samples_per_ch = interleaved_samples.len() / nr_channels;
-    ensure!(nr_samples_per_ch > 0, format!("{:?} {:?}", interleaved_samples.len(), nr_channels));
+    ensure!(
+        nr_samples_per_ch > 0,
+        format!("{:?} {:?}", interleaved_samples.len(), nr_channels)
+    );
 
     let nr_channels_to_deinterleave = channel_indices.len();
     ensure!(nr_channels_to_deinterleave > 0);
@@ -187,7 +218,10 @@ where
     // pre-allocate output
     for ch_ix in channel_indices.iter() {
         let ch_ix = *ch_ix;
-        ensure!(ch_ix < nr_channels, format!("{:?} {:?}", ch_ix, nr_channels));
+        ensure!(
+            ch_ix < nr_channels,
+            format!("{:?} {:?}", ch_ix, nr_channels)
+        );
         result.insert(ch_ix, Vec::with_capacity(nr_samples_per_ch));
     }
 
@@ -195,7 +229,10 @@ where
     // PERF: looping over each channel and 'striding' through the deinterleaved buffer, probably faster.
     for ch_ix in channel_indices.iter() {
         let ch_ix = *ch_ix;
-        ensure!(ch_ix < nr_channels, format!("{:?} {:?}", ch_ix, nr_channels));
+        ensure!(
+            ch_ix < nr_channels,
+            format!("{:?} {:?}", ch_ix, nr_channels)
+        );
         let buffer = &mut result.get_mut(&ch_ix).unwrap();
         for sample_ix in 0..nr_samples_per_ch {
             buffer.push(interleaved_samples[sample_ix * nr_channels + ch_ix]);

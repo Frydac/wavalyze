@@ -24,7 +24,10 @@ fn test_sample_ix_to_screen_x_001() {
     let mut time = setup_time(screen_rect, 10.0);
     assert_eq!(time.sample_ix_to_screen_x(5000.0), Some(600.0));
 
-    let ix_range_ref = audio::sample::FracIxRange { start: 0.0, end: 10000.0 };
+    let ix_range_ref = audio::sample::FracIxRange {
+        start: 0.0,
+        end: 10000.0,
+    };
     time.zoom_to_ix_range(ix_range_ref);
     let ix_range = time.ix_range();
 
@@ -39,12 +42,18 @@ fn test_sample_ix_to_screen_x_001() {
 #[traced_test]
 fn test_sample_ix_to_screen_x_002() {
     let screen_rect = Rect::new(0.0, 0.0, 10.0, 10.0);
-    let ix_range = audio::sample::FracIxRange { start: 0.0, end: 3.0 };
+    let ix_range = audio::sample::FracIxRange {
+        start: 0.0,
+        end: 3.0,
+    };
     let time = setup_time_with_ix_range(screen_rect, ix_range);
     for screen_x in screen_rect.x_range_inc_floor() {
         let sample_ix = time.screen_x_to_sample_ix(screen_x as f32).unwrap();
         let screen_x_2 = time.sample_ix_to_screen_x(sample_ix).unwrap();
-        println!("pix_ix {:2} -> sample_ix {:6.3} -> pix_ix2 {2:}", screen_x, sample_ix, screen_x_2);
+        println!(
+            "pix_ix {:2} -> sample_ix {:6.3} -> pix_ix2 {2:}",
+            screen_x, sample_ix, screen_x_2
+        );
     }
 
     let ix_range = time.ix_range().unwrap();

@@ -26,9 +26,15 @@ impl Single {
         })
     }
 
-    pub fn update_sample_view(&mut self, samples_per_pixel: f32, audio: &mut AudioManager, sample_rect: Option<SampleRectE>) -> Result<()> {
+    pub fn update_sample_view(
+        &mut self,
+        samples_per_pixel: f32,
+        audio: &mut AudioManager,
+        sample_rect: Option<SampleRectE>,
+    ) -> Result<()> {
         if let (Some(sample_rect), Some(screen_rect)) = (sample_rect, self.screen_rect) {
-            self.item.update_sample_view(samples_per_pixel, audio, &sample_rect, &screen_rect)?;
+            self.item
+                .update_sample_view(samples_per_pixel, audio, &sample_rect, &screen_rect)?;
         }
         Ok(())
     }

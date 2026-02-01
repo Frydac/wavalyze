@@ -17,7 +17,11 @@ use wavalyze::wav::read::{ReadConfig, read_to_file};
 //     let _buffer_id_i16 = file.channels[0].buffer;
 // }
 
-fn setup_test_wav_file<S: hound::Sample + Copy>(spec: hound::WavSpec, samples: &[S], test_name: &str) -> String {
+fn setup_test_wav_file<S: hound::Sample + Copy>(
+    spec: hound::WavSpec,
+    samples: &[S],
+    test_name: &str,
+) -> String {
     let test_output_dir = "target/test_output";
     std::fs::create_dir_all(test_output_dir).unwrap();
     let file_path = format!(

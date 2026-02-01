@@ -39,12 +39,33 @@ mod tests {
     #[test]
     fn test_round_up_to_power_of_10_times_block_size() {
         let block_size = 1024.0;
-        assert!(is_close(round_up_to_power_of_10_times_block_size(0.5, block_size), 1024.0));
-        assert!(is_close(round_up_to_power_of_10_times_block_size(1.0, block_size), 1024.0));
-        assert!(is_close(round_up_to_power_of_10_times_block_size(1023.0, block_size), 1024.0));
-        assert!(is_close(round_up_to_power_of_10_times_block_size(1024.0, block_size), 1024.0));
-        assert!(is_close(round_up_to_power_of_10_times_block_size(1025.0, block_size), 10240.0));
-        assert!(is_close(round_up_to_power_of_10_times_block_size(10240.0, block_size), 10240.0));
-        assert!(is_close(round_up_to_power_of_10_times_block_size(10241.0, block_size), 102400.0));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(0.5, block_size),
+            1024.0
+        ));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(1.0, block_size),
+            1024.0
+        ));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(1023.0, block_size),
+            1024.0
+        ));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(1024.0, block_size),
+            1024.0
+        ));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(1025.0, block_size),
+            10240.0
+        ));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(10240.0, block_size),
+            10240.0
+        ));
+        assert!(is_close(
+            round_up_to_power_of_10_times_block_size(10241.0, block_size),
+            102400.0
+        ));
     }
 }

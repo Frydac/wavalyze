@@ -142,7 +142,9 @@ impl View {
                 if let Some(path) = &file.path
                     && path.extension() == Some(std::ffi::OsStr::new("wav"))
                 {
-                    self.model.actions.push(Action::OpenFile(wav::ReadConfig::new(path)));
+                    self.model
+                        .actions
+                        .push(Action::OpenFile(wav::ReadConfig::new(path)));
                 }
             }
         });
@@ -214,7 +216,8 @@ impl View {
             for (id, track_model) in &mut model.tracks.tracks {
                 if !self.tracks.contains_key(id) {
                     println!("adding new view track: {}", track_model.name);
-                    self.tracks.insert(*id, Track::new(track_model.name.clone(), *id));
+                    self.tracks
+                        .insert(*id, Track::new(track_model.name.clone(), *id));
                 }
             }
             self.tracks.retain(|id, _| {

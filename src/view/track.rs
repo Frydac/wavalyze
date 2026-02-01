@@ -67,7 +67,12 @@ impl Track {
             });
     }
 
-    pub fn handle_interaction(&mut self, ui: &mut egui::Ui, model: &mut model::Model, track_id: Id) {
+    pub fn handle_interaction(
+        &mut self,
+        ui: &mut egui::Ui,
+        model: &mut model::Model,
+        track_id: Id,
+    ) {
         if let Some(pos) = ui.ctx().pointer_hover_pos()
             && ui.min_rect().contains(pos)
         {
@@ -128,7 +133,8 @@ impl Track {
         let model_track = model.tracks.track(self.id).unwrap();
         let view_rect = model_track.view_rect();
         let screen_rect = model_track.screen_rect;
-        let to_screen = egui::emath::RectTransform::from_to((*view_rect).into(), screen_rect.into());
+        let to_screen =
+            egui::emath::RectTransform::from_to((*view_rect).into(), screen_rect.into());
         // let color = egui::Color32::from_rgba_unmultiplied(200, 200, 200, 10);
         let color = egui::Color32::from_rgb(100, 100, 100);
         let stroke = egui::Stroke::new(1.0, color);
@@ -148,9 +154,11 @@ impl Track {
         }
 
         // end
-        let last_sample_ix = (model_track.buffer.borrow().nr_samples() - 1) as crate::audio::SampleIx;
+        let last_sample_ix =
+            (model_track.buffer.borrow().nr_samples() - 1) as crate::audio::SampleIx;
         if model_track.sample_rect.ix_rng.contains(last_sample_ix) {
-            let view_x0 = model_track.sample_ix_to_view_x(last_sample_ix - model_track.sample_rect.ix_rng.start());
+            let view_x0 = model_track
+                .sample_ix_to_view_x(last_sample_ix - model_track.sample_rect.ix_rng.start());
             // dbg!(-model_track.sample_rect.ix_rng.start());
             // dbg!(view_x0);
             let mut screen_x0 = to_screen.transform_pos(egui::pos2(view_x0, 0.0));
@@ -173,7 +181,9 @@ impl Track {
         let screen_rect = ui.min_rect();
         let to_screen = egui::emath::RectTransform::from_to((*track_view_rect).into(), screen_rect);
         let to_view = to_screen.inverse();
-        let line_color = egui::Color32::LIGHT_RED.linear_multiply(0.7).with_alpha(255);
+        let line_color = egui::Color32::LIGHT_RED
+            .linear_multiply(0.7)
+            .with_alpha(255);
         // let line_color = egui::Color32::from_rgb(128, 64, 64);
         let stroke_line = egui::Stroke::new(1.0, line_color);
         let painter = ui.painter_at(screen_rect);
@@ -183,8 +193,10 @@ impl Track {
                 for (ix, pos_sample) in buffer_pos.iter().enumerate() {
                     let pos_sample: egui::Pos2 = pos_sample.into();
                     let pos_sample_mid = egui::pos2(pos_sample.x, 0.0);
-                    let pos_sample_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(pos_sample));
-                    let pos_sample_mid_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(pos_sample_mid));
+                    let pos_sample_screen =
+                        painter.round_pos_to_pixel_center(to_screen.transform_pos(pos_sample));
+                    let pos_sample_mid_screen =
+                        painter.round_pos_to_pixel_center(to_screen.transform_pos(pos_sample_mid));
 
                     painter.line_segment([pos_sample_mid_screen, pos_sample_screen], stroke_line);
                     let circle_size = 1.5;
@@ -213,8 +225,10 @@ impl Track {
                     let max = egui::pos2(max.x, max.y);
 
                     // NOTE: swapping min and max, as the Y-axis is inverted in egui
-                    let max_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(min));
-                    let mut min_screen = painter.round_pos_to_pixel_center(to_screen.transform_pos(max));
+                    let max_screen =
+                        painter.round_pos_to_pixel_center(to_screen.transform_pos(min));
+                    let mut min_screen =
+                        painter.round_pos_to_pixel_center(to_screen.transform_pos(max));
 
                     // We ar drawing a line parallel the y-axis, it needs to be at least 1 pixel,
                     // and it seems like it doesn't draw the start pixel here? (TODO: investigate)
@@ -230,9 +244,15 @@ impl Track {
                     // TODO: we might be drawing lines next to each other where not necessary,
                     // probably need to adjust prev_min_y and prev_max_y to account for this
                     if prev_max_y < min_screen.y {
-                        painter.line_segment([egui::pos2(min_screen.x, prev_max_y), min_screen], stroke_line);
+                        painter.line_segment(
+                            [egui::pos2(min_screen.x, prev_max_y), min_screen],
+                            stroke_line,
+                        );
                     } else if prev_min_y > max_screen.y {
-                        painter.line_segment([max_screen, egui::pos2(max_screen.x, prev_min_y)], stroke_line);
+                        painter.line_segment(
+                            [max_screen, egui::pos2(max_screen.x, prev_min_y)],
+                            stroke_line,
+                        );
                     }
                     prev_max_y = max_screen.y;
                     prev_min_y = min_screen.y;
@@ -255,9 +275,12 @@ impl Track {
         // start_point_screen.x += 10.0;
         let painter = ui.painter();
         painter.line_segment(
-            [start_point_screen, to_screen.transform_pos(egui::pos2(max_x, 0.0))]
-                .each_ref()
-                .map(|pos| painter.round_pos_to_pixel_center(*pos)),
+            [
+                start_point_screen,
+                to_screen.transform_pos(egui::pos2(max_x, 0.0)),
+            ]
+            .each_ref()
+            .map(|pos| painter.round_pos_to_pixel_center(*pos)),
             self.stroke_middle_line,
         );
     }
@@ -273,20 +296,30 @@ impl Default for MouseHover {
     fn default() -> Self {
         Self {
             // screen_pos: Pos2::new(0.0, 0.0),
-            stroke_vline: egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(200, 200, 200, 100)),
+            stroke_vline: egui::Stroke::new(
+                1.0,
+                egui::Color32::from_rgba_unmultiplied(200, 200, 200, 100),
+            ),
         }
     }
 }
 
 impl MouseHover {
-    fn ui_sample_info_floating_rect2(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
+    fn ui_sample_info_floating_rect2(
+        &mut self,
+        ui: &mut egui::Ui,
+        track_id: Id,
+        hover_info: &track::HoverInfo,
+    ) {
         if hover_info.samples.is_empty() {
             return;
         }
 
         // Use the track_id to create a unique ID for each popup instance.
         let popup_id = ui.id().with(track_id).with("sample_info_popup");
-        let last_size: Option<egui::Vec2> = ui.ctx().memory_mut(|m| m.data.get_persisted::<egui::Vec2>(popup_id));
+        let last_size: Option<egui::Vec2> = ui
+            .ctx()
+            .memory_mut(|m| m.data.get_persisted::<egui::Vec2>(popup_id));
 
         let canvas_rect = ui.min_rect();
 
@@ -307,47 +340,56 @@ impl MouseHover {
             .fixed_pos(popup_pos)
             .interactable(false) // Add this line
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).outer_margin(10.0).show(ui, |ui| {
-                    // --- The content of the popup remains the same ---
-                    let mut min_sample = Option::<(i32, f32)>::None;
-                    let mut max_sample = Option::<(i32, f32)>::None;
-                    for (ix, sample) in hover_info.samples.iter() {
-                        min_sample = min_sample.or(Some((*ix, *sample)));
-                        max_sample = max_sample.or(Some((*ix, *sample)));
-                        if let Some(min_sample) = &mut min_sample
-                            && min_sample.1 > *sample
-                        {
-                            min_sample.1 = *sample;
+                egui::Frame::popup(ui.style())
+                    .outer_margin(10.0)
+                    .show(ui, |ui| {
+                        // --- The content of the popup remains the same ---
+                        let mut min_sample = Option::<(i32, f32)>::None;
+                        let mut max_sample = Option::<(i32, f32)>::None;
+                        for (ix, sample) in hover_info.samples.iter() {
+                            min_sample = min_sample.or(Some((*ix, *sample)));
+                            max_sample = max_sample.or(Some((*ix, *sample)));
+                            if let Some(min_sample) = &mut min_sample
+                                && min_sample.1 > *sample
+                            {
+                                min_sample.1 = *sample;
+                            }
+                            if let Some(max_sample) = &mut max_sample
+                                && max_sample.1 < *sample
+                            {
+                                max_sample.1 = *sample;
+                            }
                         }
-                        if let Some(max_sample) = &mut max_sample
-                            && max_sample.1 < *sample
-                        {
-                            max_sample.1 = *sample;
+
+                        let min_ix = hover_info.samples.first().unwrap().0;
+                        let max_ix = hover_info.samples.last().unwrap().0;
+
+                        let mut grid = KeyValueGrid::new(track_id);
+                        if min_ix == max_ix {
+                            grid.row("index:", format!("{}", min_ix));
+                            grid.row("value:", format!("{}", min_sample.unwrap().1));
+                        } else {
+                            grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
+                            grid.row("min value:", format!("{}", min_sample.unwrap().1));
+                            grid.row("max value:", format!("{}", max_sample.unwrap().1));
                         }
-                    }
-
-                    let min_ix = hover_info.samples.first().unwrap().0;
-                    let max_ix = hover_info.samples.last().unwrap().0;
-
-                    let mut grid = KeyValueGrid::new(track_id);
-                    if min_ix == max_ix {
-                        grid.row("index:", format!("{}", min_ix));
-                        grid.row("value:", format!("{}", min_sample.unwrap().1));
-                    } else {
-                        grid.row("indices:", format!("[{}, {}]", min_ix, max_ix));
-                        grid.row("min value:", format!("{}", min_sample.unwrap().1));
-                        grid.row("max value:", format!("{}", max_sample.unwrap().1));
-                    }
-                    grid.show(ui);
-                });
+                        grid.show(ui);
+                    });
             });
 
         // Store the size of the popup for the next frame.
-        ui.ctx()
-            .memory_mut(|m| m.data.insert_persisted(popup_id, area_response.response.rect.size()));
+        ui.ctx().memory_mut(|m| {
+            m.data
+                .insert_persisted(popup_id, area_response.response.rect.size())
+        });
     }
 
-    fn ui_sample_info_floating_rect(&mut self, ui: &mut egui::Ui, track_id: Id, hover_info: &track::HoverInfo) {
+    fn ui_sample_info_floating_rect(
+        &mut self,
+        ui: &mut egui::Ui,
+        track_id: Id,
+        hover_info: &track::HoverInfo,
+    ) {
         if hover_info.samples.is_empty() {
             return;
         }
@@ -405,20 +447,32 @@ impl MouseHover {
             });
     }
 
-    fn ui_mouse_pos_vline(&mut self, ui: &mut egui::Ui, hover_info: &track::HoverInfo, canvas_rect: &egui::Rect) {
+    fn ui_mouse_pos_vline(
+        &mut self,
+        ui: &mut egui::Ui,
+        hover_info: &track::HoverInfo,
+        canvas_rect: &egui::Rect,
+    ) {
         let painter = ui.painter();
         let x = hover_info.screen_pos.x;
         let vline_start = painter.round_pos_to_pixel_center((x, canvas_rect.top()).into());
         let vline_end = painter.round_pos_to_pixel_center((x, canvas_rect.bottom()).into());
-        ui.painter().line_segment([vline_start, vline_end], self.stroke_vline);
+        ui.painter()
+            .line_segment([vline_start, vline_end], self.stroke_vline);
     }
 
-    fn ui_mouse_pos_hline(&mut self, ui: &mut egui::Ui, hover_info: &track::HoverInfo, canvas_rect: &egui::Rect) {
+    fn ui_mouse_pos_hline(
+        &mut self,
+        ui: &mut egui::Ui,
+        hover_info: &track::HoverInfo,
+        canvas_rect: &egui::Rect,
+    ) {
         let painter = ui.painter();
         let y = hover_info.screen_pos.y;
         let hline_start = painter.round_pos_to_pixel_center((canvas_rect.left(), y).into());
         let hline_end = painter.round_pos_to_pixel_center((canvas_rect.right(), y).into());
-        ui.painter().line_segment([hline_start, hline_end], self.stroke_vline);
+        ui.painter()
+            .line_segment([hline_start, hline_end], self.stroke_vline);
     }
 
     // fn ui(&mut self, ui: &mut egui::Ui, model_track: &mut model::track::Track) {

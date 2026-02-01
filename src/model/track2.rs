@@ -94,7 +94,11 @@ impl Track {
 
     /// Create or update the sample rect to the given range
     /// TODO: we could do this by only knowing the sample_type/bit_depth, iso depending on AudioManager?
-    pub fn set_ix_range(&mut self, ix_range: audio::sample::FracIxRange, audio: &AudioManager) -> Result<()> {
+    pub fn set_ix_range(
+        &mut self,
+        ix_range: audio::sample::FracIxRange,
+        audio: &AudioManager,
+    ) -> Result<()> {
         if let Some(sample_rect) = self.sample_rect {
             let mut new_sample_rect = sample_rect;
             new_sample_rect.set_ix_rng(ix_range);
@@ -114,11 +118,16 @@ impl Track {
         }
         self.update_view_buffer_ = false;
 
-        let screen_rect = self.screen_rect.ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
-        let sample_rect = self.sample_rect.ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        let screen_rect = self
+            .screen_rect
+            .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+        let sample_rect = self
+            .sample_rect
+            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
         let buffer_id = self.single.item.buffer_id;
 
-        self.single.item.sample_view = Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect)?);
+        self.single.item.sample_view =
+            Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect)?);
 
         // trace!("self.single.item.sample_view: {:?}", self.single.item.sample_view);
 
@@ -126,7 +135,11 @@ impl Track {
     }
 
     pub fn get_sample_view(&self) -> Result<&sample::View> {
-        self.single.item.sample_view.as_ref().ok_or(anyhow!("sample_view is missing"))
+        self.single
+            .item
+            .sample_view
+            .as_ref()
+            .ok_or(anyhow!("sample_view is missing"))
     }
 
     // pub fn pos_y_sample_value<T: Sample>(&self, value: T) -> Option<f32> {

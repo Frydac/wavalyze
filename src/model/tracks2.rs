@@ -46,7 +46,11 @@ pub struct TracksHoverInfo {
 }
 
 impl Tracks {
-    pub fn add_track_to_end(&mut self, buffer_id: BufferId, track_config: &TrackConfig) -> Result<TrackId> {
+    pub fn add_track_to_end(
+        &mut self,
+        buffer_id: BufferId,
+        track_config: &TrackConfig,
+    ) -> Result<TrackId> {
         let track = Track::new2(buffer_id, track_config)?;
         let track_id = self.tracks.insert(track);
         self.tracks_order.push(track_id);
@@ -71,7 +75,9 @@ impl Tracks {
     }
 
     pub fn find_track(&self, buffer_id: BufferId) -> Option<(TrackId, &Track)> {
-        self.tracks.iter().find(|(_, track)| track.single.item.buffer_id == buffer_id)
+        self.tracks
+            .iter()
+            .find(|(_, track)| track.single.item.buffer_id == buffer_id)
     }
 
     pub fn get_track(&self, track_id: TrackId) -> Option<&Track> {
@@ -103,11 +109,20 @@ impl Tracks {
     /// Update the sample ranges of all tracks to match the ruler zoom level
     /// Should be called after each change to the ruler zoom level/position
     /// TODO: enforce this somehow?
-    pub fn update_tracks_sample_ix_ranges_to_ruler(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
-        anyhow::ensure!(self.ruler.screen_rect().width() > 0.0, "Ruler screen rect width is zero");
+    pub fn update_tracks_sample_ix_ranges_to_ruler(
+        &mut self,
+        audio: &audio::manager::AudioManager,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            self.ruler.screen_rect().width() > 0.0,
+            "Ruler screen rect width is zero"
+        );
 
         // Get current global sample index range
-        let ruler_ix_range = self.ruler.ix_range().ok_or(anyhow::anyhow!("Ruler has no time line"))?;
+        let ruler_ix_range = self
+            .ruler
+            .ix_range()
+            .ok_or(anyhow::anyhow!("Ruler has no time line"))?;
 
         // Update tracks to global sample index range
         for track in self.tracks.values_mut() {
@@ -117,7 +132,10 @@ impl Tracks {
         Ok(())
     }
 
-    fn get_sample_rect_longest_track(&self, audio: &audio::manager::AudioManager) -> Option<audio::SampleRectE> {
+    fn get_sample_rect_longest_track(
+        &self,
+        audio: &audio::manager::AudioManager,
+    ) -> Option<audio::SampleRectE> {
         // {
         // let max_sample_rect = self.tracks.values().map(|track| {
         //     let buffer_id = track.single.item.buffer_id;
@@ -143,7 +161,9 @@ impl Tracks {
 
     /// Zoom to the longest track
     pub fn zoom_to_full(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
-        let max_sample_rect = self.get_sample_rect_longest_track(audio).ok_or(anyhow::anyhow!("No tracks"))?;
+        let max_sample_rect = self
+            .get_sample_rect_longest_track(audio)
+            .ok_or(anyhow::anyhow!("No tracks"))?;
         self.zoom_to_sample_rect(max_sample_rect, audio)
     }
 
@@ -157,8 +177,15 @@ impl Tracks {
         Ok(())
     }
 
-    fn zoom_to_sample_rect(&mut self, sample_rect: audio::SampleRectE, audio: &audio::manager::AudioManager) -> Result<()> {
-        anyhow::ensure!(self.ruler.screen_rect().width() > 0.0, "Ruler screen rect width is zero");
+    fn zoom_to_sample_rect(
+        &mut self,
+        sample_rect: audio::SampleRectE,
+        audio: &audio::manager::AudioManager,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            self.ruler.screen_rect().width() > 0.0,
+            "Ruler screen rect width is zero"
+        );
         let nr_samples = sample_rect.width() as f64;
         let nr_pixels = self.ruler.screen_rect().width() as f64;
         let samples_per_pixel = nr_samples / nr_pixels;

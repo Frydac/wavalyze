@@ -68,7 +68,10 @@ impl<T: Sample> Buffer<T> {
     /// Returns the maximum value in the buffer
     /// NOTE: we ignore NaN values, similar to C or C++ afaik
     pub fn max(&self) -> Option<&T> {
-        self.data.iter().filter(|&&x| !x.is_nan()).max_by(|a, b| a.partial_cmp(b).unwrap())
+        self.data
+            .iter()
+            .filter(|&&x| !x.is_nan())
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     /// Returns the minimum value in the buffer
@@ -77,11 +80,15 @@ impl<T: Sample> Buffer<T> {
     ///   comparison is always false
     /// * doesn't do any checks, so probably fastest
     pub fn min_fold(&self) -> T {
-        self.data.iter().fold(T::MAX, |a, &b| if b < a { b } else { a })
+        self.data
+            .iter()
+            .fold(T::MAX, |a, &b| if b < a { b } else { a })
     }
 
     pub fn max_fold(&self) -> T {
-        self.data.iter().fold(T::MIN, |a, &b| if b > a { b } else { a })
+        self.data
+            .iter()
+            .fold(T::MIN, |a, &b| if b > a { b } else { a })
     }
 
     pub fn val_range(&self) -> sample::ValRange<T> {

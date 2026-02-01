@@ -127,8 +127,14 @@ impl Tracks {
     //     Ok(())
     // }
 
-    pub fn set_sample_rect(&mut self, id: TrackId, sample_rect: audio::SampleRect) -> anyhow::Result<()> {
-        let track = self.track_mut(id).ok_or(anyhow!(format!("Track with id {} not found", id)))?;
+    pub fn set_sample_rect(
+        &mut self,
+        id: TrackId,
+        sample_rect: audio::SampleRect,
+    ) -> anyhow::Result<()> {
+        let track = self
+            .track_mut(id)
+            .ok_or(anyhow!(format!("Track with id {} not found", id)))?;
 
         // if let Some(track) = self.track_mut(id) {
 
@@ -234,7 +240,10 @@ impl Tracks {
 
     // hover over a sample, state is retained until unhover is called
     pub fn update_hover_info(&mut self, id: TrackId, screen_pos: pos::Pos) {
-        self.tracks_hover_info.current = Some(TrackHoverInfo { track_id: id, screen_pos });
+        self.tracks_hover_info.current = Some(TrackHoverInfo {
+            track_id: id,
+            screen_pos,
+        });
         for track in self.tracks.values_mut() {
             track.update_hover_info(screen_pos);
         }
