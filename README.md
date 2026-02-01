@@ -2,9 +2,17 @@
 
 **Wavalyze** is a WAV file viewer, with the long-term goal of becoming a full analysis and diff tool for audio software development.
 
-This is a personal project to learn Rust, and because I could use this functionality in my job. Currently, it is not very usable as it lacks a lot of features.
+This is a personal project to learn Rust, and because I could use this functionality in my job. It is focused on visual inspection of waveforms and low-level audio data, and is built in Rust on top of `egui`.
 
-It is currently focused on visual inspection of waveforms and low-level audio data, and is built in Rust on top of `egui`.
+## Implemented features
+
+- Load WAV files via the CLI (including optional channel selection and sample index ranges).
+- Drag-and-drop WAV files into the app.
+- Render per-channel waveform tracks with headers showing file + channel info.
+- Horizontal pan/zoom controls (drag/scroll on the ruler, or use modifier + scroll on tracks).
+- Ruler and hover readouts for sample indices.
+- Track management: close individual tracks, reset zoom, fill screen height, and resize track heights.
+- Web demo mode with a built-in sample waveform.
 
 ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
 
