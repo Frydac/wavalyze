@@ -19,6 +19,7 @@ use thousands::Separable;
 
 pub type ChIx = usize; // Channel index
 
+/// File-based read options (path + optional filters).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReadConfig {
     /// Path to wav file to read
@@ -32,20 +33,24 @@ pub struct ReadConfig {
     pub sample_range: sample::OptIxRange,
 }
 
+/// In-memory read options for wasm drag-and-drop (no filesystem).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReadConfigBytes {
+    // Optional filename for UI labels; bytes hold the entire file content.
     pub name: Option<String>,
     pub bytes: Vec<u8>,
     pub ch_ixs: Option<Vec<ChIx>>,
     pub sample_range: sample::OptIxRange,
 }
 
+/// Shared subset of read options for both file and byte sources.
 #[derive(Debug, Clone)]
 struct ReadOptions {
     ch_ixs: Option<Vec<ChIx>>,
     sample_range: sample::OptIxRange,
 }
 
+/// Fully decoded data, ready to be integrated into the model.
 #[derive(Debug)]
 pub struct LoadedFile {
     pub load_id: LoadId,
@@ -61,6 +66,7 @@ pub struct LoadedFile {
 
 pub type LoadId = u64;
 
+/// Message from loader to UI thread with the decoded file or an error.
 pub enum LoadResult {
     Ok(LoadedFile),
     Err {
@@ -69,6 +75,7 @@ pub enum LoadResult {
     },
 }
 
+/// Stages used by the progress UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoadStage {
     Start,
@@ -80,6 +87,7 @@ pub enum LoadStage {
     Done,
 }
 
+/// Minimal progress tracking for loaders; atomics on native, Cells on wasm.
 #[derive(Debug)]
 pub struct LoadProgressAtomic {
     #[cfg(target_arch = "wasm32")]
@@ -101,6 +109,7 @@ pub type LoadProgressHandle = Rc<LoadProgressAtomic>;
 #[cfg(not(target_arch = "wasm32"))]
 pub type LoadProgressHandle = Arc<LoadProgressAtomic>;
 
+/// Wasm doesn't support threads/atomics, so we use Rc/Cell there.
 pub fn new_load_progress_handle() -> LoadProgressHandle {
     #[cfg(target_arch = "wasm32")]
     {
@@ -210,6 +219,7 @@ pub fn read_to_loaded_file_with_progress(
     )
 }
 
+// Same pipeline as file-based reading, but from an in-memory cursor.
 pub fn read_bytes_to_loaded_file_with_progress(
     config: &ReadConfigBytes,
     load_id: LoadId,
@@ -229,6 +239,7 @@ pub fn read_bytes_to_loaded_file_with_progress(
     )
 }
 
+// Shared implementation for file paths and byte buffers.
 fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     mut reader: hound::WavReader<R>,
     options: &ReadOptions,
@@ -320,7 +331,7 @@ fn convert_samples<T>(
         .collect()
 }
 
-// read samples into buffers knowing the sample type S
+/// Reads interleaved samples into buffers, honoring channel/range filters.
 fn read_to_buffers<S, R>(
     reader: &mut hound::WavReader<R>,
     options: &ReadOptions,
@@ -350,6 +361,7 @@ where
         let total = sample_range.len() as u64 * nr_channels as u64;
         progress.set_stage(LoadStage::ReadingSamples, total);
     }
+    // Read in one pass, updating progress in coarse steps to reduce overhead.
     let mut interleaved_samples = Vec::with_capacity(sample_range.len() as usize * nr_channels);
     let mut read_count: u64 = 0;
     const READ_UPDATE_STEP: u64 = 1 << 18;
@@ -404,7 +416,7 @@ where
     Ok(buffers)
 }
 
-// Deinterleave specified channels
+// Split interleaved/deinterleave samples into per-channel buffers.
 // TODO: make version that doesn't allocate new buffers, we might want to reuse the same buffers
 // when deinterleaving a large file in batches
 fn deinterleave<S>(

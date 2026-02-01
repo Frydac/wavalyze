@@ -60,18 +60,12 @@ impl Action {
                 model.tracks2.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
-                model.pending_loads = model.pending_loads.saturating_add(1);
-                let load_id = model.next_load_id;
-                model.next_load_id = model.next_load_id.saturating_add(1);
+                // Native: load on a worker thread. Wasm: load synchronously (no threads).
                 let progress = crate::wav::read::new_load_progress_handle();
-                model.load_progress.insert(
-                    load_id,
-                    crate::model::LoadProgressEntry {
-                        path: read_config.filepath.clone(),
-                        handle: progress.clone(),
-                    },
-                );
-                let tx = model.load_results_tx.clone();
+                let load_id = model
+                    .load_mgr
+                    .start_load(read_config.filepath.clone(), progress.clone());
+                let tx = model.load_mgr.sender();
                 let read_config = read_config.clone();
                 #[cfg(not(target_arch = "wasm32"))]
                 std::thread::spawn(move || {
@@ -101,22 +95,16 @@ impl Action {
                 }
             }
             Action::OpenFileBytes(read_config) => {
-                model.pending_loads = model.pending_loads.saturating_add(1);
-                let load_id = model.next_load_id;
-                model.next_load_id = model.next_load_id.saturating_add(1);
+                // Byte-based loads are used by wasm drag-and-drop (no filesystem access).
                 let progress = crate::wav::read::new_load_progress_handle();
                 let label = read_config
                     .name
                     .clone()
                     .unwrap_or_else(|| "file".to_string());
-                model.load_progress.insert(
-                    load_id,
-                    crate::model::LoadProgressEntry {
-                        path: std::path::PathBuf::from(label),
-                        handle: progress.clone(),
-                    },
-                );
-                let tx = model.load_results_tx.clone();
+                let load_id = model
+                    .load_mgr
+                    .start_load(std::path::PathBuf::from(label), progress.clone());
+                let tx = model.load_mgr.sender();
                 let read_config = read_config.clone();
                 #[cfg(not(target_arch = "wasm32"))]
                 std::thread::spawn(move || {

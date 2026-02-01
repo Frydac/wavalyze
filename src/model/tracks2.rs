@@ -169,8 +169,10 @@ impl Tracks {
 
     /// Update track heights to equally distribute the available height, taking min_height into account.
     pub fn fill_screen_height(&mut self, min_height: f32) -> Result<()> {
-        // TODO: figure out why we need to compensate with 6.5 and make more robust
-        let track_height = self.available_height / self.tracks.len() as f32 - 6.5;
+        if self.tracks.is_empty() {
+            return Ok(());
+        }
+        let track_height = self.available_height / self.tracks.len() as f32;
         for track in self.tracks.values_mut() {
             track.height = track_height.max(min_height);
         }

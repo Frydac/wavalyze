@@ -2,6 +2,7 @@ pub mod action;
 pub mod config;
 pub mod demo;
 pub mod hover_info;
+pub mod load_manager;
 pub mod ruler;
 pub mod sample_ix_zoom;
 pub mod track;
@@ -17,6 +18,7 @@ pub use self::track::Track;
 pub use self::tracks::Tracks;
 pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
+pub use load_manager::{LoadManager, LoadProgressEntry};
 // pub use self::hover_info::HoverInfo;
 use crate::audio;
 use crate::audio::thumbnail::ThumbnailE;
@@ -28,12 +30,9 @@ use tracing::{info, trace};
 
 use crate::wav;
 use anyhow::Result;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, Sender};
 // use std::collections::VecDeque;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Model {
     pub user_config: Config,
     pub tracks: Tracks,
@@ -45,36 +44,7 @@ pub struct Model {
 
     pub actions: Vec<Action>,
 
-    pub load_results_tx: Sender<wav::read::LoadResult>,
-    pub load_results_rx: Receiver<wav::read::LoadResult>,
-    pub pending_loads: usize,
-    pub next_load_id: wav::read::LoadId,
-    pub load_progress: HashMap<wav::read::LoadId, LoadProgressEntry>,
-}
-
-#[derive(Debug)]
-pub struct LoadProgressEntry {
-    pub path: PathBuf,
-    pub handle: wav::read::LoadProgressHandle,
-}
-
-impl Default for Model {
-    fn default() -> Self {
-        let (load_results_tx, load_results_rx) = std::sync::mpsc::channel();
-        Self {
-            user_config: Config::default(),
-            tracks: Tracks::default(),
-            files2: Vec::new(),
-            audio: audio::manager::AudioManager::default(),
-            tracks2: tracks2::Tracks::default(),
-            actions: Vec::new(),
-            load_results_tx,
-            load_results_rx,
-            pending_loads: 0,
-            next_load_id: 1,
-            load_progress: HashMap::new(),
-        }
-    }
+    pub load_mgr: LoadManager,
 }
 
 impl Model {
@@ -178,40 +148,24 @@ impl Model {
 
     pub fn drain_load_results(&mut self) -> bool {
         let mut had_results = false;
-        loop {
-            match self.load_results_rx.try_recv() {
-                Ok(result) => {
-                    had_results = true;
-                    self.pending_loads = self.pending_loads.saturating_sub(1);
-                    match result {
-                        wav::read::LoadResult::Ok(loaded) => {
-                            let load_id = loaded.load_id;
-                            let progress = self
-                                .load_progress
-                                .get(&load_id)
-                                .map(|entry| entry.handle.clone());
-                            if let Err(err) = self.add_loaded_file(loaded, progress.clone()) {
-                                tracing::error!("Failed to integrate loaded file: {err}");
-                            } else {
-                                if let Some(progress) = progress.as_ref() {
-                                    progress.set_stage(wav::read::LoadStage::Done, 1);
-                                    progress.set_current(1);
-                                }
-                                self.actions.push(Action::ZoomToFull);
-                                self.actions.push(Action::FillScreenHeight);
-                            }
-                            self.load_progress.remove(&load_id);
+        let results = self.load_mgr.drain_results();
+        for (result, progress) in results {
+            had_results = true;
+            match result {
+                wav::read::LoadResult::Ok(loaded) => {
+                    if let Err(err) = self.add_loaded_file(loaded, progress.clone()) {
+                        tracing::error!("Failed to integrate loaded file: {err}");
+                    } else {
+                        if let Some(progress) = progress.as_ref() {
+                            progress.set_stage(wav::read::LoadStage::Done, 1);
+                            progress.set_current(1);
                         }
-                        wav::read::LoadResult::Err { load_id, error } => {
-                            tracing::error!("Failed to load wav file: {error}");
-                            self.load_progress.remove(&load_id);
-                        }
+                        self.actions.push(Action::ZoomToFull);
+                        self.actions.push(Action::FillScreenHeight);
                     }
                 }
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    tracing::error!("Load results channel disconnected");
-                    break;
+                wav::read::LoadResult::Err { error, .. } => {
+                    tracing::error!("Failed to load wav file: {error}");
                 }
             }
         }

@@ -48,7 +48,7 @@ impl View {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.model.pending_loads > 0 {
+        if self.model.load_mgr.pending() > 0 {
             ctx.request_repaint();
         }
         if self.model.drain_load_results() {
@@ -122,29 +122,6 @@ impl View {
             .show(ctx, |ui| {
 
                 // ui.separator();
-
-                // egui::Frame::default()
-                //     // .stroke(egui::Stroke::new(1.0, egui::Color32::BLACK))
-                // .inner_margin(egui::Margin::same(10.0))
-                // .show(ui, |ui| {
-                //         let model = &self.model;
-
-                //         for track in model.tracks.iter() {
-                //             ui.label(&track.name);
-                //             if let Some(spp) = track.samples_per_pixel {
-                //                 ui.label(format!("samples/pixel: {}", spp));
-                //                 let pixels_per_sample = 1.0 / spp;
-                //                 ui.label(format!("pixels/sample: {}", pixels_per_sample));
-                //             }
-                //             ui.separator();
-                //         }
-
-                //         if let Some(samples_per_pixel) = model.tracks.samples_per_pixel {
-                //             ui.label(format!("samples per pixel: {}", samples_per_pixel));
-                //         } else {
-                //             ui.label("samples per pixel: not set");
-                //         }
-                //     });
             });
     }
 
@@ -321,7 +298,7 @@ impl View {
             // let _ = ruler2::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let size = ui.available_size();
-                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
+                let size = egui::vec2(size.x.max(0.0), (size.y - 1.0).max(0.0));
                 self.model.tracks2.available_height = size.y;
                 ui.allocate_ui(size, |ui| {
                     ui.set_min_width(size.x.max(0.0));
@@ -337,14 +314,15 @@ impl View {
         Ok(())
     }
 
+    /// Show a modal with a progress bar when loading files.
     fn ui_loading_modal(&mut self, ctx: &egui::Context) {
-        if self.model.pending_loads == 0 {
+        if self.model.load_mgr.pending() == 0 {
             return;
         }
 
         let (path_label, stage_label, progress_value, overall_value) =
-            match self.model.load_progress.iter().next() {
-                Some((_id, entry)) => {
+            match self.model.load_mgr.any_progress_entry() {
+                Some(entry) => {
                     let (stage, current, total) = entry.handle.snapshot();
                     let value = if total > 0 {
                         (current as f32 / total as f32).clamp(0.0, 1.0)
