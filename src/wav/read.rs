@@ -2,12 +2,15 @@ use crate::audio::buffer2::{Buffer, BufferE};
 use crate::audio::manager::Buffers;
 use crate::audio::sample;
 // use crate::audio::{BufferPool, SampleBuffer};
+use crate::audio::SampleType;
 use crate::wav::file2::{Channel, File};
 use anyhow::{Result, ensure};
 use hound;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use thousands::Separable;
 
 pub type ChIx = usize; // Channel index
@@ -24,6 +27,49 @@ pub struct ReadConfig {
     // pub sample_range: Option<sample::IxRange>,
     pub sample_range: sample::OptIxRange,
 }
+
+#[derive(Debug)]
+pub struct LoadedFile {
+    pub load_id: LoadId,
+    pub channels: BTreeMap<ChIx, BufferE>,
+    pub sample_type: SampleType,
+    pub bit_depth: u16,
+    pub sample_rate: u32,
+    pub layout: Option<crate::audio::Layout>,
+    pub path: Option<PathBuf>,
+    /// Number of samples per channel
+    pub nr_samples: u64,
+}
+
+pub type LoadId = u64;
+
+pub enum LoadResult {
+    Ok(LoadedFile),
+    Err {
+        load_id: LoadId,
+        error: anyhow::Error,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadStage {
+    Start,
+    ReadingSamples,
+    Deinterleaving,
+    Converting,
+    Thumbnail,
+    Finalizing,
+    Done,
+}
+
+#[derive(Debug)]
+pub struct LoadProgressAtomic {
+    stage: AtomicU8,
+    current: AtomicU64,
+    total: AtomicU64,
+}
+
+pub type LoadProgressHandle = Arc<LoadProgressAtomic>;
 
 impl ReadConfig {
     pub fn new(filepath: impl Into<PathBuf>) -> Self {
@@ -51,6 +97,22 @@ impl ReadConfig {
 
 // TODO: think of better name :)
 pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> {
+    let loaded = read_to_loaded_file(config)?;
+    Ok(loaded.into_file(buffers))
+}
+
+pub fn read_to_loaded_file(config: &ReadConfig) -> Result<LoadedFile> {
+    read_to_loaded_file_with_progress(config, 0, None)
+}
+
+pub fn read_to_loaded_file_with_progress(
+    config: &ReadConfig,
+    load_id: LoadId,
+    progress: Option<&LoadProgressAtomic>,
+) -> Result<LoadedFile> {
+    if let Some(progress) = progress {
+        progress.set_stage(LoadStage::Start, 0);
+    }
     let Some(filepath) = config.filepath.to_str() else {
         return Err(anyhow::anyhow!("Invalid filepath"));
     };
@@ -72,9 +134,10 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
     // read samples into appropriate type and associate with channel index
     let chix_buffers: BTreeMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 32 => {
-                convert_samples(read_to_buffers::<f32>(&mut reader, config)?, BufferE::F32)
-            }
+            bit_depth if bit_depth <= 32 => convert_samples(
+                read_to_buffers::<f32>(&mut reader, config, progress)?,
+                BufferE::F32,
+            ),
             _ => {
                 return Err(anyhow::anyhow!(
                     "Unsupported bit depth for float: {}",
@@ -83,12 +146,14 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
             }
         },
         hound::SampleFormat::Int => match spec.bits_per_sample {
-            bit_depth if bit_depth <= 16 => {
-                convert_samples(read_to_buffers::<i16>(&mut reader, config)?, BufferE::I16)
-            }
-            bit_depth if bit_depth <= 32 => {
-                convert_samples(read_to_buffers::<i32>(&mut reader, config)?, BufferE::I32)
-            }
+            bit_depth if bit_depth <= 16 => convert_samples(
+                read_to_buffers::<i16>(&mut reader, config, progress)?,
+                BufferE::I16,
+            ),
+            bit_depth if bit_depth <= 32 => convert_samples(
+                read_to_buffers::<i32>(&mut reader, config, progress)?,
+                BufferE::I32,
+            ),
             _ => {
                 return Err(anyhow::anyhow!(
                     "Unsupported bit depth for int: {}",
@@ -98,22 +163,14 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
         },
     };
 
-    let file = File {
-        // move buffers to storage and store it's id in file
-        channels: chix_buffers
-            .into_iter()
-            // .sorted_by(|(ch_ix1, _), (ch_ix2, _)| ch_ix1.cmp(ch_ix2))
-            .map(|(ch_ix, buffer)| {
-                (
-                    ch_ix,
-                    Channel {
-                        ch_ix,
-                        buffer_id: buffers.insert(buffer),
-                        channel_id: None,
-                    },
-                )
-            })
-            .collect(),
+    if let Some(progress) = progress {
+        progress.set_stage(LoadStage::Finalizing, 1);
+        progress.set_current(1);
+    }
+
+    let file = LoadedFile {
+        load_id,
+        channels: chix_buffers,
         layout: None, // TODO: first need to extend hound to 'publish' the wavextended channel mask?
         sample_rate: spec.sample_rate,
         bit_depth: spec.bits_per_sample,
@@ -142,6 +199,7 @@ fn convert_samples<T>(
 fn read_to_buffers<S>(
     reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>,
     config: &ReadConfig,
+    progress: Option<&LoadProgressAtomic>,
 ) -> Result<BTreeMap<ChIx, Buffer<S>>>
 where
     S: crate::audio::sample2::Sample + hound::Sample,
@@ -162,11 +220,28 @@ where
     }
 
     // Read the desired number of interleaved samples
-    let interleaved_samples: Result<Vec<S>, _> = reader
+    if let Some(progress) = progress {
+        let total = sample_range.len() as u64 * nr_channels as u64;
+        progress.set_stage(LoadStage::ReadingSamples, total);
+    }
+    let mut interleaved_samples = Vec::with_capacity(sample_range.len() as usize * nr_channels);
+    let mut read_count: u64 = 0;
+    const READ_UPDATE_STEP: u64 = 1 << 18;
+    for sample in reader
         .samples::<S>()
         .take(sample_range.len() as usize * nr_channels)
-        .collect();
-    let interleaved_samples = interleaved_samples?;
+    {
+        interleaved_samples.push(sample?);
+        read_count += 1;
+        if read_count.is_multiple_of(READ_UPDATE_STEP)
+            && let Some(progress) = progress
+        {
+            progress.set_current(read_count);
+        }
+    }
+    if let Some(progress) = progress {
+        progress.set_current(read_count);
+    }
 
     // channel indices we want to deinterleave
     // NOTE: this gets a refernce in to the Option if it has a value, otherwise it gets an owned
@@ -176,15 +251,26 @@ where
         None => Cow::Owned((0..nr_channels).collect()),
     };
 
-    let channels = deinterleave(&interleaved_samples, nr_channels, &ch_ixs)?;
+    if let Some(progress) = progress {
+        progress.set_stage(LoadStage::Deinterleaving, interleaved_samples.len() as u64);
+    }
+    let channels = deinterleave(&interleaved_samples, nr_channels, &ch_ixs, progress)?;
 
     // associate spec with buffers
     let spec = reader.spec();
+    if let Some(progress) = progress {
+        progress.set_stage(LoadStage::Converting, channels.len() as u64);
+    }
+    let mut converted_count: u64 = 0;
     let buffers = channels
         .into_iter()
         .map(|(ch_ix, samples)| {
             let mut buffer = Buffer::new(spec.sample_rate, spec.bits_per_sample);
             buffer.data = samples;
+            converted_count += 1;
+            if let Some(progress) = progress {
+                progress.set_current(converted_count);
+            }
             (ch_ix, buffer)
         })
         .collect();
@@ -199,6 +285,7 @@ fn deinterleave<S>(
     interleaved_samples: &[S],
     nr_channels: usize,
     channel_indices: &[ChIx],
+    progress: Option<&LoadProgressAtomic>,
 ) -> Result<HashMap<ChIx, Vec<S>>>
 where
     S: Copy,
@@ -227,6 +314,8 @@ where
 
     // deinterleave
     // PERF: looping over each channel and 'striding' through the deinterleaved buffer, probably faster.
+    let mut deinterleave_count: u64 = 0;
+    const DEINTERLEAVE_UPDATE_STEP: u64 = 1 << 19;
     for ch_ix in channel_indices.iter() {
         let ch_ix = *ch_ix;
         ensure!(
@@ -236,10 +325,110 @@ where
         let buffer = &mut result.get_mut(&ch_ix).unwrap();
         for sample_ix in 0..nr_samples_per_ch {
             buffer.push(interleaved_samples[sample_ix * nr_channels + ch_ix]);
+            deinterleave_count += 1;
+            if deinterleave_count.is_multiple_of(DEINTERLEAVE_UPDATE_STEP)
+                && let Some(progress) = progress
+            {
+                progress.set_current(deinterleave_count);
+            }
         }
+    }
+    if let Some(progress) = progress {
+        progress.set_current(deinterleave_count);
     }
 
     Ok(result)
+}
+
+impl std::fmt::Display for LoadedFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LoadedFile:")?;
+        write!(f, " path: {:?}", self.path)?;
+        write!(f, ", nr_channels: {}", self.channels.len())?;
+        write!(f, ", sample_type: {:?}", self.sample_type)?;
+        write!(f, ", bit_depth: {}", self.bit_depth)?;
+        write!(f, ", sample_rate: {}", self.sample_rate)?;
+        if let Some(layout) = &self.layout {
+            write!(f, ", layout: {:?}", layout)?;
+        }
+        write!(f, ", nr_samples: {}", self.nr_samples)?;
+        Ok(())
+    }
+}
+
+impl LoadedFile {
+    pub fn into_file(self, buffers: &mut Buffers) -> File {
+        File {
+            // move buffers to storage and store it's id in file
+            channels: self
+                .channels
+                .into_iter()
+                .map(|(ch_ix, buffer)| {
+                    (
+                        ch_ix,
+                        Channel {
+                            ch_ix,
+                            buffer_id: buffers.insert(buffer),
+                            channel_id: None,
+                        },
+                    )
+                })
+                .collect(),
+            layout: self.layout,
+            sample_rate: self.sample_rate,
+            bit_depth: self.bit_depth,
+            sample_type: self.sample_type,
+            path: self.path,
+            nr_samples: self.nr_samples,
+        }
+    }
+}
+
+impl LoadProgressAtomic {
+    pub fn new() -> Self {
+        Self {
+            stage: AtomicU8::new(LoadStage::Start as u8),
+            current: AtomicU64::new(0),
+            total: AtomicU64::new(0),
+        }
+    }
+
+    pub fn set_stage(&self, stage: LoadStage, total: u64) {
+        self.stage.store(stage as u8, Ordering::Release);
+        self.total.store(total, Ordering::Release);
+        self.current.store(0, Ordering::Release);
+    }
+
+    pub fn set_current(&self, current: u64) {
+        self.current.store(current, Ordering::Release);
+    }
+
+    pub fn snapshot(&self) -> (LoadStage, u64, u64) {
+        let stage = LoadStage::from_u8(self.stage.load(Ordering::Acquire));
+        let current = self.current.load(Ordering::Acquire);
+        let total = self.total.load(Ordering::Acquire);
+        (stage, current, total)
+    }
+}
+
+impl Default for LoadProgressAtomic {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LoadStage {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            1 => LoadStage::ReadingSamples,
+            2 => LoadStage::Deinterleaving,
+            3 => LoadStage::Converting,
+            4 => LoadStage::Thumbnail,
+            5 => LoadStage::Finalizing,
+            6 => LoadStage::Done,
+            _ => LoadStage::Start,
+        }
+    }
 }
 
 // fn deinterleave_samples<S>(interleaved_samples: &[S], nr_channels: usize) -> Result<Vec<Vec<S>>>

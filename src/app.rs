@@ -31,26 +31,7 @@ impl Default for App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // static ONCE: std::sync::Once = std::sync::Once::new();
-        // ONCE.call_once(|| {
-        //     dbg!(&ctx.style().spacing);
-        // });
-
-        // if !ctx.input().raw.dropped_files.is_empty() {
-        //     println!("files dropped");
-
-        //     let dropped_files = ctx
-        //         .input()
-        //         .raw
-        //         .dropped_files
-        //         .clone()
-        //         .iter()
-        //         .map(|file| file.path.as_ref().unwrap().clone())
-        //         .collect::<Vec<PathBuf>>();
-
-        //     dbg!(&dropped_files);
-        // }
-        // self.view.ui(ctx, frame);
+        // draw ui, and measure frame time
         self.view.ui_measured(ctx, frame);
     }
 
@@ -76,8 +57,6 @@ impl App {
                     .actions
                     .push(Action::OpenFile(file_read_config.clone()));
             }
-            model.actions.push(Action::ZoomToFull);
-            model.actions.push(Action::FillScreenHeight);
         };
         match args.command {
             None => {
@@ -115,43 +94,4 @@ impl App {
             args: None,
         }
     }
-    // pub fn new(_cc: &eframe::CreationContext<'_>, cli_config: AppCliConfig, user_config: model::Config) -> Self {
-    //     let model = model::SharedModel::default();
-
-    //     model.borrow_mut().user_config = user_config;
-
-    //     // Diff gets precedence over audio files, we ignore any extra audio files if we have the
-    //     // diff option set
-    //     if let Some(ref diff_files) = cli_config.diff {
-    //         for diff_file in diff_files {
-    //             model
-    //                 .borrow_mut()
-    //                 .add_wav_file(&diff_file.path, diff_file.channel, diff_file.offset)
-    //                 .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
-    //         }
-    //     } else {
-    //         for path in &cli_config.audio_files {
-    //             model
-    //                 .borrow_mut()
-    //                 .add_wav_file(path, None, None)
-    //                 .unwrap_or_else(|err| eprintln!("Failed to add wav file: {}", err));
-    //         }
-    //     }
-
-    //     println!(
-    //         "app after adding files model.borrow().tracks.len(): {}",
-    //         model.borrow().tracks.len()
-    //     );
-
-    //     Self {
-    //         model: model.clone(),
-    //         view: view::View::new(model),
-    //         cli_config: Some(cli_config),
-    //         args: None,
-    //     }
-    // }
-
-    // fn save_user_config(&mut self) {
-    //     self.user_config.save_to_storage();
-    // }
 }

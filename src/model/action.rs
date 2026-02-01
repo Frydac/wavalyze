@@ -59,11 +59,31 @@ impl Action {
                 model.tracks2.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
-                model
-                    .load_wav(read_config)
-                    .context("Action::OpenFile failed")?;
-                // model.load_wav(read_config)?;
-                model.actions.push(Action::ZoomToFull);
+                model.pending_loads = model.pending_loads.saturating_add(1);
+                let load_id = model.next_load_id;
+                model.next_load_id = model.next_load_id.saturating_add(1);
+                let progress = std::sync::Arc::new(crate::wav::read::LoadProgressAtomic::new());
+                model.load_progress.insert(
+                    load_id,
+                    crate::model::LoadProgressEntry {
+                        path: read_config.filepath.clone(),
+                        handle: progress.clone(),
+                    },
+                );
+                let tx = model.load_results_tx.clone();
+                let read_config = read_config.clone();
+                std::thread::spawn(move || {
+                    let result = crate::wav::read::read_to_loaded_file_with_progress(
+                        &read_config,
+                        load_id,
+                        Some(progress.as_ref()),
+                    )
+                    .context("Action::OpenFile failed");
+                    let _ = tx.send(match result {
+                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
+                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
+                    });
+                });
             }
             Action::LoadDemo => {
                 model
