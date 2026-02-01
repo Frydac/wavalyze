@@ -115,7 +115,7 @@ impl Time {
 
 // TODO: handle unwraps
 impl Time {
-    pub fn shift_x(&mut self, delta_pixels: PixelCoord) {
+    pub fn pan_x(&mut self, delta_pixels: PixelCoord) {
         if let Some(time_line) = self.time_line.as_mut() {
             let delta_sample_ixs = delta_pixels * time_line.samples_per_pixel() as f32;
             time_line.ix_start += delta_sample_ixs as f64;

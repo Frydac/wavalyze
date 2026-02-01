@@ -106,7 +106,7 @@ impl Tracks {
         }
     }
 
-    pub fn shift_track_value_range(&mut self, track_id: TrackId, delta_pixels: f32) -> Result<()> {
+    pub fn pan_track_value_range(&mut self, track_id: TrackId, delta_pixels: f32) -> Result<()> {
         let track = self
             .tracks
             .get_mut(track_id)
@@ -122,7 +122,7 @@ impl Tracks {
         };
 
         let delta_val = ruler::value::pixels_to_value_delta(delta_pixels, val_rng, screen_rect);
-        let shifted = ruler::value::shift_val_range(val_rng, delta_val);
+        let shifted = ruler::value::pan_val_range(val_rng, delta_val);
         let mut sample_rect = sample_rect;
         sample_rect.set_val_rng(shifted);
         track.set_sample_rect(sample_rect);

@@ -223,7 +223,7 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                     let scroll = i.raw_scroll_delta;
                     if scroll.x != 0.0 {
                         let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                        model.actions.push(Action::ShiftX {
+                        model.actions.push(Action::PanX {
                             nr_pixels: scroll.x,
                         });
                     }

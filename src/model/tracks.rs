@@ -149,14 +149,14 @@ impl Tracks {
 }
 
 impl Tracks {
-    pub fn shift_x(&mut self, pixel_delta: f32) -> Result<()> {
+    pub fn pan_x(&mut self, pixel_delta: f32) -> Result<()> {
         for track in self.tracks.values_mut() {
-            track.shift_sample_rect_x(pixel_delta)?;
+            track.pan_sample_rect_x(pixel_delta)?;
         }
         Ok(())
     }
 
-    pub fn shift_y(&mut self, pixel_delta: f32) -> Result<()> {
+    pub fn pan_y(&mut self, pixel_delta: f32) -> Result<()> {
         todo!()
     }
 

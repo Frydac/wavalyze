@@ -445,7 +445,7 @@ impl Track {
     }
 
     // move sample rect by dx_pixels
-    pub fn shift_sample_rect_x(&mut self, dx_pixels: f32) -> Result<()> {
+    pub fn pan_sample_rect_x(&mut self, dx_pixels: f32) -> Result<()> {
         if dx_pixels == 0.0 {
             return Ok(());
         }
@@ -453,7 +453,7 @@ impl Track {
             return Ok(());
         };
         let dx_samples = self.view_x_to_sample_ix(dx_pixels);
-        self.sample_rect.shift_x(dx_samples);
+        self.sample_rect.pan_x(dx_samples);
         self.update_view_buffer()
     }
 

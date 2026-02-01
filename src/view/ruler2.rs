@@ -64,7 +64,7 @@ pub fn handle_drag_interaction(
 ) {
     if response.dragged() {
         let delta = ui.input(|i| i.pointer.delta());
-        actions.push(model::action::Action::ShiftX {
+        actions.push(model::action::Action::PanX {
             nr_pixels: -delta.x,
         });
     }
@@ -81,7 +81,7 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
             if i.modifiers.shift && !i.modifiers.ctrl {
                 let scroll = i.raw_scroll_delta;
                 if scroll.x != 0.0 {
-                    actions.push(model::action::Action::ShiftX {
+                    actions.push(model::action::Action::PanX {
                         nr_pixels: scroll.x,
                     });
                 }

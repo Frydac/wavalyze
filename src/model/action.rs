@@ -19,7 +19,7 @@ pub enum Action {
     FillScreenHeight,
 
     /// Move the _view_ of all the tracks to the lef (negative value) or right (positive value)
-    ShiftX {
+    PanX {
         nr_pixels: PixelCoord,
     },
     /// Zoom the _view_ of all the tracks, center_x should be absolute x-position of the
@@ -30,7 +30,7 @@ pub enum Action {
     },
 
     /// Move one track up or down wrt to the sample values
-    ShiftY {
+    PanY {
         track_id: TrackId,
         nr_pixels: PixelCoord,
     },
@@ -149,8 +149,8 @@ impl Action {
                 let min_height = model.user_config.track.min_height;
                 model.tracks2.fill_screen_height(min_height)?;
             }
-            Action::ShiftX { nr_pixels } => {
-                model.tracks2.ruler.shift_x(*nr_pixels);
+            Action::PanX { nr_pixels } => {
+                model.tracks2.ruler.pan_x(*nr_pixels);
             }
             Action::ZoomX {
                 nr_pixels,
@@ -158,13 +158,11 @@ impl Action {
             } => {
                 model.tracks2.ruler.zoom_x(*nr_pixels, *center_x);
             }
-            Action::ShiftY {
+            Action::PanY {
                 track_id,
                 nr_pixels,
             } => {
-                model
-                    .tracks2
-                    .shift_track_value_range(*track_id, *nr_pixels)?;
+                model.tracks2.pan_track_value_range(*track_id, *nr_pixels)?;
             }
             Action::ZoomY {
                 track_id,

@@ -80,7 +80,7 @@ impl Track {
                 if i.modifiers.shift {
                     let scroll = i.raw_scroll_delta;
                     if scroll.x != 0.0 {
-                        let _ = model.tracks.shift_x(scroll.x);
+                        let _ = model.tracks.pan_x(scroll.x);
                     }
                 } else if i.modifiers.ctrl {
                     let scroll = i.raw_scroll_delta;
@@ -496,7 +496,7 @@ impl MouseHover {
                 if i.modifiers.shift {
                     let scroll = i.raw_scroll_delta;
                     if scroll.x != 0.0 {
-                        model.tracks.shift_x(scroll.x).unwrap();
+                        model.tracks.pan_x(scroll.x).unwrap();
                     }
                 } else if i.modifiers.ctrl {
                     let scroll = i.raw_scroll_delta;

@@ -75,7 +75,7 @@ pub fn ui(
     );
     if response.dragged() {
         let delta = ui.input(|i| i.pointer.delta());
-        actions.push(Action::ShiftY {
+        actions.push(Action::PanY {
             track_id,
             nr_pixels: delta.y,
         });

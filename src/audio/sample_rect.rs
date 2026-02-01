@@ -24,7 +24,7 @@ impl SampleRect {
         self.ix_rng.is_empty()
     }
 
-    pub fn shift_x(&mut self, dx: audio::SampleIx) -> &Self {
+    pub fn pan_x(&mut self, dx: audio::SampleIx) -> &Self {
         self.ix_rng.shift(dx);
         self
     }

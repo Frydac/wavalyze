@@ -25,7 +25,7 @@ pub fn val_range_len(val_range: sample::ValRangeE) -> f64 {
 }
 
 /// Shift a value range by a floating-point delta.
-pub fn shift_val_range(val_range: sample::ValRangeE, delta: f64) -> sample::ValRangeE {
+pub fn pan_val_range(val_range: sample::ValRangeE, delta: f64) -> sample::ValRangeE {
     match val_range {
         sample::ValRangeE::PCM16(mut range) => {
             let shift = delta.round() as i16;
