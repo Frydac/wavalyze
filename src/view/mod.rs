@@ -75,7 +75,7 @@ impl View {
 
         self.ui_loading_modal(ctx);
 
-        self.handle_drag_and_drop_into_app(ctx);
+        let had_dropped_files = self.handle_drag_and_drop_into_app(ctx);
 
         // We don't stop the program when something fails, like opening a wav file.
         if let Err(e) = self.model.process_actions() {
@@ -150,10 +150,33 @@ impl View {
 
     /// Handle drag-and-drop wav files
     /// TODO: use actions
-    fn handle_drag_and_drop_into_app(&mut self, ctx: &egui::Context) {
+    fn handle_drag_and_drop_into_app(&mut self, ctx: &egui::Context) -> bool {
+        let mut had_dropped_files = false;
         ctx.input(|i| {
             for file in &i.raw.dropped_files {
-                if let Some(path) = &file.path
+                had_dropped_files = true;
+                if cfg!(target_arch = "wasm32") {
+                    if let Some(bytes) = &file.bytes {
+                        let name = if file.name.is_empty() {
+                            None
+                        } else {
+                            Some(file.name.clone())
+                        };
+                        let is_wav_by_name = name
+                            .as_deref()
+                            .map(|name| name.to_lowercase().ends_with(".wav"))
+                            .unwrap_or(false);
+                        let is_wav_by_header = bytes.len() >= 12
+                            && &bytes[0..4] == b"RIFF"
+                            && &bytes[8..12] == b"WAVE";
+                        if is_wav_by_name || is_wav_by_header {
+                            let label = name.clone().or_else(|| Some("dropped.wav".to_string()));
+                            self.model.actions.push(Action::OpenFileBytes(
+                                wav::ReadConfigBytes::new(label, bytes.to_vec()),
+                            ));
+                        }
+                    }
+                } else if let Some(path) = &file.path
                     && path.extension() == Some(std::ffi::OsStr::new("wav"))
                 {
                     self.model
@@ -162,6 +185,7 @@ impl View {
                 }
             }
         });
+        had_dropped_files
     }
 
     fn ui_top_panel_menu_bar(&mut self, ctx: &egui::Context) {
@@ -244,10 +268,13 @@ impl View {
         }
         // render view tracks in specified order
         {
+            if self.tracks.is_empty() {
+                return;
+            }
             // let rect_height = ui.available_height() - 20.0;
-            let rect_height = ui.available_height();
+            let rect_height = ui.available_height().max(0.0);
             let height_track = rect_height / self.tracks.len() as f32;
-            let width_track = ui.available_width();
+            let width_track = ui.available_width().max(0.0);
             let min_height_track = 150.0;
             let height_track = height_track.max(min_height_track);
 
@@ -274,14 +301,17 @@ impl View {
 
     fn ui_central_panel(&mut self, ctx: &egui::Context) -> Result<()> {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.allocate_ui([ui.available_width(), 50.0].into(), |ui| {
+            let top_width = ui.available_width().max(0.0);
+            ui.allocate_ui([top_width, 50.0].into(), |ui| {
                 self.ui_top_panel_tool_bar(ui, ctx);
                 // ui.painter().rect(ui.min_rect().shrink(1.0), 0.0, egui::Color32::TRANSPARENT, egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
                 // ui.separator();
             });
 
-            ui.allocate_ui([ui.available_width(), 50.0].into(), |ui| {
+            let ruler_width = ui.available_width().max(0.0);
+            ui.allocate_ui([ruler_width, 50.0].into(), |ui| {
                 let size = ui.available_size();
+                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_min_size(size);
                 let _ = ruler2::ui(ui, &mut self.model);
             });
@@ -291,9 +321,10 @@ impl View {
             // let _ = ruler2::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let size = ui.available_size();
+                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 self.model.tracks2.available_height = size.y;
                 ui.allocate_ui(size, |ui| {
-                    ui.set_min_width(size.x);
+                    ui.set_min_width(size.x.max(0.0));
 
                     // let resp = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height() - 20.0), egui::Sense::hover());
                     let _ = self.ui_tracks2(ui);

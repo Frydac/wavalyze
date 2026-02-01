@@ -9,8 +9,12 @@ use hound;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+#[cfg(target_arch = "wasm32")]
+use std::{cell::Cell, rc::Rc};
 use thousands::Separable;
 
 pub type ChIx = usize; // Channel index
@@ -26,6 +30,20 @@ pub struct ReadConfig {
     /// Range of samples indices per channel to read, default: all
     // pub sample_range: Option<sample::IxRange>,
     pub sample_range: sample::OptIxRange,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReadConfigBytes {
+    pub name: Option<String>,
+    pub bytes: Vec<u8>,
+    pub ch_ixs: Option<Vec<ChIx>>,
+    pub sample_range: sample::OptIxRange,
+}
+
+#[derive(Debug, Clone)]
+struct ReadOptions {
+    ch_ixs: Option<Vec<ChIx>>,
+    sample_range: sample::OptIxRange,
 }
 
 #[derive(Debug)]
@@ -64,12 +82,35 @@ pub enum LoadStage {
 
 #[derive(Debug)]
 pub struct LoadProgressAtomic {
+    #[cfg(target_arch = "wasm32")]
+    stage: Cell<u8>,
+    #[cfg(not(target_arch = "wasm32"))]
     stage: AtomicU8,
+    #[cfg(target_arch = "wasm32")]
+    current: Cell<u64>,
+    #[cfg(not(target_arch = "wasm32"))]
     current: AtomicU64,
+    #[cfg(target_arch = "wasm32")]
+    total: Cell<u64>,
+    #[cfg(not(target_arch = "wasm32"))]
     total: AtomicU64,
 }
 
+#[cfg(target_arch = "wasm32")]
+pub type LoadProgressHandle = Rc<LoadProgressAtomic>;
+#[cfg(not(target_arch = "wasm32"))]
 pub type LoadProgressHandle = Arc<LoadProgressAtomic>;
+
+pub fn new_load_progress_handle() -> LoadProgressHandle {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Rc::new(LoadProgressAtomic::new())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Arc::new(LoadProgressAtomic::new())
+    }
+}
 
 impl ReadConfig {
     pub fn new(filepath: impl Into<PathBuf>) -> Self {
@@ -95,6 +136,49 @@ impl ReadConfig {
     }
 }
 
+impl ReadConfigBytes {
+    pub fn new(name: Option<String>, bytes: Vec<u8>) -> Self {
+        Self {
+            name,
+            bytes,
+            ch_ixs: None,
+            sample_range: sample::OptIxRange::default(),
+        }
+    }
+
+    pub fn with_ch_ixs(self, ch_ixs: impl Into<Vec<ChIx>>) -> Self {
+        Self {
+            ch_ixs: Some(ch_ixs.into()),
+            ..self
+        }
+    }
+
+    pub fn with_sample_range(self, sample_range: sample::OptIxRange) -> Self {
+        Self {
+            sample_range,
+            ..self
+        }
+    }
+}
+
+impl From<&ReadConfig> for ReadOptions {
+    fn from(value: &ReadConfig) -> Self {
+        Self {
+            ch_ixs: value.ch_ixs.clone(),
+            sample_range: value.sample_range,
+        }
+    }
+}
+
+impl From<&ReadConfigBytes> for ReadOptions {
+    fn from(value: &ReadConfigBytes) -> Self {
+        Self {
+            ch_ixs: value.ch_ixs.clone(),
+            sample_range: value.sample_range,
+        }
+    }
+}
+
 // TODO: think of better name :)
 pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> {
     let loaded = read_to_loaded_file(config)?;
@@ -110,19 +194,57 @@ pub fn read_to_loaded_file_with_progress(
     load_id: LoadId,
     progress: Option<&LoadProgressAtomic>,
 ) -> Result<LoadedFile> {
-    if let Some(progress) = progress {
-        progress.set_stage(LoadStage::Start, 0);
-    }
     let Some(filepath) = config.filepath.to_str() else {
         return Err(anyhow::anyhow!("Invalid filepath"));
     };
+    let options = ReadOptions::from(config);
+    let reader = hound::WavReader::open(&config.filepath)
+        .map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
+    read_to_loaded_file_from_reader(
+        reader,
+        &options,
+        load_id,
+        progress,
+        filepath,
+        Some(PathBuf::from(&config.filepath)),
+    )
+}
 
-    tracing::trace!("Start reading wav file '{}'", filepath);
+pub fn read_bytes_to_loaded_file_with_progress(
+    config: &ReadConfigBytes,
+    load_id: LoadId,
+    progress: Option<&LoadProgressAtomic>,
+) -> Result<LoadedFile> {
+    let options = ReadOptions::from(config);
+    let label = config.name.as_deref().unwrap_or("bytes");
+    let reader = hound::WavReader::new(std::io::Cursor::new(&config.bytes))
+        .map_err(|err| anyhow::anyhow!("Failed to open wav bytes '{}': {}", label, err))?;
+    read_to_loaded_file_from_reader(
+        reader,
+        &options,
+        load_id,
+        progress,
+        label,
+        config.name.as_deref().map(PathBuf::from),
+    )
+}
+
+fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
+    mut reader: hound::WavReader<R>,
+    options: &ReadOptions,
+    load_id: LoadId,
+    progress: Option<&LoadProgressAtomic>,
+    source_label: &str,
+    path: Option<PathBuf>,
+) -> Result<LoadedFile> {
+    if let Some(progress) = progress {
+        progress.set_stage(LoadStage::Start, 0);
+    }
+
+    tracing::trace!("Start reading wav file '{}'", source_label);
+    #[cfg(not(target_arch = "wasm32"))]
     let start = std::time::Instant::now();
 
-    // open wav file with hound
-    let mut reader = hound::WavReader::open(&config.filepath)
-        .map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
     let spec = reader.spec();
     tracing::trace!("{spec:?}");
     tracing::trace!(
@@ -135,7 +257,7 @@ pub fn read_to_loaded_file_with_progress(
     let chix_buffers: BTreeMap<ChIx, BufferE> = match spec.sample_format {
         hound::SampleFormat::Float => match spec.bits_per_sample {
             bit_depth if bit_depth <= 32 => convert_samples(
-                read_to_buffers::<f32>(&mut reader, config, progress)?,
+                read_to_buffers::<f32, _>(&mut reader, options, progress)?,
                 BufferE::F32,
             ),
             _ => {
@@ -147,11 +269,11 @@ pub fn read_to_loaded_file_with_progress(
         },
         hound::SampleFormat::Int => match spec.bits_per_sample {
             bit_depth if bit_depth <= 16 => convert_samples(
-                read_to_buffers::<i16>(&mut reader, config, progress)?,
+                read_to_buffers::<i16, _>(&mut reader, options, progress)?,
                 BufferE::I16,
             ),
             bit_depth if bit_depth <= 32 => convert_samples(
-                read_to_buffers::<i32>(&mut reader, config, progress)?,
+                read_to_buffers::<i32, _>(&mut reader, options, progress)?,
                 BufferE::I32,
             ),
             _ => {
@@ -175,11 +297,14 @@ pub fn read_to_loaded_file_with_progress(
         sample_rate: spec.sample_rate,
         bit_depth: spec.bits_per_sample,
         sample_type: spec.sample_format.into(),
-        path: Some(PathBuf::from(&filepath)),
+        path,
         nr_samples: reader.duration() as u64,
     };
 
+    #[cfg(not(target_arch = "wasm32"))]
     tracing::trace!("Read wav data in {:?}: {}", start.elapsed(), file);
+    #[cfg(target_arch = "wasm32")]
+    tracing::trace!("Read wav data: {}", file);
 
     Ok(file)
 }
@@ -196,17 +321,18 @@ fn convert_samples<T>(
 }
 
 // read samples into buffers knowing the sample type S
-fn read_to_buffers<S>(
-    reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>,
-    config: &ReadConfig,
+fn read_to_buffers<S, R>(
+    reader: &mut hound::WavReader<R>,
+    options: &ReadOptions,
     progress: Option<&LoadProgressAtomic>,
 ) -> Result<BTreeMap<ChIx, Buffer<S>>>
 where
+    R: std::io::Read + std::io::Seek,
     S: crate::audio::sample2::Sample + hound::Sample,
 {
     let nr_channels = reader.spec().channels as usize;
     let reader_duration = reader.duration() as i64;
-    let sample_range = config.sample_range.to_ix_range(0, reader_duration);
+    let sample_range = options.sample_range.to_ix_range(0, reader_duration);
     anyhow::ensure!(
         sample_range.end <= reader_duration,
         "sample range end {} is larger than file duration {}",
@@ -246,7 +372,7 @@ where
     // channel indices we want to deinterleave
     // NOTE: this gets a refernce in to the Option if it has a value, otherwise it gets an owned
     // value for all channels
-    let ch_ixs: Cow<'_, [ChIx]> = match config.ch_ixs.as_deref() {
+    let ch_ixs: Cow<'_, [ChIx]> = match options.ch_ixs.as_deref() {
         Some(v) => Cow::Borrowed(v),
         None => Cow::Owned((0..nr_channels).collect()),
     };
@@ -387,25 +513,59 @@ impl LoadedFile {
 impl LoadProgressAtomic {
     pub fn new() -> Self {
         Self {
+            #[cfg(target_arch = "wasm32")]
+            stage: Cell::new(LoadStage::Start as u8),
+            #[cfg(not(target_arch = "wasm32"))]
             stage: AtomicU8::new(LoadStage::Start as u8),
+            #[cfg(target_arch = "wasm32")]
+            current: Cell::new(0),
+            #[cfg(not(target_arch = "wasm32"))]
             current: AtomicU64::new(0),
+            #[cfg(target_arch = "wasm32")]
+            total: Cell::new(0),
+            #[cfg(not(target_arch = "wasm32"))]
             total: AtomicU64::new(0),
         }
     }
 
     pub fn set_stage(&self, stage: LoadStage, total: u64) {
-        self.stage.store(stage as u8, Ordering::Release);
-        self.total.store(total, Ordering::Release);
-        self.current.store(0, Ordering::Release);
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.stage.set(stage as u8);
+            self.total.set(total);
+            self.current.set(0);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.stage.store(stage as u8, Ordering::Release);
+            self.total.store(total, Ordering::Release);
+            self.current.store(0, Ordering::Release);
+        }
     }
 
     pub fn set_current(&self, current: u64) {
-        self.current.store(current, Ordering::Release);
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.current.set(current);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.current.store(current, Ordering::Release);
+        }
     }
 
     pub fn snapshot(&self) -> (LoadStage, u64, u64) {
+        #[cfg(target_arch = "wasm32")]
+        let stage = LoadStage::from_u8(self.stage.get());
+        #[cfg(not(target_arch = "wasm32"))]
         let stage = LoadStage::from_u8(self.stage.load(Ordering::Acquire));
+        #[cfg(target_arch = "wasm32")]
+        let current = self.current.get();
+        #[cfg(not(target_arch = "wasm32"))]
         let current = self.current.load(Ordering::Acquire);
+        #[cfg(target_arch = "wasm32")]
+        let total = self.total.get();
+        #[cfg(not(target_arch = "wasm32"))]
         let total = self.total.load(Ordering::Acquire);
         (stage, current, total)
     }

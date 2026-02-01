@@ -13,12 +13,13 @@ const HEADER_HEIGHT: f32 = 20.0;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     let min_height: f32 = model.user_config.track.min_height;
-    let width = ui.available_width();
+    let width = ui.available_width().max(0.0);
     let width_info = model.user_config.tracks_width_info.min(width);
     let height = model
         .tracks2
         .get_track_height(track_id)
         .unwrap_or(min_height);
+    let height = height.max(0.0);
 
     // reserves space in the parent ui, moves the parent cursor
     let (track_rect, _) =
@@ -37,7 +38,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
         ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
 
         // Draw track info left of waveform
-        let info_size = [width_info, height].into();
+        let info_size = [width_info.max(0.0), height.max(0.0)].into();
         ui.allocate_ui(info_size, |ui| {
             ui.set_max_size(info_size);
             ui.set_min_size(info_size);
@@ -45,7 +46,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
 
             // sample value ruler
             let ruler_width = 100.0;
-            let ruler_height = height - HEADER_HEIGHT;
+            let ruler_height = (height - HEADER_HEIGHT).max(0.0);
             let ruler_min = info_rect.max - egui::vec2(ruler_width, ruler_height);
             let ruler_size = egui::vec2(ruler_width, ruler_height);
             let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
@@ -61,19 +62,23 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
 
             let size = ui.available_size();
+            let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
             ui.set_max_size(size);
             ui.set_min_size(size);
             let rect_wf_group = ui.min_rect();
 
-            ui.allocate_ui([size.x, HEADER_HEIGHT].into(), |ui| {
+            ui.allocate_ui([size.x.max(0.0), HEADER_HEIGHT].into(), |ui| {
                 let size = ui.available_size();
+                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_max_size(size);
                 ui.set_min_size(size);
                 let _ = ui_header(ui, model, track_id);
             });
 
-            ui.allocate_ui([size.x, size.y - HEADER_HEIGHT].into(), |ui| {
+            let waveform_height = (size.y - HEADER_HEIGHT).max(0.0);
+            ui.allocate_ui([size.x.max(0.0), waveform_height].into(), |ui| {
                 let size = ui.available_size();
+                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_max_size(size);
                 ui.set_min_size(size);
                 let waveform_rect = ui.min_rect();

@@ -8,6 +8,7 @@ pub enum Action {
     RemoveTrack(TrackId),
 
     OpenFile(wav::ReadConfig),
+    OpenFileBytes(wav::ReadConfigBytes),
     LoadDemo,
 
     /// Set x-zoom so the longest track is full width
@@ -62,7 +63,7 @@ impl Action {
                 model.pending_loads = model.pending_loads.saturating_add(1);
                 let load_id = model.next_load_id;
                 model.next_load_id = model.next_load_id.saturating_add(1);
-                let progress = std::sync::Arc::new(crate::wav::read::LoadProgressAtomic::new());
+                let progress = crate::wav::read::new_load_progress_handle();
                 model.load_progress.insert(
                     load_id,
                     crate::model::LoadProgressEntry {
@@ -72,6 +73,7 @@ impl Action {
                 );
                 let tx = model.load_results_tx.clone();
                 let read_config = read_config.clone();
+                #[cfg(not(target_arch = "wasm32"))]
                 std::thread::spawn(move || {
                     let result = crate::wav::read::read_to_loaded_file_with_progress(
                         &read_config,
@@ -84,6 +86,64 @@ impl Action {
                         Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
                     });
                 });
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let result = crate::wav::read::read_to_loaded_file_with_progress(
+                        &read_config,
+                        load_id,
+                        Some(progress.as_ref()),
+                    )
+                    .context("Action::OpenFile failed");
+                    let _ = tx.send(match result {
+                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
+                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
+                    });
+                }
+            }
+            Action::OpenFileBytes(read_config) => {
+                model.pending_loads = model.pending_loads.saturating_add(1);
+                let load_id = model.next_load_id;
+                model.next_load_id = model.next_load_id.saturating_add(1);
+                let progress = crate::wav::read::new_load_progress_handle();
+                let label = read_config
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "file".to_string());
+                model.load_progress.insert(
+                    load_id,
+                    crate::model::LoadProgressEntry {
+                        path: std::path::PathBuf::from(label),
+                        handle: progress.clone(),
+                    },
+                );
+                let tx = model.load_results_tx.clone();
+                let read_config = read_config.clone();
+                #[cfg(not(target_arch = "wasm32"))]
+                std::thread::spawn(move || {
+                    let result = crate::wav::read::read_bytes_to_loaded_file_with_progress(
+                        &read_config,
+                        load_id,
+                        Some(progress.as_ref()),
+                    )
+                    .context("Action::OpenFileBytes failed");
+                    let _ = tx.send(match result {
+                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
+                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
+                    });
+                });
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let result = crate::wav::read::read_bytes_to_loaded_file_with_progress(
+                        &read_config,
+                        load_id,
+                        Some(progress.as_ref()),
+                    )
+                    .context("Action::OpenFileBytes failed");
+                    let _ = tx.send(match result {
+                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
+                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
+                    });
+                }
             }
             Action::LoadDemo => {
                 model
