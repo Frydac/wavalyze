@@ -129,6 +129,32 @@ impl Tracks {
         Ok(())
     }
 
+    /// Reset the value range to full scale (pan/zoom reset) for a single track.
+    pub fn recenter_track_value_range(&mut self, track_id: TrackId) -> Result<()> {
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+        let mut sample_rect = track
+            .sample_rect
+            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        let Some(val_rng) = sample_rect.val_rng() else {
+            return Ok(());
+        };
+
+        sample_rect.set_val_rng(val_rng.min_max());
+        track.set_sample_rect(sample_rect);
+        Ok(())
+    }
+
+    /// Reset the value range to full scale (pan/zoom reset) for all tracks.
+    pub fn recenter_all_value_ranges(&mut self) -> Result<()> {
+        for track_id in self.tracks_order.clone() {
+            self.recenter_track_value_range(track_id)?;
+        }
+        Ok(())
+    }
+
     /// Update the sample ranges of all tracks to match the ruler zoom level
     /// Should be called after each change to the ruler zoom level/position
     /// TODO: enforce this somehow?

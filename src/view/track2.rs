@@ -167,6 +167,9 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                     if ui.button("x").clicked() {
                         model.actions.push(Action::RemoveTrack(track_id));
                     }
+                    if ui.button("center y").clicked() {
+                        model.actions.push(Action::RecenterY { track_id });
+                    }
                 });
             });
         });

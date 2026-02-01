@@ -34,6 +34,12 @@ pub enum Action {
         track_id: TrackId,
         nr_pixels: PixelCoord,
     },
+    /// Reset the sample value range to full-scale for a single track.
+    RecenterY {
+        track_id: TrackId,
+    },
+    /// Reset the sample value range to full-scale for all tracks.
+    RecenterYAll,
     /// Zoom the _view_ of the given track, center_y should be absolute y-position of the
     /// mouse/center
     ZoomY {
@@ -163,6 +169,12 @@ impl Action {
                 nr_pixels,
             } => {
                 model.tracks2.pan_track_value_range(*track_id, *nr_pixels)?;
+            }
+            Action::RecenterY { track_id } => {
+                model.tracks2.recenter_track_value_range(*track_id)?;
+            }
+            Action::RecenterYAll => {
+                model.tracks2.recenter_all_value_ranges()?;
             }
             Action::ZoomY {
                 track_id,

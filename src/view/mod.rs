@@ -195,6 +195,9 @@ impl View {
             if ui.button("fill screen height").clicked() {
                 self.model.actions.push(Action::FillScreenHeight);
             }
+            if ui.button("recenter y").clicked() {
+                self.model.actions.push(Action::RecenterYAll);
+            }
             if cfg!(target_arch = "wasm32") && ui.button("load demo").clicked() {
                 self.model.actions.push(Action::LoadDemo);
             }
