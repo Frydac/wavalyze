@@ -53,8 +53,6 @@ pub fn ui(
                 Pos2::new(rect.right(), y),
             ];
             painter.line_segment(line, minor_stroke);
-
-            draw_value_label(ui, rect, y, format_tick_label(value, val_rng));
         }
     }
 
@@ -67,9 +65,6 @@ pub fn ui(
             Pos2::new(rect.right(), zero_y),
         ];
         painter.line_segment(zero_line, zero_stroke);
-
-        // Label for zero tick.
-        draw_value_label(ui, rect, zero_y, format_tick_label(0.0, val_rng));
     }
 
     // Dragging the value ruler pans the value range of this track.
@@ -86,8 +81,10 @@ pub fn ui(
         });
     }
 
-    draw_hover_value(ui, hover_info, audio, track, track_id, rect);
-    draw_hover_value_from_y(ui, hover_info, track, rect);
+    let mut occupied: Vec<Rect> = Vec::new();
+    draw_hover_value_from_y(ui, hover_info, track, rect, &mut occupied);
+    draw_hover_value(ui, hover_info, audio, track, track_id, rect, &mut occupied);
+    draw_lattice_labels(ui, rect, val_rng, &mut occupied);
 }
 
 fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {
@@ -104,7 +101,23 @@ fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {
     }
 }
 
-fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) {
+fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) -> Rect {
+    let (text_rect, galleys, color) = layout_value_label(ui, rect, y, &text);
+    let mut cur_y = text_rect.top();
+    for galley in galleys {
+        ui.painter()
+            .galley(Pos2::new(text_rect.left(), cur_y), galley.clone(), color);
+        cur_y += galley.size().y;
+    }
+    text_rect
+}
+
+fn layout_value_label(
+    ui: &egui::Ui,
+    rect: Rect,
+    y: f32,
+    text: &str,
+) -> (Rect, Vec<std::sync::Arc<egui::Galley>>, Color32) {
     let font_id = FontId::proportional(12.0);
     let color = ui.style().visuals.text_color();
     let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
@@ -113,18 +126,18 @@ fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) {
         .map(|line| ui.fonts(|fonts| fonts.layout_no_wrap(line.clone(), font_id.clone(), color)))
         .collect();
     let total_height: f32 = galleys.iter().map(|g| g.size().y).sum();
+    let max_width: f32 = galleys
+        .iter()
+        .map(|g| g.size().x)
+        .fold(0.0, |a, b| a.max(b));
     let mut text_pos = Pos2::new(rect.left() + 4.0, y - total_height / 2.0);
     if text_pos.y + total_height > rect.bottom() {
         text_pos.y = rect.bottom() - total_height - 2.0;
     } else if text_pos.y < rect.top() {
         text_pos.y = rect.top() + 2.0;
     }
-    let mut cur_y = text_pos.y;
-    for galley in galleys {
-        ui.painter()
-            .galley(Pos2::new(text_pos.x, cur_y), galley.clone(), color);
-        cur_y += galley.size().y;
-    }
+    let text_rect = Rect::from_min_size(text_pos, egui::vec2(max_width, total_height));
+    (text_rect, galleys, color)
 }
 
 fn draw_hover_value(
@@ -134,6 +147,7 @@ fn draw_hover_value(
     track: &Track,
     track_id: TrackId,
     rect: Rect,
+    occupied: &mut Vec<Rect>,
 ) {
     let HoverInfoE::IsHovered(hover_info) = hover_info else {
         return;
@@ -233,10 +247,17 @@ fn draw_hover_value(
     ];
     ui.painter()
         .line_segment(tick_line, Stroke::new(1.0, Color32::LIGHT_BLUE));
-    draw_value_label(ui, rect, y, label);
+    let label_rect = draw_value_label(ui, rect, y, label);
+    occupied.push(label_rect);
 }
 
-fn draw_hover_value_from_y(ui: &egui::Ui, hover_info: &HoverInfoE, track: &Track, rect: Rect) {
+fn draw_hover_value_from_y(
+    ui: &egui::Ui,
+    hover_info: &HoverInfoE,
+    track: &Track,
+    rect: Rect,
+    occupied: &mut Vec<Rect>,
+) {
     let HoverInfoE::IsHovered(hover_info) = hover_info else {
         return;
     };
@@ -325,5 +346,28 @@ fn draw_hover_value_from_y(ui: &egui::Ui, hover_info: &HoverInfoE, track: &Track
     let tick_color = ui.style().visuals.text_color();
     ui.painter()
         .line_segment(tick_line, Stroke::new(1.0, tick_color));
-    draw_value_label(ui, rect, y_ruler, label);
+    let label_rect = draw_value_label(ui, rect, y_ruler, label);
+    occupied.push(label_rect);
+}
+
+fn draw_lattice_labels(
+    ui: &egui::Ui,
+    rect: Rect,
+    val_rng: sample::ValRangeE,
+    occupied: &mut Vec<Rect>,
+) {
+    for value in [-1.0_f32, -0.5_f32, 0.0_f32, 0.5_f32, 1.0_f32] {
+        let Some(y) = sample_value_to_screen_y_e(value, val_rng, rect.into()) else {
+            continue;
+        };
+        if (rect.top()..=rect.bottom()).contains(&y) {
+            let text = format_tick_label(value, val_rng);
+            let (label_rect, _galleys, _color) = layout_value_label(ui, rect, y, &text);
+            if occupied.iter().any(|r| r.intersects(label_rect)) {
+                continue;
+            }
+            draw_value_label(ui, rect, y, text);
+            occupied.push(label_rect);
+        }
+    }
 }
