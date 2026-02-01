@@ -1,6 +1,8 @@
 use crate::audio::sample;
 use crate::model::hover_info::HoverInfoE;
-use crate::model::ruler::{sample_value_to_screen_y, sample_value_to_screen_y_e};
+use crate::model::ruler::{
+    sample_value_to_screen_y, sample_value_to_screen_y_e, screen_y_to_sample_value,
+};
 use crate::model::track2::Track;
 use crate::model::{Action, track2::TrackId};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
@@ -33,7 +35,7 @@ pub fn ui(
     let painter = ui.painter();
     let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
     let minor_stroke = Stroke::new(stroke.width, stroke.color.linear_multiply(0.6));
-    let zero_stroke = Stroke::new(stroke.width + 1.0, Color32::LIGHT_BLUE);
+    let zero_stroke = Stroke::new(stroke.width + 1.0, stroke.color);
 
     painter.rect(rect, 0.0, Color32::TRANSPARENT, stroke);
 
@@ -85,6 +87,7 @@ pub fn ui(
     }
 
     draw_hover_value(ui, hover_info, audio, track, track_id, rect);
+    draw_hover_value_from_y(ui, hover_info, track, rect);
 }
 
 fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {
@@ -104,15 +107,24 @@ fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {
 fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) {
     let font_id = FontId::proportional(12.0);
     let color = ui.style().visuals.text_color();
-    let galley = ui.fonts(|fonts| fonts.layout_no_wrap(text, font_id, color));
-    let text_size = galley.size();
-    let mut text_pos = Pos2::new(rect.left() + 4.0, y - text_size.y / 2.0);
-    if text_pos.y + text_size.y > rect.bottom() {
-        text_pos.y = rect.bottom() - text_size.y - 2.0;
+    let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
+    let galleys: Vec<_> = lines
+        .iter()
+        .map(|line| ui.fonts(|fonts| fonts.layout_no_wrap(line.clone(), font_id.clone(), color)))
+        .collect();
+    let total_height: f32 = galleys.iter().map(|g| g.size().y).sum();
+    let mut text_pos = Pos2::new(rect.left() + 4.0, y - total_height / 2.0);
+    if text_pos.y + total_height > rect.bottom() {
+        text_pos.y = rect.bottom() - total_height - 2.0;
     } else if text_pos.y < rect.top() {
         text_pos.y = rect.top() + 2.0;
     }
-    ui.painter().galley(text_pos, galley, color);
+    let mut cur_y = text_pos.y;
+    for galley in galleys {
+        ui.painter()
+            .galley(Pos2::new(text_pos.x, cur_y), galley.clone(), color);
+        cur_y += galley.size().y;
+    }
 }
 
 fn draw_hover_value(
@@ -124,39 +136,39 @@ fn draw_hover_value(
     rect: Rect,
 ) {
     let HoverInfoE::IsHovered(hover_info) = hover_info else {
-        tracing::debug!("value_ruler hover: not hovered");
         return;
     };
 
     let screen_rect = match track.screen_rect {
         Some(rect) => rect,
         None => {
-            tracing::debug!("value_ruler hover: no screen_rect");
             return;
         }
     };
-    let hover_pos = hover_info.screen_pos;
-    if !screen_rect.contains(hover_pos) {
-        tracing::debug!("value_ruler hover: hover pos outside screen_rect");
-        return;
-    }
     let sample_rect = match track.single.item.sample_rect() {
         Some(rect) => rect,
         None => {
-            tracing::debug!("value_ruler hover: no sample_rect");
             return;
         }
     };
 
+    let sample_view = match track.single.item.sample_view.as_ref() {
+        Some(view) => view,
+        None => {
+            return;
+        }
+    };
+    if sample_view.samples_per_pixel >= 0.5 {
+        return;
+    }
+
     let sample_ix = hover_info.sample_ix.round() as i64;
     if sample_ix < 0 {
-        tracing::debug!("value_ruler hover: negative sample_ix {}", sample_ix);
         return;
     }
     let sample_ix = sample_ix as usize;
     let buffer_id = track.single.item.buffer_id;
     let Ok(buffer) = audio.get_buffer(buffer_id) else {
-        tracing::debug!("value_ruler hover: buffer not found");
         return;
     };
     let ruler_rect: crate::rect::Rect = rect.into();
@@ -166,11 +178,9 @@ fn draw_hover_value(
             crate::audio::buffer2::BufferE::F32(buffer),
         ) => {
             let Some(val_rng) = rect.val_rng else {
-                tracing::debug!("value_ruler hover: no val_rng");
                 return;
             };
             let Some(sample_value) = buffer.data.get(sample_ix) else {
-                tracing::debug!("value_ruler hover: sample index out of range {}", sample_ix);
                 return;
             };
             (
@@ -183,11 +193,9 @@ fn draw_hover_value(
             crate::audio::buffer2::BufferE::I16(buffer),
         ) => {
             let Some(val_rng) = rect.val_rng else {
-                tracing::debug!("value_ruler hover: no val_rng");
                 return;
             };
             let Some(sample_value) = buffer.data.get(sample_ix) else {
-                tracing::debug!("value_ruler hover: sample index out of range {}", sample_ix);
                 return;
             };
             (
@@ -200,11 +208,9 @@ fn draw_hover_value(
             crate::audio::buffer2::BufferE::I32(buffer),
         ) => {
             let Some(val_rng) = rect.val_rng else {
-                tracing::debug!("value_ruler hover: no val_rng");
                 return;
             };
             let Some(sample_value) = buffer.data.get(sample_ix) else {
-                tracing::debug!("value_ruler hover: sample index out of range {}", sample_ix);
                 return;
             };
             (
@@ -215,16 +221,9 @@ fn draw_hover_value(
         _ => return,
     };
     let Some(y) = y else {
-        tracing::debug!("value_ruler hover: failed to map value to y");
         return;
     };
     if y < rect.top() || y > rect.bottom() {
-        tracing::debug!(
-            "value_ruler hover: y out of rect {:.2} not in [{:.2}, {:.2}]",
-            y,
-            rect.top(),
-            rect.bottom()
-        );
         return;
     }
 
@@ -235,4 +234,96 @@ fn draw_hover_value(
     ui.painter()
         .line_segment(tick_line, Stroke::new(1.0, Color32::LIGHT_BLUE));
     draw_value_label(ui, rect, y, label);
+}
+
+fn draw_hover_value_from_y(ui: &egui::Ui, hover_info: &HoverInfoE, track: &Track, rect: Rect) {
+    let HoverInfoE::IsHovered(hover_info) = hover_info else {
+        return;
+    };
+
+    let screen_rect = match track.screen_rect {
+        Some(rect) => rect,
+        None => return,
+    };
+    let hover_pos = hover_info.screen_pos;
+    if !screen_rect.contains(hover_pos) {
+        return;
+    }
+
+    let sample_rect = match track.single.item.sample_rect() {
+        Some(rect) => rect,
+        None => return,
+    };
+
+    let ruler_rect: crate::rect::Rect = rect.into();
+    let hover_label = match sample_rect {
+        crate::audio::sample_rect2::SampleRectE::F32(rect_t) => {
+            let Some(val_rng) = rect_t.val_rng else {
+                return;
+            };
+            let Some(sample_value) = screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect)
+            else {
+                return;
+            };
+            let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
+                return;
+            };
+            let db = crate::audio::db::gain_to_db(sample_value.abs());
+            Some((y_ruler, format!("{sample_value:.3}\n{db:.0} dB")))
+        }
+        crate::audio::sample_rect2::SampleRectE::I16(rect_t) => {
+            let Some(val_rng) = rect_t.val_rng else {
+                return;
+            };
+            let Some(sample_value) = screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect)
+            else {
+                return;
+            };
+            let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
+                return;
+            };
+            let scaled = crate::audio::sample::convert::pcm162flt(sample_value) as f32;
+            let db = crate::audio::db::gain_to_db(scaled.abs());
+            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.0} dB")))
+        }
+        crate::audio::sample_rect2::SampleRectE::I32(rect_t) => {
+            let Some(val_rng) = rect_t.val_rng else {
+                return;
+            };
+            let Some(sample_value) = screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect)
+            else {
+                return;
+            };
+            let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
+                return;
+            };
+            let scaled = match sample_rect.val_rng() {
+                Some(sample::ValRangeE::PCM24(_)) => {
+                    crate::audio::sample::convert::pcm242flt(sample_value) as f32
+                }
+                Some(sample::ValRangeE::PCM32(_)) => {
+                    crate::audio::sample::convert::pcm322flt(sample_value) as f32
+                }
+                _ => sample_value as f32,
+            };
+            let db = crate::audio::db::gain_to_db(scaled.abs());
+            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.0} dB")))
+        }
+    };
+
+    let Some((y_ruler, label)) = hover_label else {
+        return;
+    };
+    if y_ruler < rect.top() || y_ruler > rect.bottom() {
+        return;
+    }
+
+    let tick_line = [
+        Pos2::new(rect.right() - 10.0, y_ruler),
+        Pos2::new(rect.right(), y_ruler),
+    ];
+    let tick_color = ui.style().visuals.text_color();
+    ui.painter()
+        .line_segment(tick_line, Stroke::new(1.0, tick_color));
+    draw_value_label(ui, rect, y_ruler, label);
 }
