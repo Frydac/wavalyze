@@ -137,41 +137,202 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
         // .inner_margin(ui.style().spacing.window_margin / 6.0)
         // .outer_margin(ui.style().spacing.window_margin / 6.0)
         .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            // ui.allocate_space(egui::vec2(ui.available_width(), 0.0));
+            let mut text = String::from("track header");
+            let mut hover_text = None;
+            let mut path_text = None;
+            let mut channel_text = None;
 
-            ui.horizontal(|ui| {
-                let mut text = String::from("track header");
-                let mut hover_text = None;
+            // TODO: store hover text in model.. *smh*
+            if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
+                let path = file
+                    .path
+                    .as_ref()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("unknown");
+                path_text = Some(path.to_string());
+                channel_text = Some(format!(" - ch {}", channel.ch_ix));
+                text = format!("{} - ch {}", path, channel.ch_ix);
+                hover_text = Some(format!("{file}"));
+            }
 
-                // TODO: store hover text in model.. *smh*
-                if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
-                    let path = file
-                        .path
-                        .as_ref()
-                        .and_then(|p| p.to_str())
-                        .unwrap_or("unknown");
-                    text = format!("{} - ch {}", path, channel.ch_ix);
-                    hover_text = Some(format!("{file}"));
-                }
+            let rect = ui.max_rect();
+            let rect = egui::Rect::from_min_size(
+                rect.min,
+                egui::vec2(rect.width().max(0.0), HEADER_HEIGHT),
+            );
+            ui.set_clip_rect(rect);
 
-                let label_resp = ui.label(text);
-                if let Some(hover_text) = hover_text {
-                    label_resp.on_hover_text(hover_text);
-                }
+            let font_id = ui
+                .style()
+                .text_styles
+                .get(&egui::TextStyle::Body)
+                .cloned()
+                .unwrap_or_else(|| egui::FontId::proportional(14.0));
+            let color = ui.style().visuals.text_color();
+            let padding = ui.spacing().button_padding;
+            let item_spacing = ui.spacing().item_spacing.x;
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.style_mut().spacing.window_margin = egui::Margin::same(4.0);
-                    if ui.button("x").clicked() {
-                        model.actions.push(Action::RemoveTrack(track_id));
-                    }
-                    if ui.button("center y").clicked() {
-                        model.actions.push(Action::RecenterY { track_id });
-                    }
-                });
-            });
+            let button_size = |label: &str| {
+                let text_size = ui
+                    .fonts(|fonts| fonts.layout_no_wrap(label.to_string(), font_id.clone(), color))
+                    .size();
+                egui::vec2(
+                    text_size.x + padding.x * 2.0,
+                    (text_size.y + padding.y * 2.0).min(HEADER_HEIGHT),
+                )
+            };
+
+            let mut right = rect.right();
+            let button_x_size = button_size("x");
+            let button_x_rect = egui::Rect::from_min_size(
+                egui::pos2(
+                    right - button_x_size.x,
+                    rect.center().y - button_x_size.y / 2.0,
+                ),
+                button_x_size,
+            );
+            right = button_x_rect.left() - item_spacing;
+
+            let button_center_size = button_size("center y");
+            let button_center_rect = egui::Rect::from_min_size(
+                egui::pos2(
+                    right - button_center_size.x,
+                    rect.center().y - button_center_size.y / 2.0,
+                ),
+                button_center_size,
+            );
+            right = button_center_rect.left() - item_spacing;
+
+            if ui.put(button_x_rect, egui::Button::new("x")).clicked() {
+                model.actions.push(Action::RemoveTrack(track_id));
+            }
+            if ui
+                .put(button_center_rect, egui::Button::new("center y"))
+                .clicked()
+            {
+                model.actions.push(Action::RecenterY { track_id });
+            }
+
+            let label_rect =
+                egui::Rect::from_min_max(rect.left_top(), egui::pos2(right, rect.bottom()));
+            let max_width = label_rect.width().max(0.0);
+            let display_text = if let (Some(path), Some(suffix)) = (path_text, channel_text) {
+                truncate_path_keep_basename_to_width(ui, &path, &suffix, max_width)
+            } else {
+                text
+            };
+            let galley = ui.fonts(|fonts| fonts.layout_no_wrap(display_text, font_id, color));
+            let text_pos = egui::pos2(
+                label_rect.left() + 2.0,
+                rect.center().y - galley.size().y / 2.0,
+            );
+            ui.painter().galley(text_pos, galley, color);
+            if let Some(hover_text) = hover_text {
+                ui.interact(
+                    label_rect,
+                    ui.id().with("header_label"),
+                    egui::Sense::hover(),
+                )
+                .on_hover_text(hover_text);
+            }
         });
     Ok(())
+}
+
+fn truncate_path_keep_basename_to_width(
+    ui: &egui::Ui,
+    path: &str,
+    suffix: &str,
+    max_width: f32,
+) -> String {
+    let font_id = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .cloned()
+        .unwrap_or_else(|| egui::FontId::proportional(14.0));
+    let color = ui.style().visuals.text_color();
+
+    let measure = |text: &str| -> f32 {
+        ui.fonts(|fonts| {
+            fonts
+                .layout_no_wrap(text.to_string(), font_id.clone(), color)
+                .size()
+                .x
+        })
+    };
+
+    let full = format!("{path}{suffix}");
+    if measure(&full) <= max_width {
+        return full;
+    }
+
+    let base = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let base_with_suffix = format!("{base}{suffix}");
+    if measure(&base_with_suffix) > max_width {
+        return truncate_basename_to_width(&measure, base, suffix, max_width);
+    }
+
+    let parent_len = path.len().saturating_sub(base.len());
+    let parent = &path[..parent_len];
+    truncate_parent_to_width(&measure, parent, base, suffix, max_width)
+}
+
+fn truncate_basename_to_width(
+    measure: &dyn Fn(&str) -> f32,
+    base: &str,
+    suffix: &str,
+    max_width: f32,
+) -> String {
+    let ellipsis = "...";
+    let base_chars: Vec<char> = base.chars().collect();
+    let mut lo = 0usize;
+    let mut hi = base_chars.len();
+
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let tail: String = base_chars[base_chars.len() - mid..].iter().collect();
+        let candidate = format!("{ellipsis}{tail}{suffix}");
+        if measure(&candidate) <= max_width {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    if lo == 0 {
+        return format!("{ellipsis}{suffix}");
+    }
+
+    let tail: String = base_chars[base_chars.len() - lo..].iter().collect();
+    format!("{ellipsis}{tail}{suffix}")
+}
+
+fn truncate_parent_to_width(
+    measure: &dyn Fn(&str) -> f32,
+    parent: &str,
+    base: &str,
+    suffix: &str,
+    max_width: f32,
+) -> String {
+    let ellipsis = "...";
+    let parent_chars: Vec<char> = parent.chars().collect();
+    let mut lo = 0usize;
+    let mut hi = parent_chars.len();
+
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let tail: String = parent_chars[parent_chars.len() - mid..].iter().collect();
+        let candidate = format!("{ellipsis}{tail}{base}{suffix}");
+        if measure(&candidate) <= max_width {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    let tail: String = parent_chars[parent_chars.len() - lo..].iter().collect();
+    format!("{ellipsis}{tail}{base}{suffix}")
 }
 
 pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
