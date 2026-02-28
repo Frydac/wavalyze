@@ -7,15 +7,12 @@ pub mod ruler;
 pub mod sample_ix_zoom;
 pub mod track;
 pub mod track2;
-pub mod tracks;
 pub mod tracks2;
 pub mod types;
 pub mod view_buffer;
 
 pub use self::config::Config;
 pub use self::sample_ix_zoom::SampleIxZoom;
-pub use self::track::Track;
-pub use self::tracks::Tracks;
 pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
 pub use load_manager::{LoadManager, LoadProgressEntry};
@@ -35,15 +32,10 @@ use anyhow::Result;
 #[derive(Debug, Default)]
 pub struct Model {
     pub user_config: Config,
-    pub tracks: Tracks,
-    // files: Vec<Rc<wav::File>>,
     pub files2: Vec<wav::file2::File>,
-    // buffers: audio::BufferPool,
     pub audio: audio::manager::AudioManager,
     pub tracks2: tracks2::Tracks,
-
     pub actions: Vec<Action>,
-
     pub load_mgr: LoadManager,
 }
 

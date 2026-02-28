@@ -2,27 +2,18 @@ pub mod config;
 pub mod fps;
 pub mod grid;
 pub mod ruler2;
-pub mod track;
 pub mod track2;
 pub mod util;
 pub mod value_ruler2;
-use std::collections::HashMap;
 
-// use crate::view::util::*;
 use crate::model::{Action, hover_info::HoverInfoE};
-use crate::view::track::Track;
-// use crate::view::track2::Track as Track2;
 use crate::{model, wav};
 use anyhow::Result;
 use egui;
-// use model::track2::TrackId;
-// use slotmap::SlotMap;
 
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
-    tracks: HashMap<crate::util::Id, Track>,
-    // tracks2: SlotMap<TrackId, Track2>,
     fps: fps::Fps,
 }
 
@@ -30,8 +21,6 @@ impl View {
     pub fn new(model: model::Model) -> Self {
         Self {
             model,
-            tracks: HashMap::new(),
-            // tracks2: SlotMap::default(),
             fps: fps::Fps::new(100),
         }
     }
@@ -227,59 +216,6 @@ impl View {
             }
         }
         Ok(())
-    }
-
-    fn ui_tracks(&mut self, ui: &mut egui::Ui) {
-        let model = &mut self.model;
-
-        // update view tracks if needed
-        {
-            for (id, track_model) in &mut model.tracks.tracks {
-                if !self.tracks.contains_key(id) {
-                    println!("adding new view track: {}", track_model.name);
-                    self.tracks
-                        .insert(*id, Track::new(track_model.name.clone(), *id));
-                }
-            }
-            self.tracks.retain(|id, _| {
-                let should_keep = model.tracks.tracks.contains_key(id);
-                if !should_keep {
-                    println!("removing view track: {id}");
-                }
-                should_keep
-            });
-        }
-        // render view tracks in specified order
-        {
-            if self.tracks.is_empty() {
-                return;
-            }
-            // let rect_height = ui.available_height() - 20.0;
-            let rect_height = ui.available_height().max(0.0);
-            let height_track = rect_height / self.tracks.len() as f32;
-            let width_track = ui.available_width().max(0.0);
-            let min_height_track = 150.0;
-            let height_track = height_track.max(min_height_track);
-
-            // We want to detect if any track is hovered, so reset the current
-            model.tracks.tracks_hover_info.current = None;
-
-            for i in 0..model.tracks.track_order.len() {
-                // We copy the track_id and don't use an iterator because we want to pass
-                // the model by mutable refernce, and then we would have a reference on the
-                // track_order member.
-                let track_id = model.tracks.track_order[i];
-                ui.allocate_ui([width_track, height_track].into(), |ui| {
-                    let view_track = &mut self.tracks.get_mut(&track_id).unwrap();
-                    // this ui will notify the model of the current hover info
-                    view_track.ui(ui, model);
-                });
-            }
-            // No track is hovered, unhover all tracks
-            if model.tracks.tracks_hover_info.current.is_none() {
-                model.tracks.unhover();
-            }
-        }
     }
 
     fn ui_central_panel(&mut self, ctx: &egui::Context) -> Result<()> {

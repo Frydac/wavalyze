@@ -564,7 +564,6 @@ fn ui_waveform(
                         let circle_color = color;
                         ui.painter()
                             .circle_filled(pos.into(), circle_size, circle_color);
-
                     } else {
                         // if the point is outside the screen rect, we still draw a line, so we
                         // clip it and don't draw a circle at this pos

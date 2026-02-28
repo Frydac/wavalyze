@@ -7,7 +7,6 @@ use slotmap::SlotMap;
 
 use crate::{
     model::track2::{Track, TrackId},
-    pos,
     wav::file2::File,
 };
 
@@ -22,27 +21,6 @@ pub struct Tracks {
     // zoom
     pub available_height: f32,
     pub width_info: f32,
-}
-
-// no screen rect:
-// * open app without files
-//   -> ruler gets screen rect but no IxZoomOffset
-// * load files
-//   -> just add track without screen/sample rect
-// * next frame
-//   * check time_line isn't set
-//     * check if we have tracks
-//       -> if yes, get max sample range from all tracks
-//          initialize time_line, we now have zoom and offset
-//          -> now we can set all the sample rects for each track
-//          -> we also have the screen rect for each track
-//          -> we can now update the view_buffer
-//
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct TracksHoverInfo {
-    pub track_id: TrackId,
-    pub screen_pos: pos::Pos,
 }
 
 impl Tracks {

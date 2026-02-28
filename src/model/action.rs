@@ -3,7 +3,6 @@ use anyhow::{Context, Result};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Action {
-    RemoveTrackOld(u64),
     RemoveAllTracks,
     RemoveTrack(TrackId),
 
@@ -56,14 +55,10 @@ impl Action {
     pub fn process(&self, model: &mut crate::model::Model) -> Result<()> {
         tracing::trace!("Action::process: {:?}", self);
         match self {
-            Action::RemoveTrackOld(track_id) => {
-                model.tracks.remove_track(*track_id);
-            }
             Action::RemoveTrack(track_id) => {
                 model.tracks2.remove_track(*track_id);
             }
             Action::RemoveAllTracks => {
-                model.tracks.tracks.clear();
                 model.tracks2.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
