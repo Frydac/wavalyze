@@ -59,7 +59,11 @@ impl Fps {
             ui.heading("FPS");
             ui.separator();
             if self.durations.is_empty() {
-                ui.label("FPS metrics unavailable on wasm.");
+                if cfg!(target_arch = "wasm32") {
+                    ui.label("FPS metrics unavailable on wasm.");
+                } else {
+                    ui.label("Collecting FPS metrics...");
+                }
                 return;
             }
             let sum_duration = self.durations.iter().map(|d| d.as_secs_f64()).sum::<f64>();

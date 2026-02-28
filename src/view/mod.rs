@@ -31,10 +31,9 @@ impl View {
             self.ui(ctx, frame);
             return;
         }
-
-        let mut fps = std::mem::take(&mut self.fps);
-        fps.measure(|| self.ui(ctx, frame));
-        self.fps = fps;
+        self.fps.start_frame();
+        self.ui(ctx, frame);
+        self.fps.end_frame();
     }
 
     /// Draw ui and handle interactions

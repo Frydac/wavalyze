@@ -185,14 +185,13 @@ impl View {
                         cur_min_max_pos = MinMaxPos::from_pos(pos);
                     }
                 }
-                // Ensure the final x-bin is included; otherwise endpoints jump while panning.
+                // Ensure the final x-bin is included.
                 cur_min_max_pos.make_at_least_one_high();
                 data.push(cur_min_max_pos);
             }
 
             // Clip the positions, taking care of extending where necessary to close the gaps.
             clip_view_data(&mut data, screen_rect);
-
             ViewData::MinMax(data)
         };
 
@@ -239,9 +238,6 @@ impl View {
             "samples_per_pixel too small"
         );
 
-        // ratio target vs current (of level_data)
-        let ratio = samples_per_pixel as f64 / level_data.samples_per_pixel;
-
         // Get visible range of min/max sample indices present in the level_data
         let start_ix = sample_rect.ix_rng.start.max(0.0).ceil();
         let end_ix = (sample_rect.ix_rng.end + 1.0).max(0.0).floor();
@@ -286,7 +282,7 @@ impl View {
         };
 
         let view_data = {
-            let mut data = Vec::<MinMaxPos>::with_capacity(nr_samples / ratio as usize);
+            let mut data = Vec::<MinMaxPos>::with_capacity(nr_samples);
             let mut cur_min_max_pos;
             {
                 let val = *level_data
@@ -311,7 +307,7 @@ impl View {
                     cur_min_max_pos = min_max_pos;
                 }
             }
-            // Ensure the final x-bin is included; otherwise endpoints jump while panning.
+            // Ensure the final x-bin is included.
             cur_min_max_pos.make_at_least_one_high();
             data.push(cur_min_max_pos);
             clip_view_data(&mut data, screen_rect);
@@ -327,6 +323,8 @@ impl View {
     }
 }
 pub fn clip_view_data(view_data: &mut [MinMaxPos], screen_rect: Rect) {
+    // Keep smoothing enabled for now; it avoids visible breaks between adjacent min/max columns.
+    const SMOOTH_INNER_GAPS: bool = true;
     if view_data.is_empty() {
         return;
     }
@@ -374,7 +372,7 @@ pub fn clip_view_data(view_data: &mut [MinMaxPos], screen_rect: Rect) {
             if b.max.y < screen_rect.min.y {
                 a.min.y = screen_rect.min.y;
             }
-        } else {
+        } else if SMOOTH_INNER_GAPS {
             // if gap, extend both with half the distance of the gap
             if a.max.y < b.min.y {
                 let half = (b.min.y - a.max.y) / 2.0;

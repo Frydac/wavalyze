@@ -50,8 +50,6 @@ pub struct Track {
     // track_item: TrackItem,
     pub single: Single,
 
-    pub hover_info: Option<hover_info::HoverInfo>,
-
     /// Dirty flag for the inputs of the view buffer
     update_view_buffer_: bool,
 
@@ -73,7 +71,6 @@ impl Track {
             // samples_per_pixel: None,
             view_buffer: None,
             single,
-            hover_info: None,
             update_view_buffer_: false,
             track_md: TrackMetaData::None,
             height: track_config.min_height,
