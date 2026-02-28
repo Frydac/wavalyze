@@ -1,4 +1,5 @@
-use crate::audio::{self, buffer2::BufferE, sample, sample2::Sample};
+use crate::audio::sample::Sample;
+use crate::audio::{self, buffer2::BufferE, sample};
 use anyhow::{Result, anyhow};
 
 ///

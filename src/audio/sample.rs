@@ -1,7 +1,30 @@
-use num_traits::ToPrimitive;
+pub mod convert;
+pub mod ix_range;
+pub mod val_range;
+pub mod view;
 
-use crate::audio::sample::ValRange;
+// use crate::audio::sample::ValRange;
+pub use ix_range::{FracIx, FracIxRange, Ix, IxRange, OptIxRange};
+use num_traits::ToPrimitive;
 use std::fmt::Debug;
+pub use val_range::{ValRange, ValRangeE};
+pub use view::View;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum SampleType {
+    Float,
+    Int,
+}
+
+impl From<hound::SampleFormat> for SampleType {
+    fn from(sample_type: hound::SampleFormat) -> Self {
+        match sample_type {
+            hound::SampleFormat::Float => SampleType::Float,
+            hound::SampleFormat::Int => SampleType::Int,
+        }
+    }
+}
 
 // Represents a single audio sample value
 pub trait Sample: Debug + Default + Copy + PartialOrd + PartialEq + Clone + ToPrimitive {

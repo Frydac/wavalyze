@@ -1,4 +1,4 @@
-use wavalyze::audio::sample2::Sample;
+use wavalyze::audio::sample::Sample;
 
 #[test]
 fn test_i16_min_max() {

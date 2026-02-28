@@ -1,5 +1,5 @@
 use crate::{
-    audio::{sample, sample2::Sample},
+    audio::sample::{self, Sample},
     rect::Rect,
 };
 use num_traits::{FromPrimitive, ToPrimitive};

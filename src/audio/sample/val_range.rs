@@ -1,4 +1,4 @@
-use crate::audio::sample2::Sample;
+use crate::audio::sample::Sample;
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, Default)]
 pub struct ValRange<T: Sample> {

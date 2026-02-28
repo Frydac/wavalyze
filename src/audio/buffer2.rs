@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::audio::sample;
-use crate::audio::sample2::Sample;
+use crate::audio::sample::Sample;
 
 /// One channel of audio samples.  
 #[derive(Debug, PartialEq, Clone)]

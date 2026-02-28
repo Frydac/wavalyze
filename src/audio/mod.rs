@@ -21,6 +21,6 @@ use crate::audio;
 pub use audio::buffer_pool::{BufferPool, SampleBuffer};
 pub use audio::channel::{Id, Layout};
 pub use audio::manager::BufferId;
-pub use audio::sample::{Sample, SampleType};
+pub use audio::sample::SampleType;
 
 pub use audio::sample_rect2::SampleRectE;

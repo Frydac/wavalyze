@@ -339,7 +339,7 @@ fn read_to_buffers<S, R>(
 ) -> Result<BTreeMap<ChIx, Buffer<S>>>
 where
     R: std::io::Read + std::io::Seek,
-    S: crate::audio::sample2::Sample + hound::Sample,
+    S: crate::audio::sample::Sample + hound::Sample,
 {
     let nr_channels = reader.spec().channels as usize;
     let reader_duration = reader.duration() as i64;
