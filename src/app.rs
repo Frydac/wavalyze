@@ -1,5 +1,4 @@
 use crate::{
-    AppCliConfig,
     args::{self, Args},
     model::{self, Action},
     view,
@@ -11,10 +10,6 @@ use tracing::trace;
 #[derive(Debug)]
 pub struct App {
     view: view::View,
-
-    #[allow(dead_code)]
-    cli_config: Option<AppCliConfig>,
-
     args: Option<Args>,
 }
 
@@ -23,7 +18,6 @@ impl Default for App {
         let model = model::Model::new();
         Self {
             view: view::View::new(model),
-            cli_config: None,
             args: None,
         }
     }
@@ -31,7 +25,6 @@ impl Default for App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // draw ui, and measure frame time
         self.view.ui_measured(ctx, frame);
     }
 
@@ -77,7 +70,6 @@ impl App {
 
         Self {
             view: view::View::new(model),
-            cli_config: None,
             args: Some(args),
         }
     }
@@ -90,7 +82,6 @@ impl App {
 
         Self {
             view: view::View::new(model),
-            cli_config: None,
             args: None,
         }
     }

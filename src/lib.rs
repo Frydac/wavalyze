@@ -5,7 +5,6 @@
 
 // mod app;
 pub mod app;
-pub mod app_config;
 pub mod args;
 pub mod audio;
 pub mod generator;
@@ -25,5 +24,4 @@ pub mod wav;
 pub mod test_utils;
 
 pub use app::App;
-pub use app_config::AppCliConfig;
 pub use pos::Pos;

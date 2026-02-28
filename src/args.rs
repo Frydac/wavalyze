@@ -7,6 +7,7 @@ use crate::{
     wav::{self, ReadConfig},
 };
 
+/// Command line arguments for the application.
 #[derive(Parser, Debug, PartialEq)]
 #[command(name = "wavalyze")]
 #[command(about = "A audio file viewer", long_about = None)]

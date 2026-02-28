@@ -36,18 +36,19 @@ impl View {
         }
     }
 
+    /// Draw ui, and measure frame time
     pub fn ui_measured(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if cfg!(target_arch = "wasm32") {
             self.ui(ctx, frame);
             return;
         }
-        self.fps.start_frame();
 
-        self.ui(ctx, frame);
-
-        self.fps.end_frame();
+        let mut fps = std::mem::take(&mut self.fps);
+        fps.measure(|| self.ui(ctx, frame));
+        self.fps = fps;
     }
 
+    /// Draw ui and handle interactions
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.model.load_mgr.pending() > 0 {
             ctx.request_repaint();
@@ -57,6 +58,7 @@ impl View {
         }
 
         // Clear hover by default; hover interactions in this frame can override it.
+        // TODO: move to ruler + tracks
         self.model
             .actions
             .push(Action::SetHoverInfo(HoverInfoE::NotHovered));

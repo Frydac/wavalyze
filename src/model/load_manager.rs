@@ -17,8 +17,12 @@ pub struct LoadProgressEntry {
 pub struct LoadManager {
     tx: Sender<wav::read::LoadResult>,
     rx: Receiver<wav::read::LoadResult>,
+
+    // number of loads in progress
     pending: usize,
+    // unique id for each load
     next_id: wav::read::LoadId,
+
     progress: HashMap<wav::read::LoadId, LoadProgressEntry>,
 }
 
