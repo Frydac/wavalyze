@@ -255,7 +255,7 @@ fn draw_hover_value(
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
-            let db = crate::audio::db::gain_to_db_exact(sample_value.abs());
+            let db = crate::audio::db::gain_to_db(sample_value.abs());
             (
                 sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
                 format!("{sample_value:.3}\n{db:.3} dB"),
@@ -272,7 +272,7 @@ fn draw_hover_value(
                 return;
             };
             let scaled = crate::audio::sample::convert::pcm162flt(*sample_value) as f32;
-            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
+            let db = crate::audio::db::gain_to_db(scaled.abs());
             (
                 sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
                 format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
@@ -297,7 +297,7 @@ fn draw_hover_value(
                 }
                 _ => *sample_value as f32,
             };
-            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
+            let db = crate::audio::db::gain_to_db(scaled.abs());
             (
                 sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
                 format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
@@ -354,7 +354,7 @@ fn draw_hover_value_from_y(
             let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
                 return;
             };
-            let db = crate::audio::db::gain_to_db_exact(sample_value.abs());
+            let db = crate::audio::db::gain_to_db(sample_value.abs());
             Some((y_ruler, format!("{sample_value:.3}\n{db:.3} dB")))
         }
         crate::audio::sample_rect2::SampleRectE::I16(rect_t) => {
@@ -369,7 +369,7 @@ fn draw_hover_value_from_y(
                 return;
             };
             let scaled = crate::audio::sample::convert::pcm162flt(sample_value) as f32;
-            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
+            let db = crate::audio::db::gain_to_db(scaled.abs());
             Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.3} dB")))
         }
         crate::audio::sample_rect2::SampleRectE::I32(rect_t) => {
@@ -392,7 +392,7 @@ fn draw_hover_value_from_y(
                 }
                 _ => sample_value as f32,
             };
-            let db = crate::audio::db::gain_to_db_exact(scaled.abs());
+            let db = crate::audio::db::gain_to_db(scaled.abs());
             Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.3} dB")))
         }
     };

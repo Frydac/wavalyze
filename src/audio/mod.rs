@@ -3,7 +3,7 @@ pub mod channel;
 // pub mod channel_id;
 // pub mod channel_mask;
 pub mod buffer;
-pub mod cross_correlation;
+// pub mod cross_correlation;
 pub mod db;
 pub mod manager;
 pub mod rms;
