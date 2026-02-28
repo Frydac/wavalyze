@@ -19,7 +19,7 @@ pub type SampleIx = f64;
 // TODO: Is this what we want to do to keep duplication down in the namespace?
 use crate::audio;
 pub use audio::buffer_pool::{BufferPool, SampleBuffer};
-pub use audio::channel::{Channel, Id, Layout};
+pub use audio::channel::{Id, Layout};
 pub use audio::manager::BufferId;
 pub use audio::sample::{Sample, SampleType};
 
