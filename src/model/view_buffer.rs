@@ -1,4 +1,4 @@
-use crate::{pos, rect::Rect};
+use crate::pos;
 
 ///
 /// Buffer to store audio data that has been transformed to fit the screen, but starting as
@@ -40,10 +40,4 @@ impl ViewBufferE {
             ViewBufferE::LinePerPixelColumn(v) => v.clear(),
         }
     }
-}
-
-pub struct ViewBuffer2 {
-    samples_per_pixel: f32,
-    view_rect: Rect,
-    data: ViewBufferE,
 }

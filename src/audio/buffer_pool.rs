@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::audio::buffer::Buffer;
 use slotmap::{SlotMap, new_key_type};
 
@@ -67,15 +65,7 @@ impl BufferPool {
     }
 }
 
-struct AudioFile {
-    path: PathBuf,
-    sample_rate: u32,
-    bit_depth: u8,
-    channels: usize,
-    nr_samples: usize,
-    buffers: Vec<BufferId>,
-}
-
+#[allow(dead_code)]
 enum ChannelId {
     Left = 0,
     Right = 1,

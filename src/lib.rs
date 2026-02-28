@@ -1,6 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 // TODO: remove
-#![allow(dead_code)]
+// #![allow(dead_code)]
 #![allow(unused_variables)]
 
 // mod app;
@@ -8,7 +8,6 @@ pub mod app;
 pub mod args;
 pub mod audio;
 pub mod generator;
-pub mod id;
 pub mod log;
 pub mod math;
 pub mod model;

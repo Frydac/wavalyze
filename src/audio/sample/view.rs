@@ -371,6 +371,7 @@ pub fn clip_view_data(view_data: &mut [MinMaxPos], screen_rect: Rect) {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

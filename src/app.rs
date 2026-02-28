@@ -10,6 +10,8 @@ use tracing::trace;
 #[derive(Debug)]
 pub struct App {
     view: view::View,
+
+    #[allow(dead_code)]
     args: Option<Args>,
 }
 

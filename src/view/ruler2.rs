@@ -300,6 +300,7 @@ const TICK_HEIGHT_SHORT: f32 = 4.0;
 
 // TODO: good idea, but need to not draw a tick line?, and store the rects where not to draw the
 // other labels
+#[allow(dead_code)]
 fn ui_start_end(ui: &mut egui::Ui, ix_range: sample::FracIxRange) {
     let rect = ui.min_rect();
     // draw start tick
