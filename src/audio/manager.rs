@@ -1,6 +1,6 @@
 use crate::{
     audio::{
-        SampleRectE,
+        SampleRect,
         buffer::BufferE,
         sample::{self},
         thumbnail::ThumbnailE,
@@ -76,7 +76,7 @@ impl AudioManager {
     pub fn get_sample_view(
         &self,
         buffer_id: BufferId,
-        sample_rect: SampleRectE,
+        sample_rect: SampleRect,
         screen_rect: Rect,
     ) -> Result<sample::View> {
         let target_spp = sample_rect.width() / screen_rect.width();

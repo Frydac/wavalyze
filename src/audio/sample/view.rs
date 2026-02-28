@@ -1,11 +1,10 @@
 use crate::{
     Pos,
     audio::{
-        SampleRectE,
+        SampleRect,
         buffer::{Buffer, BufferE},
         sample,
         sample::Sample,
-        sample_rect2::SampleRect,
         thumbnail::{LevelData, LevelDataERef},
     },
     model::ruler::{sample_ix_to_screen_x, sample_value_to_screen_y},
@@ -102,28 +101,19 @@ pub struct View {
 impl View {
     pub fn from_buffere(
         buffere: &BufferE,
-        sample_rect: SampleRectE,
+        sample_rect: SampleRect,
         screen_rect: Rect,
     ) -> Result<Self> {
         match buffere {
-            BufferE::F32(buffer) => {
-                let sr = sample_rect.get_f32()?;
-                View::from_buffer(buffer, *sr, screen_rect)
-            }
-            BufferE::I32(buffer) => {
-                let sr = sample_rect.get_i32()?;
-                View::from_buffer(buffer, *sr, screen_rect)
-            }
-            BufferE::I16(buffer) => {
-                let sr = sample_rect.get_i16()?;
-                View::from_buffer(buffer, *sr, screen_rect)
-            }
+            BufferE::F32(buffer) => View::from_buffer(buffer, sample_rect, screen_rect),
+            BufferE::I32(buffer) => View::from_buffer(buffer, sample_rect, screen_rect),
+            BufferE::I16(buffer) => View::from_buffer(buffer, sample_rect, screen_rect),
         }
     }
 
     pub fn from_buffer<T: Sample + std::ops::Sub<Output = T>>(
         buffer: &Buffer<T>,
-        sample_rect: SampleRect<T>,
+        sample_rect: SampleRect,
         screen_rect: Rect,
     ) -> Result<Self> {
         ensure!(screen_rect.width() > 0.0, "screen_rect emtpy");
@@ -146,7 +136,8 @@ impl View {
         let get_pos = |ix: usize, sample: T| -> Result<Pos> {
             let pos_x = sample_ix_to_screen_x(ix as f64, sample_rect.ix_rng, screen_rect);
             let pos_x = pos_x.floor();
-            let pos_y = sample_value_to_screen_y(sample, val_rng, screen_rect)
+            let sample_norm = sample.to_norm(buffer.bit_depth);
+            let pos_y = sample_value_to_screen_y(sample_norm, val_rng, screen_rect)
                 .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             Ok(Pos::new(pos_x, pos_y))
         };
@@ -203,25 +194,25 @@ impl View {
     }
     pub fn from_level_data_e(
         level_data: &LevelDataERef<'_>,
-        sample_rect: SampleRectE,
+        sample_rect: SampleRect,
         screen_rect: Rect,
     ) -> Result<Self> {
         match level_data {
             LevelDataERef::F32(level_data) => {
-                Self::from_level_data(level_data, *sample_rect.get_f32()?, screen_rect)
+                Self::from_level_data(level_data, sample_rect, screen_rect)
             }
             LevelDataERef::I32(level_data) => {
-                Self::from_level_data(level_data, *sample_rect.get_i32()?, screen_rect)
+                Self::from_level_data(level_data, sample_rect, screen_rect)
             }
             LevelDataERef::I16(level_data) => {
-                Self::from_level_data(level_data, *sample_rect.get_i16()?, screen_rect)
+                Self::from_level_data(level_data, sample_rect, screen_rect)
             }
         }
     }
 
     pub fn from_level_data<T: Sample + std::ops::Sub<Output = T>>(
         level_data: &LevelData<T>,
-        sample_rect: SampleRect<T>,
+        sample_rect: SampleRect,
         screen_rect: Rect,
     ) -> Result<Self> {
         ensure!(screen_rect.width() > 0.0, "screen_rect emtpy");
@@ -259,10 +250,18 @@ impl View {
             let sample_ix = level_data.ix_to_sample_ix(ix_in_level_data);
             let pos_x = sample_ix_to_screen_x(sample_ix as f64, sample_rect.ix_rng, screen_rect);
             // NOTE: y screen coordinates go from top to bottom, so we need to invert the min/max values
-            let pos_y_min = sample_value_to_screen_y(min_max_val.max, val_rng, screen_rect)
-                .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
-            let pos_y_max = sample_value_to_screen_y(min_max_val.min, val_rng, screen_rect)
-                .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
+            let pos_y_min = sample_value_to_screen_y(
+                min_max_val.max.to_norm(level_data.bit_depth),
+                val_rng,
+                screen_rect,
+            )
+            .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
+            let pos_y_max = sample_value_to_screen_y(
+                min_max_val.min.to_norm(level_data.bit_depth),
+                val_rng,
+                screen_rect,
+            )
+            .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             Ok(MinMaxPos {
                 min: Pos::new(pos_x, pos_y_min),
                 max: Pos::new(pos_x, pos_y_max),

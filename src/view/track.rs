@@ -4,7 +4,7 @@ use crate::{
     model::{
         Action, Model,
         hover_info::{HoverInfo, HoverInfoE},
-        ruler::sample_value_to_screen_y_e,
+        ruler::sample_value_to_screen_y,
         track::TrackId,
     },
     rect::Rect,
@@ -531,7 +531,7 @@ fn ui_waveform(
                     let Some(val_rng) = sample_rect.val_rng() else {
                         return;
                     };
-                    let Some(y_mid) = sample_value_to_screen_y_e(0.0, val_rng, screen_rect) else {
+                    let Some(y_mid) = sample_value_to_screen_y(0.0, val_rng, screen_rect) else {
                         return;
                     };
                     let pos_mid = crate::Pos { x: pos.x, y: y_mid };
@@ -602,7 +602,7 @@ fn ui_waveform(
     Ok(())
 }
 
-fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRectE, screen_rect: Rect) {
+fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRect, screen_rect: Rect) {
     let Some(val_rng) = sample_rect.val_rng() else {
         return;
     };
@@ -618,7 +618,7 @@ fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRectE, screen_re
         (0.5_f32, false),
         (1.0_f32, false),
     ] {
-        let Some(y) = sample_value_to_screen_y_e(value, val_rng, screen_rect) else {
+        let Some(y) = sample_value_to_screen_y(value as f64, val_rng, screen_rect) else {
             continue;
         };
         if y < screen_rect.top() || y > screen_rect.bottom() {

@@ -1,8 +1,4 @@
-use crate::{
-    audio::sample::{self, Sample},
-    rect::Rect,
-};
-use num_traits::{FromPrimitive, ToPrimitive};
+use crate::{audio::sample, rect::Rect};
 
 // assumes both ranges are valid
 pub fn sample_ix_to_screen_x(
@@ -30,18 +26,14 @@ pub fn screen_x_to_sample_ix(
 
 // PERF: remove range_len check, this can be in a per sample basis, while the range should be
 // checked per buffer.
-pub fn sample_value_to_screen_y<T>(
-    sample_value: T,
-    val_range: sample::ValRange<T>,
+pub fn sample_value_to_screen_y(
+    sample_value: f64,
+    val_range: sample::ValRange<f64>,
     screen_rect: Rect,
-) -> Option<f32>
-where
-    T: Sample + Copy + ToPrimitive,
-{
-    let min = val_range.min.to_f32()?;
-    let max = val_range.max.to_f32()?;
-    let value = sample_value.to_f32()?;
-
+) -> Option<f32> {
+    let min = val_range.min;
+    let max = val_range.max;
+    let value = sample_value;
     let range_len = max - min;
     if range_len == 0.0 {
         return None;
@@ -51,56 +43,25 @@ where
     let frac = (value - min) / range_len;
 
     // Invert Y axis: max value at top, min at bottom
-    Some(screen_rect.bottom() - frac * screen_rect.height())
+    Some(screen_rect.bottom() - frac as f32 * screen_rect.height())
 }
 
-pub fn sample_value_to_screen_y_e(
-    sample_value: f32,
-    val_range: sample::ValRangeE,
-    screen_rect: Rect,
-) -> Option<f32> {
-    match val_range {
-        sample::ValRangeE::PCM16(val_range) => {
-            let sv_i16 = sample::convert::flt2pcm16(sample_value);
-            sample_value_to_screen_y(sv_i16, val_range, screen_rect)
-        }
-        sample::ValRangeE::PCM24(val_range) => {
-            let sv_i32 = sample::convert::flt2pcm24(sample_value);
-            sample_value_to_screen_y(sv_i32, val_range, screen_rect)
-        }
-        sample::ValRangeE::PCM32(val_range) => {
-            let sv_i32 = sample::convert::flt2pcm32(sample_value);
-            sample_value_to_screen_y(sv_i32, val_range, screen_rect)
-        }
-        sample::ValRangeE::F32(val_range) => {
-            let sv_f32 = sample_value;
-            sample_value_to_screen_y(sv_f32, val_range, screen_rect)
-        }
-    }
-}
-
-pub fn screen_y_to_sample_value<T>(
+pub fn screen_y_to_sample_value(
     screen_y: f32,
-    val_range: sample::ValRange<T>,
+    val_range: sample::ValRange<f64>,
     screen_rect: Rect,
-) -> Option<T>
-where
-    T: Sample + Copy + ToPrimitive + FromPrimitive,
-{
-    let min = val_range.min.to_f32()?;
-    let max = val_range.max.to_f32()?;
-
+) -> Option<f64> {
+    let min = val_range.min;
+    let max = val_range.max;
     let range_len = max - min;
     if range_len == 0.0 {
         return None;
     }
 
     // Normalize screen Y into [0, 1], inverted
-    let frac = (screen_rect.bottom() - screen_y) / screen_rect.height();
+    let frac = (screen_rect.bottom() - screen_y) as f64 / screen_rect.height() as f64;
 
-    let sample_f32 = min + frac * range_len;
-
-    T::from_f32(sample_f32)
+    Some(min + frac * range_len)
 }
 
 // smallest multiple of m that is >= x
@@ -148,7 +109,7 @@ mod tests {
     fn sample_extremes_map_to_screen_extremes() {
         let rect = Rect::new(0.0, 10.0, 100.0, 110.0);
         let range = sample::ValRange {
-            min: -1.0f32,
+            min: -1.0f64,
             max: 1.0,
         };
 
@@ -163,11 +124,11 @@ mod tests {
     fn sample_midpoint_maps_to_screen_center() {
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
         let range = sample::ValRange {
-            min: -32768i16,
-            max: 32767,
+            min: -1.0,
+            max: 1.0,
         };
 
-        let y = sample_value_to_screen_y(0i16, range, rect).unwrap();
+        let y = sample_value_to_screen_y(0.0, range, rect).unwrap();
 
         assert!((y - 50.0).abs() < 1.0);
     }
@@ -176,7 +137,7 @@ mod tests {
     fn screen_to_sample_round_trip_is_reasonable() {
         let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
         let range = sample::ValRange {
-            min: -1.0f32,
+            min: -1.0f64,
             max: 1.0,
         };
 

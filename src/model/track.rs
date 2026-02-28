@@ -35,7 +35,7 @@ pub struct Track {
     /// The pixel rectangle in absolute screen coordinates for the track
     /// Is updated by/for the view when displayed
     pub screen_rect: Option<Rect>,
-    pub sample_rect: Option<audio::SampleRectE>,
+    pub sample_rect: Option<audio::SampleRect>,
 
     // x range is pixel width starting at 0.0
     // y range is sample_rect sample range coordinates I think
@@ -91,7 +91,7 @@ impl Track {
         }
     }
 
-    pub fn set_sample_rect(&mut self, sample_rect: audio::SampleRectE) {
+    pub fn set_sample_rect(&mut self, sample_rect: audio::SampleRect) {
         if self.sample_rect != Some(sample_rect) {
             self.update_view_buffer_ = true;
             self.sample_rect = Some(sample_rect);
@@ -112,7 +112,7 @@ impl Track {
             self.set_sample_rect(new_sample_rect);
         } else {
             let buffer = audio.get_buffer(self.single.item.buffer_id)?;
-            let mut sample_rect = audio::SampleRectE::from_buffere(buffer);
+            let mut sample_rect = audio::SampleRect::from_buffere(buffer);
             sample_rect.set_ix_rng(ix_range);
             self.set_sample_rect(sample_rect);
         }

@@ -120,7 +120,10 @@ impl Tracks {
             return Ok(());
         };
 
-        sample_rect.set_val_rng(val_rng.min_max());
+        sample_rect.set_val_rng(audio::sample::ValRange {
+            min: -1.0,
+            max: 1.0,
+        });
         track.set_sample_rect(sample_rect);
         Ok(())
     }
@@ -203,20 +206,20 @@ impl Tracks {
     fn get_sample_rect_longest_track(
         &self,
         audio: &audio::manager::AudioManager,
-    ) -> Option<audio::SampleRectE> {
+    ) -> Option<audio::SampleRect> {
         // {
         // let max_sample_rect = self.tracks.values().map(|track| {
         //     let buffer_id = track.single.item.buffer_id;
         //     let buffer = audio.get_buffer(buffer_id).ok()?;
-        //     let sample_rect = audio::SampleRectE::from_buffere(buffer);
+        //     let sample_rect = audio::SampleRect::from_buffere(buffer);
         //     Some(sample_rect)
         // }).max_by_key(|sample_rect| sample_rect.width() as u64)?;
         // }
-        let mut max_sample_rect: Option<audio::SampleRectE> = None;
+        let mut max_sample_rect: Option<audio::SampleRect> = None;
         for track in self.tracks.values() {
             let buffer_id = track.single.item.buffer_id;
             let buffer = audio.get_buffer(buffer_id).ok()?;
-            let sample_rect = audio::SampleRectE::from_buffere(buffer);
+            let sample_rect = audio::SampleRect::from_buffere(buffer);
             if max_sample_rect
                 .as_ref()
                 .is_none_or(|max_rect| max_rect.width() < sample_rect.width())
@@ -249,7 +252,7 @@ impl Tracks {
 
     fn zoom_to_sample_rect(
         &mut self,
-        sample_rect: audio::SampleRectE,
+        sample_rect: audio::SampleRect,
         audio: &audio::manager::AudioManager,
     ) -> Result<()> {
         anyhow::ensure!(

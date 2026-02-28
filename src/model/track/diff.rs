@@ -7,7 +7,7 @@ pub struct Diff {
     pub buffer_id_b: audio::BufferId,
 
     /// Rectangal view over the buffer's samples
-    pub sample_rect: audio::SampleRectE,
+    pub sample_rect: audio::SampleRect,
 
     /// For positioning wrt the 'absolute' sample range of the track
     /// allow for separate offset for each buffer

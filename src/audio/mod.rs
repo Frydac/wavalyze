@@ -22,4 +22,4 @@ pub use audio::channel::{Id, Layout};
 pub use audio::manager::BufferId;
 pub use audio::sample::SampleType;
 
-pub use audio::sample_rect2::SampleRectE;
+pub use audio::sample_rect2::SampleRect;

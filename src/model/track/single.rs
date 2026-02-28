@@ -2,7 +2,7 @@ use crate::{
     audio::{
         self,
         manager::{AudioManager, BufferId},
-        sample_rect2::SampleRectE,
+        sample_rect2::SampleRect,
     },
     rect::Rect,
 };
@@ -29,7 +29,7 @@ impl Single {
         &mut self,
         samples_per_pixel: f32,
         audio: &mut AudioManager,
-        sample_rect: Option<SampleRectE>,
+        sample_rect: Option<SampleRect>,
     ) -> Result<()> {
         if let (Some(sample_rect), Some(screen_rect)) = (sample_rect, self.screen_rect) {
             self.item
@@ -48,7 +48,7 @@ pub struct Item {
     pub buffer_id: BufferId,
 
     /// Rectangular view over the buffer's samples
-    pub sample_rect: Option<SampleRectE>,
+    pub sample_rect: Option<SampleRect>,
     /// The data to display but still in 'sample' coordinates
     pub sample_view: Option<audio::sample::View>,
 
@@ -70,7 +70,7 @@ impl Item {
         &mut self,
         samples_per_pixel: f32,
         audio: &AudioManager,
-        sample_rect: &SampleRectE,
+        sample_rect: &SampleRect,
         screen_rect: &Rect,
     ) -> Result<()> {
         let buffer = audio
@@ -86,11 +86,11 @@ impl Item {
         Ok(())
     }
 
-    pub fn sample_rect(&self) -> Option<SampleRectE> {
+    pub fn sample_rect(&self) -> Option<SampleRect> {
         self.sample_rect
     }
 
-    pub fn set_sample_rect(&mut self, sample_rect: SampleRectE) {
+    pub fn set_sample_rect(&mut self, sample_rect: SampleRect) {
         self.sample_rect = Some(sample_rect);
     }
 }

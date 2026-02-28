@@ -1,8 +1,6 @@
-use crate::audio::sample;
+use crate::audio::sample::{self, Sample};
 use crate::model::hover_info::HoverInfoE;
-use crate::model::ruler::{
-    sample_value_to_screen_y, sample_value_to_screen_y_e, screen_y_to_sample_value,
-};
+use crate::model::ruler::{sample_value_to_screen_y, screen_y_to_sample_value};
 use crate::model::track::Track;
 use crate::model::{Action, track::TrackId};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
@@ -35,7 +33,7 @@ pub fn ui(
         return;
     };
 
-    let zero_y = sample_value_to_screen_y_e(0.0, val_rng, rect.into());
+    let zero_y = sample_value_to_screen_y(0.0, val_rng, rect.into());
 
     let painter = ui.painter();
     let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
@@ -49,7 +47,7 @@ pub fn ui(
 
     // Value ticks at -1.0, -0.5, 0.5, 1.0 (mapped to PCM ranges when needed).
     for value in [-1.0_f32, -0.5_f32, 0.5_f32, 1.0_f32] {
-        let Some(y) = sample_value_to_screen_y_e(value, val_rng, rect.into()) else {
+        let Some(y) = sample_value_to_screen_y(value as f64, val_rng, rect.into()) else {
             continue;
         };
         if (rect.top()..=rect.bottom()).contains(&y) {
@@ -88,7 +86,7 @@ pub fn ui(
     handle_value_ruler_scroll(ui, rect, track_id, ctx);
 
     let mut occupied: Vec<Rect> = Vec::new();
-    draw_hover_value_from_y(ui, ctx.hover_info, track, rect, &mut occupied);
+    draw_hover_value_from_y(ui, ctx.hover_info, ctx.audio, track, rect, &mut occupied);
     draw_hover_value(
         ui,
         ctx.hover_info,
@@ -98,7 +96,7 @@ pub fn ui(
         rect,
         &mut occupied,
     );
-    draw_lattice_labels(ui, rect, val_rng, &mut occupied);
+    draw_lattice_labels(ui, ctx.audio, track, rect, val_rng, &mut occupied);
 }
 
 fn handle_value_ruler_scroll(
@@ -135,17 +133,26 @@ fn handle_value_ruler_scroll(
     }
 }
 
-fn format_tick_label(value: f32, val_rng: sample::ValRangeE) -> String {
-    match val_rng {
-        sample::ValRangeE::PCM16(_) => {
-            let scaled = (value * i16::MAX as f32).round() as i16;
+fn format_tick_label(
+    value: f64,
+    audio: &crate::audio::manager::AudioManager,
+    track: &Track,
+) -> String {
+    let Ok(buffer) = audio.get_buffer(track.single.item.buffer_id) else {
+        return format!("{value:.2}");
+    };
+    match buffer {
+        crate::audio::buffer::BufferE::F32(_) => format!("{value:.2}"),
+        crate::audio::buffer::BufferE::I16(_) => {
+            let scaled = (value * sample::convert::float2pcm_factor(16) as f64).round() as i16;
             format!("{scaled}")
         }
-        sample::ValRangeE::PCM24(_) | sample::ValRangeE::PCM32(_) => {
-            let scaled = (value * 8_388_607.0).round() as i32;
+        crate::audio::buffer::BufferE::I32(buffer) => {
+            let bit_depth = buffer.bit_depth.clamp(1, 32) as u32;
+            let scaled =
+                (value * sample::convert::float2pcm_factor(bit_depth) as f64).round() as i32;
             format!("{scaled}")
         }
-        sample::ValRangeE::F32(_) => format!("{value:.2}"),
     }
 }
 
@@ -244,66 +251,54 @@ fn draw_hover_value(
         return;
     };
     let ruler_rect: crate::rect::Rect = rect.into();
-    let (y, label) = match (sample_rect, buffer) {
-        (
-            crate::audio::sample_rect2::SampleRectE::F32(rect),
-            crate::audio::buffer::BufferE::F32(buffer),
-        ) => {
-            let Some(val_rng) = rect.val_rng else {
-                return;
-            };
+    let Some(val_rng) = sample_rect.val_rng() else {
+        return;
+    };
+    let (y, label) = match buffer {
+        crate::audio::buffer::BufferE::F32(buffer) => {
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
             let db = crate::audio::db::gain_to_db(sample_value.abs());
             (
-                sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
+                sample_value_to_screen_y(
+                    (*sample_value).to_norm(buffer.bit_depth),
+                    val_rng,
+                    ruler_rect,
+                ),
                 format!("{sample_value:.3}\n{db:.3} dB"),
             )
         }
-        (
-            crate::audio::sample_rect2::SampleRectE::I16(rect),
-            crate::audio::buffer::BufferE::I16(buffer),
-        ) => {
-            let Some(val_rng) = rect.val_rng else {
-                return;
-            };
+        crate::audio::buffer::BufferE::I16(buffer) => {
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
             let scaled = crate::audio::sample::convert::pcm162flt(*sample_value) as f32;
             let db = crate::audio::db::gain_to_db(scaled.abs());
             (
-                sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
+                sample_value_to_screen_y(
+                    (*sample_value).to_norm(buffer.bit_depth),
+                    val_rng,
+                    ruler_rect,
+                ),
                 format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
             )
         }
-        (
-            crate::audio::sample_rect2::SampleRectE::I32(rect),
-            crate::audio::buffer::BufferE::I32(buffer),
-        ) => {
-            let Some(val_rng) = rect.val_rng else {
-                return;
-            };
+        crate::audio::buffer::BufferE::I32(buffer) => {
             let Some(sample_value) = buffer.data.get(sample_ix) else {
                 return;
             };
-            let scaled = match sample_rect.val_rng() {
-                Some(sample::ValRangeE::PCM24(_)) => {
-                    crate::audio::sample::convert::pcm242flt(*sample_value) as f32
-                }
-                Some(sample::ValRangeE::PCM32(_)) => {
-                    crate::audio::sample::convert::pcm322flt(*sample_value) as f32
-                }
-                _ => *sample_value as f32,
-            };
+            let scaled = (*sample_value).to_norm(buffer.bit_depth) as f32;
             let db = crate::audio::db::gain_to_db(scaled.abs());
             (
-                sample_value_to_screen_y(*sample_value, val_rng, ruler_rect),
+                sample_value_to_screen_y(
+                    (*sample_value).to_norm(buffer.bit_depth),
+                    val_rng,
+                    ruler_rect,
+                ),
                 format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
             )
         }
-        _ => return,
     };
     let Some(y) = y else {
         return;
@@ -319,6 +314,7 @@ fn draw_hover_value(
 fn draw_hover_value_from_y(
     ui: &egui::Ui,
     hover_info: &HoverInfoE,
+    audio: &crate::audio::manager::AudioManager,
     track: &Track,
     rect: Rect,
     occupied: &mut Vec<Rect>,
@@ -341,12 +337,16 @@ fn draw_hover_value_from_y(
         None => return,
     };
 
+    let Ok(buffer) = audio.get_buffer(track.single.item.buffer_id) else {
+        return;
+    };
+
     let ruler_rect: crate::rect::Rect = rect.into();
-    let hover_label = match sample_rect {
-        crate::audio::sample_rect2::SampleRectE::F32(rect_t) => {
-            let Some(val_rng) = rect_t.val_rng else {
-                return;
-            };
+    let Some(val_rng) = sample_rect.val_rng() else {
+        return;
+    };
+    let hover_label = match buffer {
+        crate::audio::buffer::BufferE::F32(_) => {
             let Some(sample_value) = screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect)
             else {
                 return;
@@ -354,13 +354,10 @@ fn draw_hover_value_from_y(
             let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
                 return;
             };
-            let db = crate::audio::db::gain_to_db(sample_value.abs());
+            let db = crate::audio::db::gain_to_db(sample_value.abs() as f32);
             Some((y_ruler, format!("{sample_value:.3}\n{db:.3} dB")))
         }
-        crate::audio::sample_rect2::SampleRectE::I16(rect_t) => {
-            let Some(val_rng) = rect_t.val_rng else {
-                return;
-            };
+        crate::audio::buffer::BufferE::I16(_) => {
             let Some(sample_value) = screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect)
             else {
                 return;
@@ -368,14 +365,11 @@ fn draw_hover_value_from_y(
             let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
                 return;
             };
-            let scaled = crate::audio::sample::convert::pcm162flt(sample_value) as f32;
-            let db = crate::audio::db::gain_to_db(scaled.abs());
-            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.3} dB")))
+            let raw = (sample_value * sample::convert::float2pcm_factor(16) as f64).round() as i16;
+            let db = crate::audio::db::gain_to_db(sample_value.abs() as f32);
+            Some((y_ruler, format!("{raw}\n{sample_value:.3}\n{db:.3} dB")))
         }
-        crate::audio::sample_rect2::SampleRectE::I32(rect_t) => {
-            let Some(val_rng) = rect_t.val_rng else {
-                return;
-            };
+        crate::audio::buffer::BufferE::I32(buffer_t) => {
             let Some(sample_value) = screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect)
             else {
                 return;
@@ -383,17 +377,11 @@ fn draw_hover_value_from_y(
             let Some(y_ruler) = sample_value_to_screen_y(sample_value, val_rng, ruler_rect) else {
                 return;
             };
-            let scaled = match sample_rect.val_rng() {
-                Some(sample::ValRangeE::PCM24(_)) => {
-                    crate::audio::sample::convert::pcm242flt(sample_value) as f32
-                }
-                Some(sample::ValRangeE::PCM32(_)) => {
-                    crate::audio::sample::convert::pcm322flt(sample_value) as f32
-                }
-                _ => sample_value as f32,
-            };
-            let db = crate::audio::db::gain_to_db(scaled.abs());
-            Some((y_ruler, format!("{sample_value}\n{scaled:.3}\n{db:.3} dB")))
+            let bit_depth = buffer_t.bit_depth.clamp(1, 32) as u32;
+            let raw =
+                (sample_value * sample::convert::float2pcm_factor(bit_depth) as f64).round() as i32;
+            let db = crate::audio::db::gain_to_db(sample_value.abs() as f32);
+            Some((y_ruler, format!("{raw}\n{sample_value:.3}\n{db:.3} dB")))
         }
     };
 
@@ -411,16 +399,18 @@ fn draw_hover_value_from_y(
 
 fn draw_lattice_labels(
     ui: &egui::Ui,
+    audio: &crate::audio::manager::AudioManager,
+    track: &Track,
     rect: Rect,
-    val_rng: sample::ValRangeE,
+    val_rng: sample::ValRange<f64>,
     occupied: &mut Vec<Rect>,
 ) {
-    for value in [-1.0_f32, -0.5_f32, 0.0_f32, 0.5_f32, 1.0_f32] {
-        let Some(y) = sample_value_to_screen_y_e(value, val_rng, rect.into()) else {
+    for value in [-1.0_f64, -0.5_f64, 0.0_f64, 0.5_f64, 1.0_f64] {
+        let Some(y) = sample_value_to_screen_y(value, val_rng, rect.into()) else {
             continue;
         };
         if (rect.top()..=rect.bottom()).contains(&y) {
-            let text = format_tick_label(value, val_rng);
+            let text = format_tick_label(value, audio, track);
             let (label_rect, _galleys, _color) = layout_value_label(ui, rect, y, &text);
             if occupied.iter().any(|r| r.intersects(label_rect)) {
                 continue;

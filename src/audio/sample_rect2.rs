@@ -1,139 +1,57 @@
-use crate::audio::sample::Sample;
-use crate::audio::{self, buffer::BufferE, sample};
-use anyhow::{Result, anyhow};
+use crate::audio::{buffer::BufferE, sample};
 
 ///
 /// A 2D 'camera' view expressed in terms of sample indices and sample values.
 ///
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct SampleRect<T: Sample> {
+pub struct SampleRect {
     /// X range in f64 (for zooming/moving with sub-sample resolution)
     pub ix_rng: sample::FracIxRange,
-    /// Y range in SampleType
-    /// TODO: maybe not an option?
-    pub val_rng: Option<sample::ValRange<T>>,
+    /// Y range is always normalized sample value range.
+    pub val_rng: Option<sample::ValRange<f64>>,
 }
 
-impl<T: Sample> SampleRect<T> {
+impl SampleRect {
     /// Rectangle contains the whole buffer
-    pub fn from_buffer(buffer: &audio::buffer::Buffer<T>) -> Self {
+    pub fn from_buffere(buffer: &BufferE) -> Self {
+        let nr_samples = match buffer {
+            BufferE::F32(buffer) => buffer.nr_samples(),
+            BufferE::I32(buffer) => buffer.nr_samples(),
+            BufferE::I16(buffer) => buffer.nr_samples(),
+        };
         Self {
             ix_rng: sample::FracIxRange {
                 start: 0.0,
-                end: buffer.nr_samples() as f64,
+                end: nr_samples as f64,
             },
-            val_rng: Some(buffer.val_range()),
+            val_rng: Some(sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            }),
         }
     }
 
     pub fn width(&self) -> f32 {
         self.ix_rng.len() as f32
     }
-}
-
-/// Dynamically typed sample rect
-#[derive(Debug, Clone, PartialEq, Copy)]
-pub enum SampleRectE {
-    F32(SampleRect<f32>),
-    I32(SampleRect<i32>),
-    I16(SampleRect<i16>),
-}
-
-impl SampleRectE {
-    pub fn from_buffere(buffer: &BufferE) -> Self {
-        match buffer {
-            BufferE::F32(buffer) => SampleRectE::F32(SampleRect::<f32>::from_buffer(buffer)),
-            BufferE::I32(buffer) => SampleRectE::I32(SampleRect::<i32>::from_buffer(buffer)),
-            BufferE::I16(buffer) => SampleRectE::I16(SampleRect::<i16>::from_buffer(buffer)),
-        }
-    }
-
-    pub fn width(&self) -> f32 {
-        match self {
-            SampleRectE::F32(rect) => rect.width(),
-            SampleRectE::I32(rect) => rect.width(),
-            SampleRectE::I16(rect) => rect.width(),
-        }
-    }
 
     pub fn set_ix_rng(&mut self, ix_rng: sample::FracIxRange) {
-        match self {
-            SampleRectE::F32(rect) => rect.ix_rng = ix_rng,
-            SampleRectE::I32(rect) => rect.ix_rng = ix_rng,
-            SampleRectE::I16(rect) => rect.ix_rng = ix_rng,
-        }
+        self.ix_rng = ix_rng;
     }
 
     pub fn shift_ix_rng(&mut self, shift: f64) {
-        match self {
-            SampleRectE::F32(rect) => rect.ix_rng.start += shift,
-            SampleRectE::I32(rect) => rect.ix_rng.start += shift,
-            SampleRectE::I16(rect) => rect.ix_rng.start += shift,
-        }
+        self.ix_rng.start += shift;
     }
 
     pub fn ix_rng(&self) -> sample::FracIxRange {
-        match self {
-            SampleRectE::F32(rect) => rect.ix_rng,
-            SampleRectE::I32(rect) => rect.ix_rng,
-            SampleRectE::I16(rect) => rect.ix_rng,
-        }
+        self.ix_rng
     }
 
-    pub fn val_rng(&self) -> Option<sample::ValRangeE> {
-        match self {
-            SampleRectE::F32(rect) => rect.val_rng.map(sample::ValRangeE::F32),
-            SampleRectE::I32(rect) => rect.val_rng.map(sample::ValRangeE::PCM24),
-            SampleRectE::I16(rect) => rect.val_rng.map(sample::ValRangeE::PCM16),
-        }
+    pub fn val_rng(&self) -> Option<sample::ValRange<f64>> {
+        self.val_rng
     }
 
-    pub fn set_val_rng(&mut self, val_range: sample::ValRangeE) {
-        match self {
-            SampleRectE::F32(rect) => {
-                if let sample::ValRangeE::F32(range) = val_range {
-                    rect.val_rng = Some(range);
-                }
-            }
-            SampleRectE::I32(rect) => {
-                if let sample::ValRangeE::PCM24(range) = val_range {
-                    rect.val_rng = Some(range);
-                }
-            }
-            SampleRectE::I16(rect) => {
-                if let sample::ValRangeE::PCM16(range) = val_range {
-                    rect.val_rng = Some(range);
-                }
-            }
-        }
-    }
-
-    // pub fn val_rng<T: Sample>(&self) -> Option<sample::ValRange<T>> {
-    // match self {
-    //     SampleRectE::F32(sample_rect) => sample_rect.get_f32().ok().map(|rect| rect.val_rng),
-    //     SampleRectE::I32(sample_rect) => sample_rect.val_rng,
-    //     SampleRectE::I16(sample_rect) => sample_rect.val_rng,
-    // }
-    // }
-
-    pub fn get_f32(&self) -> Result<&SampleRect<f32>> {
-        match self {
-            SampleRectE::F32(rect) => Ok(rect),
-            _ => Err(anyhow!("Not a f32 rect")),
-        }
-    }
-
-    pub fn get_i32(&self) -> Result<&SampleRect<i32>> {
-        match self {
-            SampleRectE::I32(rect) => Ok(rect),
-            _ => Err(anyhow!("Not a i32 rect")),
-        }
-    }
-
-    pub fn get_i16(&self) -> Result<&SampleRect<i16>> {
-        match self {
-            SampleRectE::I16(rect) => Ok(rect),
-            _ => Err(anyhow!("Not a i16 rect")),
-        }
+    pub fn set_val_rng(&mut self, val_range: sample::ValRange<f64>) {
+        self.val_rng = Some(val_range);
     }
 }

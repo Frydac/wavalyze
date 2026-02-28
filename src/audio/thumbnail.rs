@@ -63,6 +63,7 @@ pub enum LevelDataERef<'a> {
 #[derive(Debug, Clone)]
 pub struct LevelData<T: Sample> {
     pub samples_per_pixel: f64,
+    pub bit_depth: u16,
     pub data: Vec<sample::ValRange<T>>,
 }
 impl<T: Sample> LevelData<T> {
@@ -74,12 +75,13 @@ impl<T: Sample> LevelData<T> {
 
 impl<T: Sample> LevelData<T> {
     // TODO: we should make all the level data in one pass, not one pass per zoom level
-    pub fn from_buffer(buffer: &[T], samples_per_pixel: u64) -> Self {
+    pub fn from_buffer(buffer: &Buffer<T>, samples_per_pixel: u64) -> Self {
         let mut result = Self {
             samples_per_pixel: samples_per_pixel as f64,
+            bit_depth: buffer.bit_depth,
             data: vec![],
         };
-        for chunk in &buffer.iter().chunks(samples_per_pixel as usize) {
+        for chunk in &buffer.data.iter().chunks(samples_per_pixel as usize) {
             let mut min_max = sample::ValRange::<T> {
                 min: T::MAX,
                 max: T::MIN,
@@ -105,6 +107,7 @@ impl<T: Sample> LevelData<T> {
         let ratio = samples_per_pixel as f64 / level_data.samples_per_pixel;
         let mut result = Self {
             samples_per_pixel: samples_per_pixel as f64,
+            bit_depth: level_data.bit_depth,
             data: vec![],
         };
         result.data.reserve(level_data.data.len() / ratio as usize);
@@ -123,11 +126,13 @@ impl<T: Sample> LevelData<T> {
     }
     pub fn from_buffer_fractional_2(
         buffer: &[T],
+        bit_depth: u16,
         sample_ix_range: sample::IxRange,
         samples_per_pixel: f64,
     ) -> Self {
         let mut res = Self {
             samples_per_pixel,
+            bit_depth,
             data: vec![],
         };
         res.from_buffer_fractional(buffer, sample_ix_range, samples_per_pixel);
