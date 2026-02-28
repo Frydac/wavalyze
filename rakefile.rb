@@ -25,6 +25,18 @@ task :create_test_data do
             nr_channels: 2,
         },
         {
+            bit_depth: 24,
+            sample_type: SampleType::SIGNED,
+            sample_rate: 48_000,
+            nr_channels: 2,
+        },
+        {
+            bit_depth: 32,
+            sample_type: SampleType::SIGNED,
+            sample_rate: 48_000,
+            nr_channels: 2,
+        },
+        {
             bit_depth: 16,
             sample_type: SampleType::SIGNED,
             sample_rate: 44_100,
