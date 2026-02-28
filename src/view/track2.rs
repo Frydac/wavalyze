@@ -11,7 +11,7 @@ use crate::{
     view::{util::rpc, value_ruler2},
 };
 use anyhow::Result;
-const HEADER_HEIGHT: f32 = 20.0;
+const HEADER_HEIGHT: f32 = 22.0;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     let min_height: f32 = model.user_config.track.min_height;
@@ -170,7 +170,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 .unwrap_or_else(|| egui::FontId::proportional(14.0));
             let color = ui.style().visuals.text_color();
             let padding = ui.spacing().button_padding;
-            let item_spacing = ui.spacing().item_spacing.x;
+            let item_spacing = ui.spacing().item_spacing.x.max(2.0);
 
             let button_size = |label: &str| {
                 let text_size = ui
@@ -442,10 +442,9 @@ pub fn ui_waveform_canvas(
     // let stroke = egui::Stroke::NONE;
     ui.painter().rect(rect, 0.0, bg_color, stroke);
     handle_pan_drag(ui, model, track_id, rect);
-    let _ = ui_waveform(ui, model, track_id, rect);
+    ui_waveform(ui, model, track_id, rect)?;
     ui_hover(ui, model, track_id);
 
-    // Ok(resp.response)
     Ok(())
 }
 
@@ -527,22 +526,55 @@ fn ui_waveform(
         ViewData::Single(ref positions) => {
             if sample_view.samples_per_pixel < 0.25 {
                 positions.iter().for_each(|pos| {
-                    let pos = rpc(ui, pos.into());
-                    if !screen_rect.contains(pos.into()) {
+                    // get mid pos, fails only if one of the ranges is invalid, then we don't draw
+                    // anyway
+                    let Some(val_rng) = sample_rect.val_rng() else {
+                        return;
+                    };
+                    let Some(y_mid) = sample_value_to_screen_y_e(0.0, val_rng, screen_rect) else {
+                        return;
+                    };
+                    let pos_mid = crate::Pos { x: pos.x, y: y_mid };
+
+                    if pos.y < screen_rect.top() && pos_mid.y < screen_rect.top()
+                        || pos.y > screen_rect.bottom() && pos_mid.y > screen_rect.bottom()
+                    {
+                        // both points are outside the screen rect on the same side, we don't need
+                        // to draw anything
                         return;
                     }
-                    let circle_size = 2.0;
-                    let circle_color = color;
-                    ui.painter().circle_filled(pos, circle_size, circle_color);
-                    if let Some(val_rng) = sample_rect.val_rng()
-                        && let Some(y_mid) = sample_value_to_screen_y_e(0.0, val_rng, screen_rect)
-                    {
-                        let pos_mid = rpc(ui, egui::pos2(pos.x, y_mid));
-                        if screen_rect.contains(pos_mid.into()) {
-                            ui.painter()
-                                .line_segment([pos_mid, pos], egui::Stroke::new(1.0, line_color));
-                        }
-                    }
+
+                    // Here we know we'll have to draw at least a line
+
+                    // prepare pos_mid
+                    let pos_mid = screen_rect.clip_pos(pos_mid);
+                    let pos_mid = rpc(ui, pos_mid.into());
+
+                    let mut pos = *pos;
+
+                    // We need a circle if the point itself is inside the screen rect.
+                    if screen_rect.contains(pos) {
+                        // draw circle
+                        let circle_size = if sample_view.samples_per_pixel < 1.0 / 16.0 {
+                            // a bit bigger when more zoomed in
+                            3.0
+                        } else {
+                            2.0
+                        };
+                        let circle_color = color;
+                        ui.painter()
+                            .circle_filled(pos.into(), circle_size, circle_color);
+
+                    } else {
+                        // if the point is outside the screen rect, we still draw a line, so we
+                        // clip it and don't draw a circle at this pos
+                        pos = screen_rect.clip_pos(pos);
+                        pos = rpc(ui, pos.into()).into();
+                    };
+
+                    // draw line
+                    ui.painter()
+                        .line_segment([pos_mid, pos.into()], egui::Stroke::new(1.0, line_color));
                 });
             } else {
                 let positions = positions

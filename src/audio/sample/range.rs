@@ -82,6 +82,15 @@ impl ValRangeE {
             ValRangeE::F32(range) => range.is_empty(),
         }
     }
+
+    pub fn len(&self) -> f64 {
+        match self {
+            ValRangeE::PCM16(range) => range.len(),
+            ValRangeE::PCM24(range) => range.len(),
+            ValRangeE::PCM32(range) => range.len(),
+            ValRangeE::F32(range) => range.len(),
+        }
+    }
 }
 
 pub type Ix = i64;

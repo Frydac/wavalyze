@@ -54,6 +54,7 @@ pub enum Action {
 
 impl Action {
     pub fn process(&self, model: &mut crate::model::Model) -> Result<()> {
+        tracing::trace!("Action::process: {:?}", self);
         match self {
             Action::RemoveTrackOld(track_id) => {
                 model.tracks.remove_track(*track_id);

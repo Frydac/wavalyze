@@ -3,11 +3,16 @@
 [![CI](https://github.com/frydac/wavalyze/actions/workflows/rust.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/rust.yml)
 [![Pages](https://github.com/frydac/wavalyze/actions/workflows/pages.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/pages.yml)
 
+<p align="center">
+  <img src="doc/images/wavalyze.svg" alt="Wavalyze header graphic" width="50%">
+</p>
+
 **Wavalyze** is a WAV file viewer with a long-term goal of becoming a full analysis and diff tool for audio software development.
 
 It is a personal Rust learning project, focused on visual inspection of waveforms and low-level audio data, built on `egui`.
 
 ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
+
 
 ## Demo
 

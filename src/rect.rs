@@ -107,6 +107,18 @@ impl Rect {
     pub fn y_range_inc_floor(&self) -> std::ops::RangeInclusive<i32> {
         self.min.y.floor() as i32..=self.max.y.floor() as i32
     }
+
+    pub fn clip_pos<T: Into<Pos>>(&self, pos: T) -> Pos {
+        let pos: Pos = pos.into();
+        self.clip_x_y(pos.x, pos.y)
+    }
+
+    pub fn clip_x_y(&self, x: f32, y: f32) -> Pos {
+        Pos::new(
+            x.max(self.min.x).min(self.max.x),
+            y.max(self.min.y).min(self.max.y),
+        )
+    }
 }
 
 // Conversion traits from and to egui::Rect
