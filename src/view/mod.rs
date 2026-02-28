@@ -1,8 +1,8 @@
 pub mod config;
 pub mod fps;
 pub mod grid;
-pub mod ruler2;
-pub mod track2;
+pub mod ruler;
+pub mod track;
 pub mod util;
 pub mod value_ruler2;
 
@@ -99,10 +99,10 @@ impl View {
                 ui.add_space(5.0);
                 self.fps.ui(ui);
                 ui.add_space(5.0);
-                ruler2::ui_ruler_info_panel(ui, &self.model.tracks2.ruler);
+                ruler::ui_ruler_info_panel(ui, &self.model.tracks2.ruler);
                 ui.add_space(5.0);
-                ruler2::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
-                ruler2::ui_hover_info_panel2(ui, &self.model.tracks2.hover_info);
+                ruler::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
+                ruler::ui_hover_info_panel2(ui, &self.model.tracks2.hover_info);
             });
     }
 
@@ -212,7 +212,7 @@ impl View {
             for track_ix in 0..model.tracks2.tracks_order.len() {
                 let track_id = model.tracks2.tracks_order[track_ix];
                 ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
-                crate::view::track2::ui(ui, model, track_id)?;
+                crate::view::track::ui(ui, model, track_id)?;
             }
         }
         Ok(())
@@ -232,12 +232,12 @@ impl View {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_min_size(size);
-                let _ = ruler2::ui(ui, &mut self.model);
+                let _ = ruler::ui(ui, &mut self.model);
             });
             // self.ui_top_panel_tool_bar(ui, ctx);
 
             // ruler::ui(ui, &self.model);
-            // let _ = ruler2::ui(ui, &mut self.model);
+            // let _ = ruler::ui(ui, &mut self.model);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), (size.y - 1.0).max(0.0));

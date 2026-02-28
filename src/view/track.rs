@@ -5,7 +5,7 @@ use crate::{
         Action, Model,
         hover_info::{HoverInfo, HoverInfoE},
         ruler::sample_value_to_screen_y_e,
-        track2::TrackId,
+        track::TrackId,
     },
     rect::Rect,
     view::{util::rpc, value_ruler2},

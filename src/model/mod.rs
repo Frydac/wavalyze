@@ -6,7 +6,6 @@ pub mod load_manager;
 pub mod ruler;
 pub mod sample_ix_zoom;
 pub mod track;
-pub mod track2;
 pub mod tracks2;
 pub mod types;
 pub mod view_buffer;
@@ -19,7 +18,7 @@ pub use load_manager::{LoadManager, LoadProgressEntry};
 // pub use self::hover_info::HoverInfo;
 use crate::audio;
 use crate::audio::thumbnail::ThumbnailE;
-use crate::model::track2::TrackId;
+use crate::model::track::TrackId;
 pub use action::Action;
 use tracing::{info, trace};
 

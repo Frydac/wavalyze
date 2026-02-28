@@ -1,4 +1,4 @@
-use crate::{model::PixelCoord, model::hover_info::HoverInfoE, model::track2::TrackId, wav};
+use crate::{model::PixelCoord, model::hover_info::HoverInfoE, model::track::TrackId, wav};
 use anyhow::{Context, Result};
 
 #[derive(Debug, PartialEq, Clone)]

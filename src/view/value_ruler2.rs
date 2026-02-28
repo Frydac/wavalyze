@@ -3,8 +3,8 @@ use crate::model::hover_info::HoverInfoE;
 use crate::model::ruler::{
     sample_value_to_screen_y, sample_value_to_screen_y_e, screen_y_to_sample_value,
 };
-use crate::model::track2::Track;
-use crate::model::{Action, track2::TrackId};
+use crate::model::track::Track;
+use crate::model::{Action, track::TrackId};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
 
 pub struct ValueRulerContext<'a> {

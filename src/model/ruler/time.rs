@@ -59,7 +59,7 @@ impl Time {
             .compute_ticks(
                 ix_range,
                 self.screen_rect,
-                crate::view::ruler2::NR_PIXELS_PER_TICK,
+                crate::view::ruler::NR_PIXELS_PER_TICK,
             )
             .ok()?;
         Some(&self.ix_lattice)

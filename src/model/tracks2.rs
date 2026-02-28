@@ -6,7 +6,7 @@ use anyhow::Result;
 use slotmap::SlotMap;
 
 use crate::{
-    model::track2::{Track, TrackId},
+    model::track::{Track, TrackId},
     wav::file2::File,
 };
 
