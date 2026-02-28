@@ -247,7 +247,7 @@ fn draw_hover_value(
     let (y, label) = match (sample_rect, buffer) {
         (
             crate::audio::sample_rect2::SampleRectE::F32(rect),
-            crate::audio::buffer2::BufferE::F32(buffer),
+            crate::audio::buffer::BufferE::F32(buffer),
         ) => {
             let Some(val_rng) = rect.val_rng else {
                 return;
@@ -263,7 +263,7 @@ fn draw_hover_value(
         }
         (
             crate::audio::sample_rect2::SampleRectE::I16(rect),
-            crate::audio::buffer2::BufferE::I16(buffer),
+            crate::audio::buffer::BufferE::I16(buffer),
         ) => {
             let Some(val_rng) = rect.val_rng else {
                 return;
@@ -280,7 +280,7 @@ fn draw_hover_value(
         }
         (
             crate::audio::sample_rect2::SampleRectE::I32(rect),
-            crate::audio::buffer2::BufferE::I32(buffer),
+            crate::audio::buffer::BufferE::I32(buffer),
         ) => {
             let Some(val_rng) = rect.val_rng else {
                 return;

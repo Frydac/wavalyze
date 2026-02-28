@@ -6,7 +6,7 @@ use anyhow::Result;
 use crate::{
     audio::{
         self,
-        buffer2::{Buffer, BufferE},
+        buffer::{Buffer, BufferE},
         thumbnail::ThumbnailE,
     },
     wav,

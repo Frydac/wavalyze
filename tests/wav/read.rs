@@ -1,4 +1,4 @@
-use wavalyze::audio::buffer2::BufferE;
+use wavalyze::audio::buffer::BufferE;
 use wavalyze::audio::manager::Buffers;
 use wavalyze::wav::read::{ReadConfig, read_to_file};
 

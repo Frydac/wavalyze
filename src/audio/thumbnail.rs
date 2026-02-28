@@ -6,7 +6,7 @@ use std::fmt;
 
 use itertools::Itertools;
 
-use crate::audio::buffer2::{Buffer, BufferE};
+use crate::audio::buffer::{Buffer, BufferE};
 use crate::audio::sample::Sample;
 use crate::audio::sample::{self};
 

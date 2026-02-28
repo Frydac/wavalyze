@@ -1,6 +1,6 @@
 // use tracing::trace;
 // use tracing_test::traced_test;
-// use wavalyze::audio::buffer2::Buffer;
+// use wavalyze::audio::buffer::Buffer;
 // use wavalyze::audio::thumbnail::{LevelData, Thumbnail, ThumbnailConfig};
 
 // #[test]

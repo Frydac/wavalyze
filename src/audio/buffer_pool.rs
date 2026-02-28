@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::audio::buffer2::Buffer;
+use crate::audio::buffer::Buffer;
 use slotmap::{SlotMap, new_key_type};
 
 // TODO: move somewhere, also name? ok I guess

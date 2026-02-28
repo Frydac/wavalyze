@@ -2,7 +2,7 @@ use crate::{
     Pos,
     audio::{
         SampleRectE,
-        buffer2::{Buffer, BufferE},
+        buffer::{Buffer, BufferE},
         sample,
         sample::Sample,
         sample_rect2::SampleRect,

@@ -1,4 +1,4 @@
-use crate::audio::buffer2::{Buffer, BufferE};
+use crate::audio::buffer::{Buffer, BufferE};
 use crate::audio::manager::Buffers;
 use crate::audio::sample;
 // use crate::audio::{BufferPool, SampleBuffer};
@@ -668,7 +668,7 @@ impl LoadStage {
 //     bit_depth: u16,
 // ) -> Result<Vec<Buffer<S>>>
 // where
-//     S: crate::audio::buffer2::Sample,
+//     S: crate::audio::buffer::Sample,
 // {
 //     let nr_samples = interleaved_samples.len() / nr_channels;
 //     ensure!(
@@ -705,7 +705,7 @@ impl LoadStage {
 //     channels: &[usize],
 // ) -> Result<HashMap<usize, Buffer<S>>>
 // where
-//     S: crate::audio::buffer2::Sample,
+//     S: crate::audio::buffer::Sample,
 // {
 //     let nr_samples_per_ch = interleaved_samples.len() / nr_channels;
 //     ensure!(nr_samples_per_ch > 0, format!("{:?} {:?}", interleaved_samples.len(), nr_channels));
@@ -741,7 +741,7 @@ impl LoadStage {
 
 // fn read_and_deinterleave_samples<S>(reader: &mut hound::WavReader<std::io::BufReader<std::fs::File>>) -> Result<Vec<Buffer<S>>>
 // where
-//     S: hound::Sample + crate::audio::buffer2::Sample,
+//     S: hound::Sample + crate::audio::buffer::Sample,
 // {
 //     // read samples into interleaved vector
 //     let spec = reader.spec();
@@ -765,7 +765,7 @@ impl LoadStage {
 //     channels: &[usize],
 // ) -> Result<HashMap<usize, Buffer<S>>>
 // where
-//     S: hound::Sample + crate::audio::buffer2::Sample,
+//     S: hound::Sample + crate::audio::buffer::Sample,
 // {
 //     let nr_channels_to_deinterleave = channels.len();
 //     ensure!(nr_channels_to_deinterleave > 0);

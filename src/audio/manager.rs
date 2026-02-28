@@ -3,7 +3,7 @@
 use crate::{
     audio::{
         SampleRectE,
-        buffer2::BufferE,
+        buffer::BufferE,
         sample::{self},
         thumbnail::ThumbnailE,
     },

@@ -1,5 +1,5 @@
 use crate::audio::sample::Sample;
-use crate::audio::{self, buffer2::BufferE, sample};
+use crate::audio::{self, buffer::BufferE, sample};
 use anyhow::{Result, anyhow};
 
 ///
@@ -16,7 +16,7 @@ pub struct SampleRect<T: Sample> {
 
 impl<T: Sample> SampleRect<T> {
     /// Rectangle contains the whole buffer
-    pub fn from_buffer(buffer: &audio::buffer2::Buffer<T>) -> Self {
+    pub fn from_buffer(buffer: &audio::buffer::Buffer<T>) -> Self {
         Self {
             ix_rng: sample::FracIxRange {
                 start: 0.0,

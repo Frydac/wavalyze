@@ -1,4 +1,4 @@
-use wavalyze::audio::buffer2::Buffer;
+use wavalyze::audio::buffer::Buffer;
 
 #[test]
 fn test_buffer() {

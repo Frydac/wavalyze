@@ -1,3 +1,3 @@
-pub mod buffer2;
+pub mod buffer;
 pub mod sample2;
 pub mod thumbnail;
