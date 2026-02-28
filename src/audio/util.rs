@@ -1,37 +1,34 @@
-use crate::{
-    audio::buffer::{Buffer, BufferBuilder},
-    sample::SampleType,
-};
+use crate::sample::SampleType;
 
 // Create a 'test' audio::Buffer with a sine wave per channel
-pub fn buffer_sine_float(
-    nr_channels: usize,
-    nr_samples: usize,
-    amplitude: f32,
-    sample_rate: u32,
-) -> Buffer<f32> {
-    let mut ab = BufferBuilder::new()
-        .nr_channels(nr_channels)
-        .sample_rate(sample_rate)
-        .bit_depth(32)
-        .nr_samples(nr_samples)
-        .build::<f32>()
-        .unwrap();
+// pub fn buffer_sine_float(
+//     nr_channels: usize,
+//     nr_samples: usize,
+//     amplitude: f32,
+//     sample_rate: u32,
+// ) -> Buffer<f32> {
+//     let mut ab = BufferBuilder::new()
+//         .nr_channels(nr_channels)
+//         .sample_rate(sample_rate)
+//         .bit_depth(32)
+//         .nr_samples(nr_samples)
+//         .build::<f32>()
+//         .unwrap();
 
-    use crate::*;
+//     use crate::*;
 
-    for (index, channel) in ab.channels_mut().enumerate() {
-        let sample_period = 20 + index * 5;
-        let mut sine_gen =
-            generator::Sine::new_with_sample_period(sample_period, amplitude, sample_rate);
+//     for (index, channel) in ab.channels_mut().enumerate() {
+//         let sample_period = 20 + index * 5;
+//         let mut sine_gen =
+//             generator::Sine::new_with_sample_period(sample_period, amplitude, sample_rate);
 
-        for sample in channel.iter_mut() {
-            *sample = sine_gen.next().unwrap();
-        }
-    }
+//         for sample in channel.iter_mut() {
+//             *sample = sine_gen.next().unwrap();
+//         }
+//     }
 
-    ab
-}
+//     ab
+// }
 
 // Trait we will implement for i16, i32 and f32
 // I tried different approaches, more C++ like, but they didn't work as a generic type T cannot
@@ -155,9 +152,9 @@ mod tests {
         assert_eq!(max, 1.0);
     }
 
-    #[test]
-    fn test_buffer_sine_float() {
-        let ab = buffer_sine_float(3, 40, 0.8, 48000);
-        dbg!(ab);
-    }
+    // #[test]
+    // fn test_buffer_sine_float() {
+    //     let ab = buffer_sine_float(3, 40, 0.8, 48000);
+    //     dbg!(ab);
+    // }
 }

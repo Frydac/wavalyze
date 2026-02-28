@@ -2,7 +2,6 @@ use crate::{
     audio::{
         self,
         manager::{AudioManager, BufferId},
-        sample_range2::SampleFractionalIx,
         sample_rect2::SampleRectE,
     },
     rect::Rect,
@@ -54,7 +53,7 @@ pub struct Item {
     pub sample_view: Option<audio::sample::View>,
 
     /// For positioning wrt the 'absolute' sample range of the track
-    pub sample_ix_offset: SampleFractionalIx,
+    pub sample_ix_offset: f64,
 }
 
 impl Item {

@@ -1,4 +1,4 @@
-use crate::audio::{self, sample_range2::SampleFractionalIx};
+use crate::audio;
 
 /// Repesents a time domain view of 2 audio buffers and their difference
 #[derive(Debug, PartialEq, Clone)]
@@ -11,6 +11,6 @@ pub struct Diff {
 
     /// For positioning wrt the 'absolute' sample range of the track
     /// allow for separate offset for each buffer
-    pub sample_ix_offset_a: SampleFractionalIx,
-    pub sample_ix_offset_b: SampleFractionalIx,
+    pub sample_ix_offset_a: f64,
+    pub sample_ix_offset_b: f64,
 }
