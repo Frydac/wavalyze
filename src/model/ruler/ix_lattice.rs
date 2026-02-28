@@ -7,11 +7,11 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TickType {
-    /// Not all ticks are labeled, labeled ticks are always a multiple of 10
-    Labeled,
-    /// Halfway between two labeled ticks
+    /// We split ticks in 3 parts, big, mid, small
+    Big,
+    /// Halfway between two big ticks
     Mid,
-    /// All other 1/10 inbetween ticks
+    /// All other 1/10 inbetween big and mid ticks
     Small,
 }
 
@@ -70,7 +70,7 @@ impl IxLattice {
                 continue;
             };
             let tick_type = if cur_sample_ix % nr_samples_per_label_tick as i64 == 0 {
-                TickType::Labeled
+                TickType::Big
             } else if cur_sample_ix % nr_samples_per_mid_tick as i64 == 0 {
                 TickType::Mid
             } else {

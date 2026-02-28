@@ -352,14 +352,14 @@ fn ui_ix_lattice(
     for tick in &ix_lattice.ticks {
         // draw tick line with appropriate height
         let tick_height = match tick.tick_type {
-            ruler::TickType::Labeled => TICK_HEIGHT_LONG,
+            ruler::TickType::Big => TICK_HEIGHT_LONG,
             ruler::TickType::Mid => TICK_HEIGHT_MID,
             ruler::TickType::Small => TICK_HEIGHT_SHORT,
         };
         ui_tick_line(ui, tick.screen_x, tick_height, None);
 
         // draw tick label if needed
-        if tick.tick_type == ruler::TickType::Labeled {
+        if tick.tick_type == ruler::TickType::Big {
             let rect = ui_tick_label(
                 ui,
                 tick.screen_x,
