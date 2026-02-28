@@ -152,6 +152,13 @@ impl View {
         } else {
             // We have 2 or more samples per pixel, we draw the min/max of the samples per
             // pixel column (x coordinate).
+            if nr_samples == 0 {
+                return Ok(Self {
+                    data: ViewData::MinMax(vec![]),
+                    samples_per_pixel,
+                    sample_ix_start: sample_rect.ix_rng.start,
+                });
+            }
             let mut data = Vec::<MinMaxPos>::with_capacity(screen_rect.width() as usize);
 
             // Convert all samples to min/max positions even if outside of the screen rect.
@@ -178,6 +185,9 @@ impl View {
                         cur_min_max_pos = MinMaxPos::from_pos(pos);
                     }
                 }
+                // Ensure the final x-bin is included; otherwise endpoints jump while panning.
+                cur_min_max_pos.make_at_least_one_high();
+                data.push(cur_min_max_pos);
             }
 
             // Clip the positions, taking care of extending where necessary to close the gaps.
@@ -242,6 +252,13 @@ impl View {
         let end_ix = end_ix.min(level_data.data.len());
         ensure!(end_ix >= start_ix, "end_ix < start_ix");
         let nr_samples = end_ix - start_ix;
+        if nr_samples == 0 {
+            return Ok(Self {
+                data: ViewData::MinMax(vec![]),
+                samples_per_pixel,
+                sample_ix_start: sample_rect.ix_rng.start,
+            });
+        }
 
         // Get screen positions for min/max sample, with floored x coordinate.
         let get_min_max_pos = |ix_in_level_data: usize,
@@ -294,6 +311,9 @@ impl View {
                     cur_min_max_pos = min_max_pos;
                 }
             }
+            // Ensure the final x-bin is included; otherwise endpoints jump while panning.
+            cur_min_max_pos.make_at_least_one_high();
+            data.push(cur_min_max_pos);
             clip_view_data(&mut data, screen_rect);
             // tracing::trace!("Created ViewData from level_data, samples_per_pixel: {}, data.len(): {}", samples_per_pixel, data.len());
             ViewData::MinMax(data)
