@@ -66,7 +66,14 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 let value_ruler_config = value_ruler2::ValueRulerConfig {
                     show_hover_tick: false,
                 };
-                value_ruler2::ui(ui, track, track_id, ruler_rect, value_ruler_config, &mut value_ruler_ctx);
+                value_ruler2::ui(
+                    ui,
+                    track,
+                    track_id,
+                    ruler_rect,
+                    value_ruler_config,
+                    &mut value_ruler_ctx,
+                );
             }
         });
 
@@ -595,8 +602,10 @@ fn ui_waveform(
                     };
 
                     // draw line
-                    ui.painter()
-                        .line_segment([pos_mid, pos.into()], egui::Stroke::new(stroke_width, line_color));
+                    ui.painter().line_segment(
+                        [pos_mid, pos.into()],
+                        egui::Stroke::new(stroke_width, line_color),
+                    );
                 });
             } else {
                 let positions = positions
