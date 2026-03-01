@@ -93,6 +93,16 @@ impl Rect {
         )
     }
 
+    pub fn shift_x(&mut self, dx: f32) {
+        self.min.x += dx;
+        self.max.x += dx;
+    }
+
+    pub fn shift_y(&mut self, dy: f32) {
+        self.min.y += dy;
+        self.max.y += dy;
+    }
+
     pub fn x_range_inc(&self) -> std::ops::RangeInclusive<f32> {
         self.min.x..=self.max.x
     }

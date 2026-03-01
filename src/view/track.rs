@@ -63,7 +63,10 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                     audio: &model.audio,
                     zoom_y_factor: model.user_config.zoom_x_scroll_factor,
                 };
-                value_ruler2::ui(ui, track, track_id, ruler_rect, &mut value_ruler_ctx);
+                let value_ruler_config = value_ruler2::ValueRulerConfig {
+                    show_hover_tick: false,
+                };
+                value_ruler2::ui(ui, track, track_id, ruler_rect, value_ruler_config, &mut value_ruler_ctx);
             }
         });
 
@@ -119,10 +122,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
 
             if !modifiers.ctrl && !modifiers.shift && !modifiers.alt {
                 track.height = (track.height + response.drag_delta().y).max(min_height);
-                dbg!(track.height);
             } else if modifiers.shift {
                 let new_height = (track.height + response.drag_delta().y).max(min_height);
-                dbg!(new_height);
                 model.tracks2.set_tracks_height(new_height);
             }
         }
@@ -381,15 +382,22 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
         if let Some(pos) = ui.ctx().pointer_hover_pos()
             && rect.contains(pos)
         {
+            let sample_ix = model
+                .tracks2
+                .ruler
+                .screen_x_to_sample_ix(pos.x)
+                .unwrap_or(0.0);
+            let sample_pos_x = model
+                .tracks2
+                .ruler
+                .sample_ix_to_screen_x(sample_ix.round())
+                .map(|x| x.floor() as f64);
             model
                 .actions
                 .push(Action::SetHoverInfo(HoverInfoE::IsHovered(HoverInfo {
                     screen_pos: pos.into(),
-                    sample_ix: model
-                        .tracks2
-                        .ruler
-                        .screen_x_to_sample_ix(pos.x)
-                        .unwrap_or(0.0),
+                    sample_ix,
+                    sample_pos_x,
                 })));
             ui.ctx().input(|i| {
                 let scroll = i.raw_scroll_delta;
@@ -500,6 +508,11 @@ fn ui_waveform(
             .ok_or(anyhow::anyhow!("No time line"))?;
         time_line.get_ix_range(ui.min_rect().width() as f64)
     };
+    let hover_info = model.tracks2.hover_info;
+    let hover_info_sample_pos_x = match hover_info {
+        HoverInfoE::NotHovered => None,
+        HoverInfoE::IsHovered(hover_info) => hover_info.sample_pos_x,
+    };
     let track = model
         .tracks2
         .get_track_mut(track_id)
@@ -535,6 +548,16 @@ fn ui_waveform(
                         return;
                     };
                     let pos_mid = crate::Pos { x: pos.x, y: y_mid };
+                    let is_hovered = hover_info.sample_pos_is_hovered(pos.x.into());
+                    let stroke_width = if is_hovered { 2.0 } else { 1.0 };
+
+                    let color = if is_hovered {
+                        // egui::Color32::LIGHT_GREEN
+                        egui::Color32::WHITE
+                    } else {
+                        egui::Color32::LIGHT_RED
+                    };
+                    let line_color = color.linear_multiply(0.7);
 
                     if pos.y < screen_rect.top() && pos_mid.y < screen_rect.top()
                         || pos.y > screen_rect.bottom() && pos_mid.y > screen_rect.bottom()
@@ -573,7 +596,7 @@ fn ui_waveform(
 
                     // draw line
                     ui.painter()
-                        .line_segment([pos_mid, pos.into()], egui::Stroke::new(1.0, line_color));
+                        .line_segment([pos_mid, pos.into()], egui::Stroke::new(stroke_width, line_color));
                 });
             } else {
                 let positions = positions

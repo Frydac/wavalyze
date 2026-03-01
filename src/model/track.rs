@@ -6,8 +6,6 @@ use crate::{
 use anyhow::{Result, anyhow};
 use slotmap::new_key_type;
 
-#[path = "track/hover_info.rs"]
-pub mod hover_info;
 #[path = "track/single.rs"]
 pub mod single;
 

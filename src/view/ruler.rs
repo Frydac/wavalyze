@@ -105,16 +105,23 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut model::Model) -> Result<Option<eg
         .pointer_hover_pos()
         .filter(|&pos| rect.contains(pos))
     {
+        let sample_ix = model
+            .tracks2
+            .ruler
+            .screen_x_to_sample_ix(pos_in_rect.x)
+            .unwrap_or(0.0);
+        let sample_pos_x = model
+            .tracks2
+            .ruler
+            .sample_ix_to_screen_x(sample_ix.round())
+            .map(|x| x.floor() as f64);
         // If mouse hovers over the ruler
         // ui.ctx().set_cursor_icon(egui::CursorIcon::None);
         // Set tracks to hovered state (next frame, via action)
         let hover_info = HoverInfoE::IsHovered(HoverInfo {
             screen_pos: pos_in_rect.into(),
-            sample_ix: model
-                .tracks2
-                .ruler
-                .screen_x_to_sample_ix(pos_in_rect.x)
-                .unwrap_or(0.0),
+            sample_ix,
+            sample_pos_x,
         });
         model.actions.push(Action::SetHoverInfo(hover_info));
     }

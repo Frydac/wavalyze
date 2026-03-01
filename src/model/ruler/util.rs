@@ -1,14 +1,38 @@
 use crate::{audio::sample, rect::Rect};
 
 // assumes both ranges are valid
-pub fn sample_ix_to_screen_x(
+// This one is visually less stable, adjacent sample ix bin grouping shifts depending on
+// parameters.
+pub fn sample_ix_to_screen_x_2(
     sample_ix: f64,
     sample_ix_range: sample::FracIxRange,
     screen_rect: Rect,
 ) -> f32 {
     let sample_ix_offset = sample_ix - sample_ix_range.start;
     let sample_ix_frac = sample_ix_offset / sample_ix_range.len();
-    screen_rect.left() + sample_ix_frac as f32 * screen_rect.width()
+    screen_rect.left().floor() + sample_ix_frac as f32 * screen_rect.width().floor()
+}
+
+// This one is visually more stable that normal lerp.
+// We take the sample ix 'global' bin and then shift that in place, so adjacent pixels
+// always result in the same grouping per bin, with normal lerp these shift from bin to bin
+pub fn sample_ix_to_screen_x(
+    sample_ix: f64,
+    sample_ix_range: sample::FracIxRange,
+    screen_rect: Rect,
+) -> f32 {
+    let spp = sample_ix_range.len() / screen_rect.width() as f64;
+
+    if spp > 2.0 {
+        // global sample ix bin: stable grouping of adjacent sample indices
+        let sample_ix_bin = (sample_ix / spp).floor();
+        let sample_ix_range_start_offset_bin = (sample_ix_range.start / spp).floor();
+
+        let res = sample_ix_bin as f32 - sample_ix_range_start_offset_bin as f32;
+        res + screen_rect.left()
+    } else {
+        sample_ix_to_screen_x_2(sample_ix, sample_ix_range, screen_rect)
+    }
 }
 
 // assumes both ranges are valid
@@ -147,4 +171,53 @@ mod tests {
 
         assert!((original_y - y_back).abs() < 0.5);
     }
+
+    #[allow(dead_code)]
+    fn linspace(start: f64, end: f64, steps: usize) -> impl Iterator<Item = f64> {
+        (0..=steps).map(move |i| start + (end - start) * (i as f64 / steps as f64))
+    }
+
+    // #[test]
+    // fn test_emile() {
+    //     println!("test_emile");
+    //     let mut sample_ix_range = crate::audio::sample::FracIxRange {
+    //         start: 0.0,
+    //         end: 10.0,
+    //     };
+    //     let screen_rect = Rect::new(0.0, 0.0, 4.0, 4.0);
+    //     let samples_per_pixel = sample_ix_range.len() / screen_rect.width() as f64;
+    //     dbg!(samples_per_pixel);
+    //     let ix_rng = 10..12;
+
+    //     for sample_ix in ix_rng.clone() {
+    //         let screen_x = sample_ix_to_screen_x(sample_ix as f64, sample_ix_range, screen_rect);
+    //         println!(
+    //             "{:8.2} -> {:8.2} -> {:8.2}",
+    //             sample_ix,
+    //             screen_x,
+    //             screen_x.floor()
+    //         );
+    //     }
+
+    //     println!();
+
+    //     for shift in linspace(0.0, 1.0, 5) {
+    //     // let shift = 0.5;
+    //     // {
+    //     dbg!(shift);
+    //         sample_ix_range.shift(shift);
+    //         let samples_per_pixel = sample_ix_range.len() / screen_rect.width() as f64;
+    //         dbg!(samples_per_pixel);
+    //         for sample_ix in ix_rng.clone() {
+    //             let screen_x =
+    //                 sample_ix_to_screen_x(sample_ix as f64, sample_ix_range, screen_rect);
+    //             println!(
+    //                 "{:8.2} -> {:8.2} -> {:8.2}",
+    //                 sample_ix,
+    //                 screen_x,
+    //                 screen_x.floor()
+    //             );
+    //         }
+    //     }
+    // }
 }

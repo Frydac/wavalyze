@@ -301,6 +301,7 @@ impl View {
                 let min_max_pos = get_min_max_pos(ix_in_level_data, *val)?;
                 if cur_min_max_pos.min.x == min_max_pos.min.x {
                     cur_min_max_pos.include_y(min_max_pos.max.y);
+                    cur_min_max_pos.include_y(min_max_pos.min.y);
                 } else {
                     cur_min_max_pos.make_at_least_one_high();
                     data.push(cur_min_max_pos);

@@ -113,6 +113,9 @@ impl Time {
     }
 }
 
+// TODO: make configurable
+const MIN_SAMPLES_PER_PIXEL: f64 = 0.002;
+
 // TODO: handle unwraps
 impl Time {
     pub fn pan_x(&mut self, delta_pixels: PixelCoord) {
@@ -140,16 +143,16 @@ impl Time {
         let frac_min = center_x_normalized / self.screen_rect.width();
         let new_min_x = self.screen_rect.min.x - frac_min * nr_pixels;
         let new_max_x = self.screen_rect.max.x + (1.0 - frac_min) * nr_pixels;
-        let Some(new_min_ix) = self.screen_x_to_sample_ix(new_min_x) else {
-            return;
-        };
-        let Some(new_max_ix) = self.screen_x_to_sample_ix(new_max_x) else {
-            return;
-        };
-        let Some(time_line) = self.time_line.as_mut() else {
-            return;
-        };
-        time_line.ix_start = new_min_ix;
-        self.set_samples_per_pixel((new_max_ix - new_min_ix) / self.screen_rect.width() as f64);
+        if let (Some(new_min_ix), Some(new_max_ix), Some(time_line)) = (
+            self.screen_x_to_sample_ix(new_min_x),
+            self.screen_x_to_sample_ix(new_max_x),
+            self.time_line.as_mut(),
+        ) {
+            let spp = (new_max_ix - new_min_ix) / self.screen_rect.width() as f64;
+            if spp > MIN_SAMPLES_PER_PIXEL {
+                time_line.ix_start = new_min_ix;
+                self.set_samples_per_pixel(spp);
+            }
+        }
     }
 }

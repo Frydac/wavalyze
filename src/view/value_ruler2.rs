@@ -12,6 +12,18 @@ pub struct ValueRulerContext<'a> {
     pub zoom_y_factor: f32,
 }
 
+pub struct ValueRulerConfig {
+    pub show_hover_tick: bool,
+}
+
+impl Default for ValueRulerConfig {
+    fn default() -> Self {
+        Self {
+            show_hover_tick: true,
+        }
+    }
+}
+
 /// Draw a value ruler for a track using its sample_rect and screen_rect mapping.
 /// For now we only draw a zero tick centered via the current value range.
 pub fn ui(
@@ -19,6 +31,7 @@ pub fn ui(
     track: &Track,
     track_id: TrackId,
     rect: Rect,
+    config: ValueRulerConfig,
     ctx: &mut ValueRulerContext<'_>,
 ) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
@@ -86,7 +99,9 @@ pub fn ui(
     handle_value_ruler_scroll(ui, rect, track_id, ctx);
 
     let mut occupied: Vec<Rect> = Vec::new();
-    draw_hover_value_from_y(ui, ctx.hover_info, ctx.audio, track, rect, &mut occupied);
+    if config.show_hover_tick {
+        draw_hover_value_from_y(ui, ctx.hover_info, ctx.audio, track, rect, &mut occupied);
+    }
     draw_hover_value(
         ui,
         ctx.hover_info,

@@ -11,8 +11,6 @@ pub struct SampleIxZoom {
     pub ix_start: audio::sample::FracIx,
 }
 
-const MIN_SAMPLES_PER_PIXEL: f64 = 0.01;
-
 impl SampleIxZoom {
     /// The range of samples that is visible in a given pixel width
     pub fn get_ix_range(&self, pixel_width: f64) -> audio::sample::FracIxRange {
@@ -23,7 +21,7 @@ impl SampleIxZoom {
     }
 
     pub fn set_samples_per_pixel(&mut self, samples_per_pixel: f64) {
-        self.samples_per_pixel = samples_per_pixel.max(MIN_SAMPLES_PER_PIXEL);
+        self.samples_per_pixel = samples_per_pixel;
     }
 
     pub fn samples_per_pixel(&self) -> f64 {
