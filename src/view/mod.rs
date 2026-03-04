@@ -47,9 +47,9 @@ impl View {
 
         // Clear hover by default; hover interactions in this frame can override it.
         // TODO: move to ruler + tracks
-        // self.model
-        //     .actions
-        //     .push(Action::SetHoverInfo(HoverInfoE::NotHovered));
+        self.model
+            .actions
+            .push(Action::SetHoverInfo(HoverInfoE::NotHovered));
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
