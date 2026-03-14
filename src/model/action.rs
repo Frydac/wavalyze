@@ -1,4 +1,7 @@
-use crate::{model::PixelCoord, model::hover_info::HoverInfoE, model::track::TrackId, wav};
+use crate::{
+    model::{PixelCoord, hover_info::HoverInfoE, selection_info::SelectionInfoE, track::TrackId},
+    wav,
+};
 use anyhow::{Context, Result};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -49,6 +52,9 @@ pub enum Action {
     /// Update hover info on the next frame so all views stay in sync.
     SetHoverInfo(HoverInfoE),
     // TODO: zoom rect?
+
+    // SetSelection
+    SetSelection(SelectionInfoE),
 }
 
 impl Action {
@@ -56,10 +62,10 @@ impl Action {
         tracing::trace!("Action::process: {:?}", self);
         match self {
             Action::RemoveTrack(track_id) => {
-                model.tracks2.remove_track(*track_id);
+                model.tracks.remove_track(*track_id);
             }
             Action::RemoveAllTracks => {
-                model.tracks2.remove_all_tracks();
+                model.tracks.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
                 // Native: load on a worker thread. Wasm: load synchronously (no threads).
@@ -143,34 +149,34 @@ impl Action {
                 model.actions.push(Action::FillScreenHeight);
             }
             Action::ZoomToFull => {
-                model.tracks2.zoom_to_full(&model.audio)?;
+                model.tracks.zoom_to_full(&model.audio)?;
                 // model.tracks.zoom_to_full();
                 // todo!();
             }
             Action::FillScreenHeight => {
                 let min_height = model.user_config.track.min_height;
-                model.tracks2.fill_screen_height(min_height)?;
+                model.tracks.fill_screen_height(min_height)?;
             }
             Action::PanX { nr_pixels } => {
-                model.tracks2.ruler.pan_x(*nr_pixels);
+                model.tracks.ruler.pan_x(*nr_pixels);
             }
             Action::ZoomX {
                 nr_pixels,
                 center_x,
             } => {
-                model.tracks2.ruler.zoom_x(*nr_pixels, *center_x);
+                model.tracks.ruler.zoom_x(*nr_pixels, *center_x);
             }
             Action::PanY {
                 track_id,
                 nr_pixels,
             } => {
-                model.tracks2.pan_track_value_range(*track_id, *nr_pixels)?;
+                model.tracks.pan_track_value_range(*track_id, *nr_pixels)?;
             }
             Action::RecenterY { track_id } => {
-                model.tracks2.recenter_track_value_range(*track_id)?;
+                model.tracks.recenter_track_value_range(*track_id)?;
             }
             Action::RecenterYAll => {
-                model.tracks2.recenter_all_value_ranges()?;
+                model.tracks.recenter_all_value_ranges()?;
             }
             Action::ZoomY {
                 track_id,
@@ -178,11 +184,14 @@ impl Action {
                 center_y,
             } => {
                 model
-                    .tracks2
+                    .tracks
                     .zoom_track_value_range(*track_id, *nr_pixels, *center_y)?;
             }
             Action::SetHoverInfo(hover_info) => {
-                model.tracks2.hover_info = *hover_info;
+                model.tracks.hover_info = *hover_info;
+            }
+            Action::SetSelection(selection_info) => {
+                model.tracks.selection_info = *selection_info;
             }
         }
 

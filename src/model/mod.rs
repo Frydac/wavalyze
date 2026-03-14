@@ -5,6 +5,7 @@ pub mod hover_info;
 pub mod load_manager;
 pub mod ruler;
 pub mod sample_ix_zoom;
+pub mod selection_info;
 pub mod track;
 pub mod tracks2;
 pub mod types;
@@ -33,7 +34,7 @@ pub struct Model {
     pub user_config: Config,
     pub files2: Vec<wav::file2::File>,
     pub audio: audio::manager::AudioManager,
-    pub tracks2: tracks2::Tracks,
+    pub tracks: tracks2::Tracks,
     pub actions: Vec<Action>,
     pub load_mgr: LoadManager,
 }
@@ -41,7 +42,7 @@ pub struct Model {
 impl Model {
     pub fn new() -> Self {
         let mut res = Self::default();
-        res.tracks2.width_info = res.user_config.tracks_width_info;
+        res.tracks.width_info = res.user_config.tracks_width_info;
         res
     }
 
@@ -54,7 +55,7 @@ impl Model {
 
         // Add tracks for the loaded buffers in the file
         if let Err(e) = self
-            .tracks2
+            .tracks
             .add_tracks_from_file(&file, &self.user_config.track)
         {
             tracing::error!("Error adding tracks from file: {e}");
@@ -75,7 +76,7 @@ impl Model {
         &self,
         track_id: TrackId,
     ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
-        let track = self.tracks2.get_track(track_id)?;
+        let track = self.tracks.get_track(track_id)?;
         let buffer_id = track.single.item.buffer_id;
         for file in self.files2.iter() {
             if let Some(channel) = file.get_channel(buffer_id) {
@@ -86,7 +87,7 @@ impl Model {
     }
 
     pub fn zoom_to_full(&mut self) -> Result<()> {
-        self.tracks2.zoom_to_full(&self.audio)
+        self.tracks.zoom_to_full(&self.audio)
     }
 
     pub fn add_loaded_file(
@@ -130,7 +131,7 @@ impl Model {
             nr_samples: loaded.nr_samples,
         };
 
-        self.tracks2
+        self.tracks
             .add_tracks_from_file(&file, &self.user_config.track)?;
         self.files2.push(file);
 

@@ -1,6 +1,6 @@
 use crate::{
     audio::{self, BufferId},
-    model::{config::TrackConfig, hover_info::HoverInfoE, ruler},
+    model::{config::TrackConfig, hover_info::HoverInfoE, ruler, selection_info::SelectionInfoE},
 };
 use anyhow::Result;
 use slotmap::SlotMap;
@@ -18,6 +18,7 @@ pub struct Tracks {
     // hover
     pub hover_info: HoverInfoE,
     // selection
+    pub selection_info: SelectionInfoE,
     // zoom
     pub available_height: f32,
     pub width_info: f32,
@@ -266,5 +267,18 @@ impl Tracks {
         self.ruler.time_line.as_mut().unwrap().ix_start = sample_rect.ix_rng().start;
         self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
         Ok(())
+    }
+
+    pub fn samples_per_pixel(&self) -> Option<f64> {
+        self.ruler.samples_per_pixel()
+    }
+}
+
+impl Tracks {
+    pub fn sample_ix_to_screen_x(&self, sample_ix: f64) -> Option<f32> {
+        self.ruler.sample_ix_to_screen_x(sample_ix)
+    }
+    pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<f64> {
+        self.ruler.screen_x_to_sample_ix(screen_x)
     }
 }

@@ -4,7 +4,8 @@ pub mod val_range;
 pub mod view;
 
 // use crate::audio::sample::ValRange;
-pub use ix_range::{FracIx, FracIxRange, Ix, IxRange, OptIxRange};
+pub use ix_range::IxRange;
+pub use ix_range::{FracIx, FracIxRange, Ix, OptIxRange};
 use num_traits::ToPrimitive;
 use std::fmt::Debug;
 pub use val_range::{ValRange, ValRangeE};

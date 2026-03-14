@@ -17,6 +17,7 @@ pub mod sample;
 pub mod util;
 pub mod view;
 pub mod wav;
+pub mod widgets;
 
 // Code used only for test builds/configs
 #[cfg(test)]

@@ -57,6 +57,15 @@ impl<T: IxTrait + std::ops::Sub<Output = T> + std::ops::Add<Output = T> + std::o
         self.start += offset;
         self.end += offset;
     }
+
+    pub fn include(&mut self, ix: T) {
+        if self.start > ix {
+            self.start = ix;
+        }
+        if self.end < ix {
+            self.end = ix;
+        }
+    }
 }
 
 impl<T> From<Range<T>> for IxRangeG<T>

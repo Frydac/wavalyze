@@ -1,0 +1,208 @@
+use crate::{
+    audio::{self, sample::view::ViewData},
+    model::{Action, Model, ruler::sample_value_to_screen_y, track::TrackId},
+    rect::Rect,
+    view::{
+        track::{hover, selection},
+        util::rpc,
+    },
+};
+use anyhow::Result;
+
+pub fn ui_waveform_canvas(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    rect: egui::Rect,
+) -> Result<()> {
+    let size = ui.available_size();
+    ui.set_max_size(size);
+    ui.set_min_size(size);
+
+    let bg_color = ui.visuals().extreme_bg_color;
+    let stroke = ui.visuals().window_stroke();
+    ui.painter().rect(rect, 0.0, bg_color, stroke);
+    let waveform_response = ui.interact(
+        rect,
+        ui.id().with(("waveform_interaction", track_id)),
+        egui::Sense::drag(),
+    );
+    handle_pan_drag(ui, model, track_id, &waveform_response);
+    ui_waveform(ui, model, track_id, rect)?;
+    hover::ui_hover(ui, model, track_id);
+    selection::ui_selection(ui, model, &waveform_response);
+
+    Ok(())
+}
+
+fn handle_pan_drag(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    response: &egui::Response,
+) {
+    if response.dragged_by(egui::PointerButton::Secondary) {
+        let (delta, modifiers) = ui.input(|i| (i.pointer.delta(), i.modifiers));
+        if modifiers.ctrl {
+            model.actions.push(Action::PanX {
+                nr_pixels: -delta.x,
+            });
+            model.actions.push(Action::PanY {
+                track_id,
+                nr_pixels: delta.y,
+            });
+        } else if modifiers.shift {
+            model.actions.push(Action::PanY {
+                track_id,
+                nr_pixels: delta.y,
+            });
+        } else {
+            model.actions.push(Action::PanX {
+                nr_pixels: -delta.x,
+            });
+        }
+    }
+}
+
+fn ui_waveform(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    rect: egui::Rect,
+) -> Result<()> {
+    let sample_ix_range = {
+        let time_line = model
+            .tracks
+            .ruler
+            .time_line
+            .as_ref()
+            .ok_or(anyhow::anyhow!("No time line"))?;
+        time_line.get_ix_range(ui.min_rect().width() as f64)
+    };
+    let hover_info = model.tracks.hover_info;
+    let track = model
+        .tracks
+        .get_track_mut(track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+
+    track.set_ix_range(sample_ix_range, &model.audio)?;
+    track.set_screen_rect(rect.into());
+    track.update_sample_view(&mut model.audio)?;
+    let sample_view = track.get_sample_view()?;
+
+    let color = egui::Color32::LIGHT_RED;
+    let line_color = color.linear_multiply(0.7);
+    let screen_rect = track
+        .screen_rect
+        .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+    let sample_rect = track
+        .single
+        .item
+        .sample_rect()
+        .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+    draw_value_grid(ui, sample_rect, screen_rect);
+
+    match sample_view.data {
+        ViewData::Single(ref positions) => {
+            if sample_view.samples_per_pixel < 0.25 {
+                positions.iter().for_each(|pos| {
+                    let Some(val_rng) = sample_rect.val_rng() else {
+                        return;
+                    };
+                    let Some(y_mid) = sample_value_to_screen_y(0.0, val_rng, screen_rect) else {
+                        return;
+                    };
+                    let pos_mid = crate::Pos { x: pos.x, y: y_mid };
+                    let is_hovered = hover_info.sample_pos_is_hovered(pos.x.into());
+                    let stroke_width = if is_hovered { 2.0 } else { 1.0 };
+
+                    let color = if is_hovered {
+                        egui::Color32::WHITE
+                    } else {
+                        egui::Color32::LIGHT_RED
+                    };
+                    let line_color = color.linear_multiply(0.7);
+
+                    if pos.y < screen_rect.top() && pos_mid.y < screen_rect.top()
+                        || pos.y > screen_rect.bottom() && pos_mid.y > screen_rect.bottom()
+                    {
+                        return;
+                    }
+
+                    let pos_mid = screen_rect.clip_pos(pos_mid);
+                    let pos_mid = rpc(ui, pos_mid.into());
+
+                    let mut pos = *pos;
+
+                    if screen_rect.contains(pos) {
+                        let circle_size = if sample_view.samples_per_pixel < 1.0 / 16.0 {
+                            3.0
+                        } else {
+                            2.0
+                        };
+                        ui.painter().circle_filled(pos.into(), circle_size, color);
+                    } else {
+                        pos = screen_rect.clip_pos(pos);
+                        pos = rpc(ui, pos.into()).into();
+                    };
+
+                    ui.painter().line_segment(
+                        [pos_mid, pos.into()],
+                        egui::Stroke::new(stroke_width, line_color),
+                    );
+                });
+            } else {
+                let positions = positions
+                    .iter()
+                    .map(|pos| rpc(ui, pos.into()))
+                    .filter(|pos| screen_rect.contains((*pos).into()))
+                    .collect();
+                ui.painter()
+                    .line(positions, egui::Stroke::new(1.0, line_color));
+            }
+        }
+        ViewData::MinMax(ref mix_max_positions) => {
+            mix_max_positions.iter().for_each(|pos| {
+                let min = rpc(ui, (&pos.min).into());
+                let max = rpc(ui, (&pos.max).into());
+                if !screen_rect.contains(min.into()) && !screen_rect.contains(max.into()) {
+                    return;
+                }
+                let color = egui::Color32::LIGHT_RED;
+                ui.painter()
+                    .line_segment([min, max], egui::Stroke::new(1.0, color));
+            });
+        }
+    };
+
+    Ok(())
+}
+
+fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRect, screen_rect: Rect) {
+    let Some(val_rng) = sample_rect.val_rng() else {
+        return;
+    };
+
+    let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
+    let faint = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.35));
+    let mid = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.6));
+
+    for (value, is_mid) in [
+        (-1.0_f32, false),
+        (-0.5_f32, false),
+        (0.0_f32, true),
+        (0.5_f32, false),
+        (1.0_f32, false),
+    ] {
+        let Some(y) = sample_value_to_screen_y(value as f64, val_rng, screen_rect) else {
+            continue;
+        };
+        if y < screen_rect.top() || y > screen_rect.bottom() {
+            continue;
+        }
+        let left = rpc(ui, egui::pos2(screen_rect.left(), y));
+        let right = rpc(ui, egui::pos2(screen_rect.right(), y));
+        ui.painter()
+            .line_segment([left, right], if is_mid { mid } else { faint });
+    }
+}

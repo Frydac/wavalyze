@@ -23,6 +23,12 @@ pub fn debug_rect(ui: &mut egui::Ui, rect: egui::Rect, color: egui::Color32) {
 }
 
 /// round to pixel center (TODO: move to somehwere more general)
+/// Useful for pixel-perfect rendering of lines that are one pixel wide (or any odd number of pixels).
 pub fn rpc(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
     ui.painter().round_pos_to_pixel_center(pos)
+}
+
+/// Useful for pixel-perfect rendering of filled shapes.
+pub fn rp(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
+    ui.painter().round_pos_to_pixels(pos)
 }

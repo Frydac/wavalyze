@@ -1,16 +1,16 @@
 use crate::{
-    audio,
-    audio::sample::view::ViewData,
-    model::{
-        Action, Model,
-        hover_info::{HoverInfo, HoverInfoE},
-        ruler::sample_value_to_screen_y,
-        track::TrackId,
-    },
-    rect::Rect,
-    view::{util::rpc, value_ruler2},
+    model::{Action, Model, track::TrackId},
+    view::value_ruler2,
 };
 use anyhow::Result;
+
+#[path = "track/hover.rs"]
+mod hover;
+#[path = "track/selection.rs"]
+mod selection;
+#[path = "track/waveform.rs"]
+mod waveform;
+
 const HEADER_HEIGHT: f32 = 22.0;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
@@ -18,7 +18,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     let width = ui.available_width().max(0.0);
     let width_info = model.user_config.tracks_width_info.min(width);
     let height = model
-        .tracks2
+        .tracks
         .get_track_height(track_id)
         .unwrap_or(min_height);
     let height = height.max(0.0);
@@ -55,8 +55,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
             ui.painter()
                 .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
-            if let Some(track) = model.tracks2.get_track(track_id) {
-                let hover_info = model.tracks2.hover_info;
+            if let Some(track) = model.tracks.get_track(track_id) {
+                let hover_info = model.tracks.hover_info;
                 let mut value_ruler_ctx = value_ruler2::ValueRulerContext {
                     actions: &mut model.actions,
                     hover_info: &hover_info,
@@ -102,7 +102,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 ui.set_max_size(size);
                 ui.set_min_size(size);
                 let waveform_rect = ui.min_rect();
-                let _ = ui_waveform_canvas(ui, model, track_id, waveform_rect);
+                let _ = waveform::ui_waveform_canvas(ui, model, track_id, waveform_rect);
             });
         });
     });
@@ -123,7 +123,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
         if response.dragged() {
             let modifiers = track_ui.input(|i| i.modifiers);
             let track = model
-                .tracks2
+                .tracks
                 .get_track_mut(track_id)
                 .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
 
@@ -131,7 +131,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 track.height = (track.height + response.drag_delta().y).max(min_height);
             } else if modifiers.shift {
                 let new_height = (track.height + response.drag_delta().y).max(min_height);
-                model.tracks2.set_tracks_height(new_height);
+                model.tracks.set_tracks_height(new_height);
             }
         }
     }
@@ -343,322 +343,10 @@ fn truncate_parent_to_width(
     format!("{ellipsis}{tail}{base}{suffix}")
 }
 
-pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
-    // Draw hover info
-    match &model.tracks2.hover_info {
-        HoverInfoE::NotHovered => {}
-        HoverInfoE::IsHovered(hover_info) => {
-            // Draw vertical line always when hover info is present
-            {
-                let pos_y_min = ui.min_rect().top();
-                let pos_y_max = ui.min_rect().bottom();
-                let pos_x = hover_info.screen_pos.x;
-                let pos_min = rpc(ui, egui::pos2(pos_x, pos_y_min));
-                let pos_max = rpc(ui, egui::pos2(pos_x, pos_y_max));
-                ui.painter().line_segment(
-                    [pos_min, pos_max],
-                    egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE),
-                );
-            }
-
-            // Draw horizontal line only mouse is over the track
-            {
-                let rect = ui.min_rect();
-                if rect.contains((&hover_info.screen_pos).into()) {
-                    let pos_x_min = rect.left();
-                    let pos_x_max = rect.right();
-                    let pos_y = hover_info.screen_pos.y;
-                    let pos_min = rpc(ui, egui::pos2(pos_x_min, pos_y));
-                    let pos_max = rpc(ui, egui::pos2(pos_x_max, pos_y));
-                    ui.painter().line_segment(
-                        [pos_min, pos_max],
-                        egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE),
-                    );
-                }
-            }
-        }
-    }
-
-    // Do hover interaction
-    {
-        let rect = ui.min_rect();
-        let hover_response = ui
-            .interact(rect, egui::Id::new(track_id), egui::Sense::hover())
-            .on_hover_cursor(egui::CursorIcon::None);
-
-        if let Some(pos) = ui.ctx().pointer_hover_pos()
-            && rect.contains(pos)
-        {
-            let sample_ix = model
-                .tracks2
-                .ruler
-                .screen_x_to_sample_ix(pos.x)
-                .unwrap_or(0.0);
-            let sample_pos_x = model
-                .tracks2
-                .ruler
-                .sample_ix_to_screen_x(sample_ix.round())
-                .map(|x| x.floor() as f64);
-            model
-                .actions
-                .push(Action::SetHoverInfo(HoverInfoE::IsHovered(HoverInfo {
-                    screen_pos: pos.into(),
-                    sample_ix,
-                    sample_pos_x,
-                })));
-            ui.ctx().input(|i| {
-                let scroll = i.raw_scroll_delta;
-                let scroll_y = if scroll.y != 0.0 { scroll.y } else { scroll.x };
-                if i.modifiers.alt {
-                    if i.modifiers.shift && !i.modifiers.ctrl && scroll_y != 0.0 {
-                        model.actions.push(Action::PanY {
-                            track_id,
-                            nr_pixels: scroll_y,
-                        });
-                    } else if i.modifiers.ctrl && scroll_y != 0.0 {
-                        let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                        model.actions.push(Action::ZoomY {
-                            track_id,
-                            nr_pixels: scroll_y * zoom_x_factor,
-                            center_y: pos.y,
-                        });
-                    }
-                } else if i.modifiers.shift && !i.modifiers.ctrl {
-                    if scroll.x != 0.0 {
-                        model.actions.push(Action::PanX {
-                            nr_pixels: scroll.x,
-                        });
-                    }
-                } else if i.modifiers.ctrl && scroll.y != 0.0 {
-                    let zoom_x_factor = model.user_config.zoom_x_scroll_factor;
-                    model.actions.push(Action::ZoomX {
-                        nr_pixels: scroll.y * zoom_x_factor,
-                        center_x: pos.x,
-                    });
-                }
-            });
-        }
-    }
-}
-
-pub fn ui_waveform_canvas(
-    ui: &mut egui::Ui,
-    model: &mut Model,
-    track_id: TrackId,
-    rect: egui::Rect,
-) -> Result<()> {
-    let size = ui.available_size();
-    ui.set_max_size(size);
-    ui.set_min_size(size);
-
-    // -- Waveform canvas --
-    let bg_color = ui.visuals().extreme_bg_color;
-    let stroke = ui.visuals().window_stroke();
-    // let stroke = egui::Stroke::NONE;
-    ui.painter().rect(rect, 0.0, bg_color, stroke);
-    handle_pan_drag(ui, model, track_id, rect);
-    ui_waveform(ui, model, track_id, rect)?;
-    ui_hover(ui, model, track_id);
-
-    Ok(())
-}
-
-fn handle_pan_drag(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
-    let response = ui.interact(
-        rect,
-        ui.id().with(("pan_drag", track_id)),
-        egui::Sense::drag(),
-    );
-    if response.dragged_by(egui::PointerButton::Secondary) {
-        let (delta, modifiers) = ui.input(|i| (i.pointer.delta(), i.modifiers));
-        if modifiers.ctrl {
-            model.actions.push(Action::PanX {
-                nr_pixels: -delta.x,
-            });
-            model.actions.push(Action::PanY {
-                track_id,
-                nr_pixels: delta.y,
-            });
-        } else if modifiers.shift {
-            model.actions.push(Action::PanY {
-                track_id,
-                nr_pixels: delta.y,
-            });
-        } else {
-            model.actions.push(Action::PanX {
-                nr_pixels: -delta.x,
-            });
-        }
-    }
-}
-
 fn resize_handle(ui: &mut egui::Ui, id: egui::Id, rect: egui::Rect) -> egui::Response {
     let response = ui.interact(rect, id, egui::Sense::drag());
     if response.hovered() || response.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
     }
     response
-}
-
-fn ui_waveform(
-    ui: &mut egui::Ui,
-    model: &mut Model,
-    track_id: TrackId,
-    rect: egui::Rect,
-) -> Result<()> {
-    let sample_ix_range = {
-        let time_line = model
-            .tracks2
-            .ruler
-            .time_line
-            .as_ref()
-            .ok_or(anyhow::anyhow!("No time line"))?;
-        time_line.get_ix_range(ui.min_rect().width() as f64)
-    };
-    let hover_info = model.tracks2.hover_info;
-    let hover_info_sample_pos_x = match hover_info {
-        HoverInfoE::NotHovered => None,
-        HoverInfoE::IsHovered(hover_info) => hover_info.sample_pos_x,
-    };
-    let track = model
-        .tracks2
-        .get_track_mut(track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-    track.set_ix_range(sample_ix_range, &model.audio)?;
-    track.set_screen_rect(rect.into());
-    track.update_sample_view(&mut model.audio)?;
-    let sample_view = track.get_sample_view()?;
-
-    let color = egui::Color32::LIGHT_RED;
-    let line_color = color.linear_multiply(0.7);
-    let screen_rect = track
-        .screen_rect
-        .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
-    let sample_rect = track
-        .single
-        .item
-        .sample_rect()
-        .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
-    draw_value_grid(ui, sample_rect, screen_rect);
-
-    match sample_view.data {
-        ViewData::Single(ref positions) => {
-            if sample_view.samples_per_pixel < 0.25 {
-                positions.iter().for_each(|pos| {
-                    // get mid pos, fails only if one of the ranges is invalid, then we don't draw
-                    // anyway
-                    let Some(val_rng) = sample_rect.val_rng() else {
-                        return;
-                    };
-                    let Some(y_mid) = sample_value_to_screen_y(0.0, val_rng, screen_rect) else {
-                        return;
-                    };
-                    let pos_mid = crate::Pos { x: pos.x, y: y_mid };
-                    let is_hovered = hover_info.sample_pos_is_hovered(pos.x.into());
-                    let stroke_width = if is_hovered { 2.0 } else { 1.0 };
-
-                    let color = if is_hovered {
-                        // egui::Color32::LIGHT_GREEN
-                        egui::Color32::WHITE
-                    } else {
-                        egui::Color32::LIGHT_RED
-                    };
-                    let line_color = color.linear_multiply(0.7);
-
-                    if pos.y < screen_rect.top() && pos_mid.y < screen_rect.top()
-                        || pos.y > screen_rect.bottom() && pos_mid.y > screen_rect.bottom()
-                    {
-                        // both points are outside the screen rect on the same side, we don't need
-                        // to draw anything
-                        return;
-                    }
-
-                    // Here we know we'll have to draw at least a line
-
-                    // prepare pos_mid
-                    let pos_mid = screen_rect.clip_pos(pos_mid);
-                    let pos_mid = rpc(ui, pos_mid.into());
-
-                    let mut pos = *pos;
-
-                    // We need a circle if the point itself is inside the screen rect.
-                    if screen_rect.contains(pos) {
-                        // draw circle
-                        let circle_size = if sample_view.samples_per_pixel < 1.0 / 16.0 {
-                            // a bit bigger when more zoomed in
-                            3.0
-                        } else {
-                            2.0
-                        };
-                        let circle_color = color;
-                        ui.painter()
-                            .circle_filled(pos.into(), circle_size, circle_color);
-                    } else {
-                        // if the point is outside the screen rect, we still draw a line, so we
-                        // clip it and don't draw a circle at this pos
-                        pos = screen_rect.clip_pos(pos);
-                        pos = rpc(ui, pos.into()).into();
-                    };
-
-                    // draw line
-                    ui.painter().line_segment(
-                        [pos_mid, pos.into()],
-                        egui::Stroke::new(stroke_width, line_color),
-                    );
-                });
-            } else {
-                let positions = positions
-                    .iter()
-                    .map(|pos| rpc(ui, pos.into()))
-                    .filter(|pos| screen_rect.contains((*pos).into()))
-                    .collect();
-                ui.painter()
-                    .line(positions, egui::Stroke::new(1.0, line_color));
-            }
-        }
-        ViewData::MinMax(ref mix_max_positions) => {
-            mix_max_positions.iter().for_each(|pos| {
-                let min = rpc(ui, (&pos.min).into());
-                let max = rpc(ui, (&pos.max).into());
-                if !screen_rect.contains(min.into()) && !screen_rect.contains(max.into()) {
-                    return;
-                }
-                let color = egui::Color32::LIGHT_RED;
-                ui.painter()
-                    .line_segment([min, max], egui::Stroke::new(1.0, color));
-            });
-        }
-    };
-
-    Ok(())
-}
-
-fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRect, screen_rect: Rect) {
-    let Some(val_rng) = sample_rect.val_rng() else {
-        return;
-    };
-
-    let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
-    let faint = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.35));
-    let mid = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.6));
-
-    for (value, is_mid) in [
-        (-1.0_f32, false),
-        (-0.5_f32, false),
-        (0.0_f32, true),
-        (0.5_f32, false),
-        (1.0_f32, false),
-    ] {
-        let Some(y) = sample_value_to_screen_y(value as f64, val_rng, screen_rect) else {
-            continue;
-        };
-        if y < screen_rect.top() || y > screen_rect.bottom() {
-            continue;
-        }
-        let left = rpc(ui, egui::pos2(screen_rect.left(), y));
-        let right = rpc(ui, egui::pos2(screen_rect.right(), y));
-        ui.painter()
-            .line_segment([left, right], if is_mid { mid } else { faint });
-    }
 }

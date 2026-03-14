@@ -111,6 +111,12 @@ impl Time {
 
         todo!()
     }
+
+    pub fn samples_per_pixel(&self) -> Option<f64> {
+        self.time_line
+            .as_ref()
+            .map(|time_line| time_line.samples_per_pixel())
+    }
 }
 
 // TODO: make configurable
