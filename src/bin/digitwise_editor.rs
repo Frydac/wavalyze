@@ -168,6 +168,7 @@ fn describe_action(label: &str, value: u64, output: &DigitwiseNumberEditorOutput
         Some(DigitwiseNumberEditorAction::ReplaceDigit) => "replace",
         Some(DigitwiseNumberEditorAction::IncrementPlace) => "increment",
         Some(DigitwiseNumberEditorAction::DecrementPlace) => "decrement",
+        Some(DigitwiseNumberEditorAction::DragAdjustPlace) => "drag-adjust",
         None => "none",
     };
 

@@ -1,6 +1,8 @@
 use egui::{self, Align2, Color32, EventFilter, FontId, Response, Sense, Stroke, Ui, WidgetText};
 
 const MAX_U64_DIGITS: usize = 20;
+const DRAG_START_THRESHOLD_PX: f32 = 4.0;
+const DRAG_STEP_PX: f32 = 12.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DigitwiseNumberEditorAction {
@@ -10,6 +12,7 @@ pub enum DigitwiseNumberEditorAction {
     ReplaceDigit,
     IncrementPlace,
     DecrementPlace,
+    DragAdjustPlace,
 }
 
 #[derive(Debug)]
@@ -33,6 +36,14 @@ pub struct DigitwiseNumberEditor<'a> {
 struct EditorState {
     selected_digit: usize,
     has_focus: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct DragState {
+    digit_index: usize,
+    press_y: f32,
+    applied_steps: i32,
+    crossed_threshold: bool,
 }
 
 struct RenderedDigit {
@@ -73,6 +84,8 @@ impl<'a> DigitwiseNumberEditor<'a> {
 
         let mut state = load_state(ui.ctx(), self.id_source);
         state.selected_digit = state.selected_digit.min(digits - 1);
+        let drag_state_id = self.id_source.with("drag_state");
+        let mut drag_state = load_drag_state(ui.ctx(), drag_state_id);
 
         let displayed_value = format_value(*self.value, digits);
         let digit_chars: Vec<char> = displayed_value.chars().collect();
@@ -90,7 +103,18 @@ impl<'a> DigitwiseNumberEditor<'a> {
             for (digit_index, digit_char) in digit_chars.iter().copied().enumerate() {
                 let digit_id = self.id_source.with(("digit", digit_index));
                 let (rect, _) = ui.allocate_exact_size(digit_size, Sense::hover());
-                let response = ui.interact(rect, digit_id, Sense::click());
+                let response = ui.interact(rect, digit_id, Sense::click_and_drag());
+
+                if response.drag_started()
+                    && let Some(pointer_pos) = response.interact_pointer_pos()
+                {
+                    drag_state = Some(DragState {
+                        digit_index,
+                        press_y: pointer_pos.y,
+                        applied_steps: 0,
+                        crossed_threshold: false,
+                    });
+                }
 
                 if response.clicked() {
                     state.selected_digit = digit_index;
@@ -123,9 +147,48 @@ impl<'a> DigitwiseNumberEditor<'a> {
             response = response.union(digit.response.clone());
         }
 
+        let mut drag_focus_digit = None;
+        if let Some(mut active_drag) = drag_state {
+            if ui.input(|i| i.pointer.primary_down()) {
+                if let Some(pointer_pos) = ui.input(|i| i.pointer.latest_pos()) {
+                    let total_steps = drag_steps_from_pointer(active_drag.press_y, pointer_pos.y);
+                    if !active_drag.crossed_threshold && total_steps != 0 {
+                        active_drag.crossed_threshold = true;
+                    }
+
+                    if active_drag.crossed_threshold {
+                        let step_delta = total_steps - active_drag.applied_steps;
+                        if step_delta != 0 {
+                            let digit_index = active_drag.digit_index;
+                            let any_change = apply_drag_step_delta(
+                                self.value,
+                                digits,
+                                digit_index,
+                                step_delta,
+                                clamped_max,
+                            );
+                            active_drag.applied_steps = total_steps;
+                            drag_focus_digit = Some(digit_index);
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                            if any_change {
+                                changed = true;
+                                action = Some(DigitwiseNumberEditorAction::DragAdjustPlace);
+                            }
+                        }
+                    }
+                }
+
+                drag_state = Some(active_drag);
+            } else {
+                drag_focus_digit = Some(active_drag.digit_index);
+                drag_state = None;
+            }
+        }
+
         let focused_digit = rendered_digits
             .iter()
             .position(|digit| ui.memory(|memory| memory.has_focus(digit.id)))
+            .or(drag_focus_digit)
             .or_else(|| focus_digit.map(|_| state.selected_digit));
 
         if let Some(focused_digit) = focused_digit {
@@ -217,6 +280,7 @@ impl<'a> DigitwiseNumberEditor<'a> {
         }
 
         store_state(ui.ctx(), self.id_source, state);
+        store_drag_state(ui.ctx(), drag_state_id, drag_state);
 
         DigitwiseNumberEditorOutput {
             response,
@@ -233,6 +297,20 @@ fn load_state(ctx: &egui::Context, id: egui::Id) -> EditorState {
 
 fn store_state(ctx: &egui::Context, id: egui::Id, state: EditorState) {
     ctx.data_mut(|data| data.insert_temp(id, state));
+}
+
+fn load_drag_state(ctx: &egui::Context, id: egui::Id) -> Option<DragState> {
+    ctx.data_mut(|data| data.get_temp(id))
+}
+
+fn store_drag_state(ctx: &egui::Context, id: egui::Id, state: Option<DragState>) {
+    ctx.data_mut(|data| {
+        if let Some(state) = state {
+            data.insert_temp(id, state);
+        } else {
+            data.remove::<DragState>(id);
+        }
+    });
 }
 
 fn digit_size(ui: &Ui, digit_width: Option<f32>) -> egui::Vec2 {
@@ -372,6 +450,32 @@ fn apply_step_at_digit(
     true
 }
 
+fn apply_drag_step_delta(
+    value: &mut u64,
+    digits: usize,
+    digit_index: usize,
+    step_delta: i32,
+    max: u64,
+) -> bool {
+    let delta_sign = step_delta.signum() as i8;
+    let nr_steps = step_delta.unsigned_abs();
+    let mut any_change = false;
+    for _ in 0..nr_steps {
+        if apply_step_at_digit(value, digits, digit_index, delta_sign, max) {
+            any_change = true;
+        }
+    }
+    any_change
+}
+
+fn drag_steps_from_pointer(press_y: f32, current_y: f32) -> i32 {
+    let delta = press_y - current_y;
+    if delta.abs() < DRAG_START_THRESHOLD_PX {
+        return 0;
+    }
+    (delta / DRAG_STEP_PX).trunc() as i32
+}
+
 fn digit_step(digits: usize, digit_index: usize) -> u64 {
     let place = digits.saturating_sub(digit_index + 1) as u32;
     pow10(place).unwrap_or(u64::MAX)
@@ -420,6 +524,23 @@ mod tests {
         let mut value = 59;
         assert!(!apply_replace_digit(&mut value, 2, 0, 9, 75));
         assert_eq!(value, 59);
+    }
+
+    #[test]
+    fn drag_steps_require_threshold_and_follow_vertical_direction() {
+        assert_eq!(drag_steps_from_pointer(100.0, 97.0), 0);
+        assert_eq!(drag_steps_from_pointer(100.0, 88.0), 1);
+        assert_eq!(drag_steps_from_pointer(100.0, 76.0), 2);
+        assert_eq!(drag_steps_from_pointer(100.0, 112.0), -1);
+        assert_eq!(drag_steps_from_pointer(100.0, 124.0), -2);
+    }
+
+    #[test]
+    fn drag_steps_are_stable_within_same_step_band() {
+        assert_eq!(drag_steps_from_pointer(100.0, 89.0), 0);
+        assert_eq!(drag_steps_from_pointer(100.0, 88.1), 0);
+        assert_eq!(drag_steps_from_pointer(100.0, 88.0), 1);
+        assert_eq!(drag_steps_from_pointer(100.0, 79.0), 1);
     }
 
     #[test]
