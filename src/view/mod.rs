@@ -56,7 +56,7 @@ impl View {
         self.ui_top_panel_menu_bar(ctx);
         self.ui_right_side_panel(ctx);
         self.ui_left_side_panel(ctx);
-        self.ui_bottom_side_panel(ctx);
+        self.ui_bottom_panel(ctx);
 
         // central_panel should always come last
         if let Err(e) = self.ui_central_panel(ctx) {
@@ -77,14 +77,19 @@ impl View {
         }
     }
 
-    fn ui_bottom_side_panel(&mut self, ctx: &egui::Context) {
+    fn ui_bottom_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("bottom_panel")
             .resizable(false)
             .min_height(0.0)
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Bottom Panel");
-                });
+                selection_info::ui_selection_info_toolbar(
+                    ui,
+                    self.model.tracks.selection_info,
+                    &mut self.model.actions,
+                );
+                // ui.vertical_centered(|ui| {
+                //     ui.heading("Bottom Panel");
+                // });
             });
     }
 
@@ -103,7 +108,10 @@ impl View {
                 ui.add_space(5.0);
                 // ruler::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
                 ruler::ui_hover_info_panel2(ui, &self.model.tracks.hover_info);
-                selection_info::ui_selection_info_side_panel(ui, &self.model.tracks.selection_info);
+                selection_info::ui_selection_info_side_panel(
+                    ui,
+                    &mut self.model.tracks.selection_info,
+                );
             });
     }
 

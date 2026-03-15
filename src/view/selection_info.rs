@@ -1,6 +1,23 @@
-use crate::model::selection_info::SelectionInfoE;
+use crate::{
+    model::{
+        Action,
+        selection_info::{SelectionInfo, SelectionInfoE},
+    },
+    widgets::DigitwiseNumberEditor,
+};
 
-pub fn ui_selection_info_side_panel(ui: &mut egui::Ui, selection_info: &SelectionInfoE) {
+const SELECTION_EDITOR_DIGITS: usize = 9;
+const SELECTION_EDITOR_MAX: u64 = 999_999_999;
+const SELECTION_EDITOR_DIGIT_WIDTH: f32 = 12.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+enum StartEditMode {
+    #[default]
+    KeepEnd,
+    KeepLength,
+}
+
+pub fn ui_selection_info_side_panel(ui: &mut egui::Ui, selection_info: &mut SelectionInfoE) {
     ui.group(|ui| {
         ui.vertical(|ui| {
             ui.heading("Selection Info");
@@ -12,12 +29,174 @@ pub fn ui_selection_info_side_panel(ui: &mut egui::Ui, selection_info: &Selectio
                 SelectionInfoE::IsSelected(selection_info) => {
                     ui.label(format!(
                         "ix range: [{}, {}]",
-                        selection_info.ix_rng.start, selection_info.ix_rng.end
+                        selection_info.ix_rng.start,
+                        selection_info.ix_rng.end - 1
                     ));
-                    ui.label(format!("count: {}", selection_info.ix_rng.len()));
+                    ui.label(format!("length: {}", selection_info.ix_rng.len()));
                     // ui.label(format!("pos x range: {:?}", selection_info.screen_x_start..=selection_info.screen_x_end));
+                    // let mut value = selection_info.ix_rng.start as u64;
+                    // let output = DigitwiseNumberEditor::new("selection_start", &mut value)
+                    //     .digits(9)
+                    //     .max(999999999)
+                    //     .show(ui);
+                    // if output.changed {
+                    //     selection_info.ix_rng.start = value as i64;
+                    //     // model
+                    // }
                 }
             }
         });
     });
+}
+
+pub fn ui_selection_info_toolbar(
+    ui: &mut egui::Ui,
+    selection_info: SelectionInfoE,
+    actions: &mut Vec<Action>,
+) {
+    let start_edit_mode_id = ui.id().with("selection_start_edit_mode");
+    let mut start_edit_mode = load_start_edit_mode(ui.ctx(), start_edit_mode_id);
+    let (had_selection, screen_x_start, screen_x_end, mut start_val, mut length_val, mut end_val) =
+        match selection_info {
+            SelectionInfoE::NotSelected => (false, 0.0, 0.0, 0, 0, 0),
+            SelectionInfoE::IsSelected(selection_info) => {
+                let start_ix = selection_info.ix_rng.start.max(0) as u64;
+                let end_exclusive_ix = selection_info
+                    .ix_rng
+                    .end
+                    .max(selection_info.ix_rng.start.saturating_add(1))
+                    as u64;
+                let start_val = start_ix.min(SELECTION_EDITOR_MAX);
+                let end_val = end_exclusive_ix.saturating_sub(1).min(SELECTION_EDITOR_MAX);
+                let length_val = end_val.saturating_sub(start_val).saturating_add(1);
+                (
+                    true,
+                    selection_info.screen_x_start,
+                    selection_info.screen_x_end,
+                    start_val,
+                    length_val,
+                    end_val,
+                )
+            }
+        };
+
+    ui.group(|ui| {
+        ui.vertical(|ui| {
+            ui.label("Selection");
+            ui.horizontal(|ui| {
+                ui.label("Start edit:");
+                ui.radio_value(&mut start_edit_mode, StartEditMode::KeepEnd, "keep end");
+                ui.radio_value(
+                    &mut start_edit_mode,
+                    StartEditMode::KeepLength,
+                    "keep length",
+                );
+            });
+
+            egui::Grid::new(ui.id().with("selection_toolbar_grid"))
+                .num_columns(2)
+                .spacing([8.0, 4.0])
+                .show(ui, |ui| {
+                    ui.label("start");
+                    let out_start = DigitwiseNumberEditor::new("selection_start", &mut start_val)
+                        .digits(SELECTION_EDITOR_DIGITS)
+                        .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
+                        .max(SELECTION_EDITOR_MAX)
+                        .show(ui);
+                    ui.end_row();
+
+                    ui.label("length");
+                    let out_length =
+                        DigitwiseNumberEditor::new("selection_length", &mut length_val)
+                            .digits(SELECTION_EDITOR_DIGITS)
+                            .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
+                            .max(SELECTION_EDITOR_MAX)
+                            .show(ui);
+                    ui.end_row();
+
+                    ui.label("end");
+                    let out_end = DigitwiseNumberEditor::new("selection_end", &mut end_val)
+                        .digits(SELECTION_EDITOR_DIGITS)
+                        .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
+                        .max(SELECTION_EDITOR_MAX)
+                        .show(ui);
+                    ui.end_row();
+
+                    let any_changed = out_start.changed || out_length.changed || out_end.changed;
+                    if !any_changed {
+                        return;
+                    }
+
+                    if !had_selection {
+                        if out_start.changed {
+                            end_val = start_val;
+                            length_val = 1;
+                        }
+                        if out_length.changed {
+                            length_val = length_val.max(1);
+                            let desired_end =
+                                start_val.saturating_add(length_val.saturating_sub(1));
+                            end_val = desired_end.min(SELECTION_EDITOR_MAX);
+                            length_val = end_val.saturating_sub(start_val).saturating_add(1);
+                        }
+                        if out_end.changed {
+                            if end_val < start_val {
+                                end_val = start_val;
+                            }
+                            length_val = end_val.saturating_sub(start_val).saturating_add(1);
+                        }
+                    } else {
+                        if out_start.changed {
+                            match start_edit_mode {
+                                StartEditMode::KeepEnd => {
+                                    if start_val > end_val {
+                                        start_val = end_val;
+                                    }
+                                    length_val =
+                                        end_val.saturating_sub(start_val).saturating_add(1);
+                                }
+                                StartEditMode::KeepLength => {
+                                    let desired_end =
+                                        start_val.saturating_add(length_val.saturating_sub(1));
+                                    end_val = desired_end.min(SELECTION_EDITOR_MAX);
+                                    length_val =
+                                        end_val.saturating_sub(start_val).saturating_add(1);
+                                }
+                            }
+                        }
+
+                        if out_length.changed {
+                            length_val = length_val.max(1);
+                            let desired_end =
+                                start_val.saturating_add(length_val.saturating_sub(1));
+                            end_val = desired_end.min(SELECTION_EDITOR_MAX);
+                            length_val = end_val.saturating_sub(start_val).saturating_add(1);
+                        }
+
+                        if out_end.changed {
+                            if end_val < start_val {
+                                end_val = start_val;
+                            }
+                            length_val = end_val.saturating_sub(start_val).saturating_add(1);
+                        }
+                    }
+
+                    let new_selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+                        ix_rng: (start_val as i64..(end_val + 1) as i64).into(),
+                        screen_x_start,
+                        screen_x_end,
+                    });
+                    actions.push(Action::SetSelection(new_selection_info));
+                });
+        });
+    });
+    store_start_edit_mode(ui.ctx(), start_edit_mode_id, start_edit_mode);
+}
+
+fn load_start_edit_mode(ctx: &egui::Context, id: egui::Id) -> StartEditMode {
+    ctx.data_mut(|data| data.get_temp(id)).unwrap_or_default()
+}
+
+fn store_start_edit_mode(ctx: &egui::Context, id: egui::Id, mode: StartEditMode) {
+    ctx.data_mut(|data| data.insert_temp(id, mode));
 }
