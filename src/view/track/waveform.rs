@@ -140,15 +140,20 @@ fn ui_waveform(
                         } else {
                             2.0
                         };
-                        ui.painter().circle_filled(pos.into(), circle_size, color);
+                        // Use pos centerd x so it aligns with the line that is drawn on a pixel
+                        // column exactly.
+                        let pos_centered = rpc(ui, pos.into());
+                        let pos_centered_x = egui::pos2(pos_centered.x, pos.y);
+                        ui.painter().circle_filled(pos_centered_x, circle_size, color);
                     } else {
                         pos = screen_rect.clip_pos(pos);
-                        pos = rpc(ui, pos.into()).into();
                     };
 
+                    let pos = rpc(ui, pos.into());
+
                     ui.painter().line_segment(
-                        [pos_mid, pos.into()],
-                        egui::Stroke::new(stroke_width, line_color),
+                        [pos_mid, pos],
+                        egui::Stroke::new(stroke_width, line_color.linear_multiply(0.5)),
                     );
                 });
             } else {

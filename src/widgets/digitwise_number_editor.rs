@@ -248,18 +248,24 @@ impl<'a> DigitwiseNumberEditor<'a> {
                     digit_chars[focused_digit].to_digit(10).expect("digit char") as u8;
 
                 if let Some(new_digit) = input {
-                    if new_digit != current_digit
-                        && apply_replace_digit(
-                            self.value,
-                            digits,
-                            focused_digit,
-                            new_digit,
-                            clamped_max,
-                        )
-                    {
+                    let next_digit = (focused_digit + 1).min(digits - 1);
+                    if new_digit == current_digit {
+                        if next_digit != focused_digit {
+                            state.selected_digit = next_digit;
+                            focus_digit = Some(next_digit);
+                            action = Some(DigitwiseNumberEditorAction::MoveRight);
+                        } else {
+                            focus_digit = Some(focused_digit);
+                        }
+                    } else if apply_replace_digit(
+                        self.value,
+                        digits,
+                        focused_digit,
+                        new_digit,
+                        clamped_max,
+                    ) {
                         changed = true;
                         action = Some(DigitwiseNumberEditorAction::ReplaceDigit);
-                        let next_digit = (focused_digit + 1).min(digits - 1);
                         state.selected_digit = next_digit;
                         focus_digit = Some(next_digit);
                     } else {

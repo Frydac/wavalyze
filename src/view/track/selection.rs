@@ -7,6 +7,7 @@ use crate::{
 };
 
 const SELECTION_EDGE_HIT_RADIUS_PX: f32 = 8.0;
+const SELECTION_RESIZE_CURSOR: egui::CursorIcon = egui::CursorIcon::ResizeColumn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum SelectionResizeEdge {
@@ -107,7 +108,7 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
     };
 
     if hover_edge.is_some() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        ui.ctx().set_cursor_icon(SELECTION_RESIZE_CURSOR);
     }
 
     let primary_down = ui.input(|i| i.pointer.primary_down());
@@ -193,7 +194,7 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
             start_x,
             current_pos.x,
         );
-        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        ui.ctx().set_cursor_icon(SELECTION_RESIZE_CURSOR);
         return;
     }
 
