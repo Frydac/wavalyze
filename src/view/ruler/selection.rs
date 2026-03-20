@@ -48,7 +48,17 @@ pub fn ui_selection_interaction_and_tics(
     // against each other. Otherwise fall back to the ordinary single-label placement path.
     match (left_label, right_label) {
         (Some((left_x, left_text)), Some((right_x, right_text))) => {
-            if let Some(pair_rects) = ticks::ui_selection_tick_label_pair(
+            if left_x == right_x
+                && let Some(rect) = ticks::ui_tick_label(
+                    ui,
+                    left_x,
+                    TickLabel::SampleIx(left_ix),
+                    Some(existing_rects.as_slice()),
+                    true,
+                )
+            {
+                result.push(rect);
+            } else if let Some(pair_rects) = ticks::ui_selection_tick_label_pair(
                 ui,
                 (left_x, left_text),
                 (right_x, right_text),
