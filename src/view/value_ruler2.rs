@@ -448,10 +448,13 @@ fn draw_lattice_labels(
             TickType::Mid => lattice.major_step / 2.0,
             TickType::Small => continue,
         };
-        for tick in lattice.ticks.iter().filter(|tick| tick.tick_type == tick_type) {
+        for tick in lattice
+            .ticks
+            .iter()
+            .filter(|tick| tick.tick_type == tick_type)
+        {
             let text = format_tick_label(tick.sample_value, step);
-            let (label_rect, _galleys, _color) =
-                layout_value_label(ui, rect, tick.screen_y, &text);
+            let (label_rect, _galleys, _color) = layout_value_label(ui, rect, tick.screen_y, &text);
             if occupied.iter().any(|r| r.intersects(label_rect)) {
                 continue;
             }

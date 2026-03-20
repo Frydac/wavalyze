@@ -166,10 +166,12 @@ mod tests {
 
         assert_eq!(major_values, vec![-1.0, -0.5, 0.0, 0.5, 1.0]);
         assert_eq!(lattice.major_step, 0.5);
-        assert!(lattice
-            .ticks
-            .iter()
-            .any(|tick| tick.sample_value == 0.0 && tick.tick_type == TickType::Big));
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .any(|tick| tick.sample_value == 0.0 && tick.tick_type == TickType::Big)
+        );
     }
 
     #[test]
@@ -196,10 +198,12 @@ mod tests {
 
         assert_eq!(major_values, vec![-0.2, -0.1, 0.0, 0.1, 0.2]);
         assert_eq!(lattice.major_step, 0.1);
-        assert!(lattice
-            .ticks
-            .iter()
-            .all(|tick| tick.sample_value >= -0.2 && tick.sample_value <= 0.2));
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .all(|tick| tick.sample_value >= -0.2 && tick.sample_value <= 0.2)
+        );
     }
 
     #[test]
@@ -217,13 +221,14 @@ mod tests {
             )
             .unwrap();
 
-        assert!(lattice
-            .ticks
-            .iter()
-            .all(|tick| tick.sample_value >= 0.25 && tick.sample_value <= 0.75));
-        assert!(lattice
-            .ticks
-            .iter()
-            .all(|tick| tick.screen_y >= screen_rect.top() && tick.screen_y <= screen_rect.bottom()));
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .all(|tick| tick.sample_value >= 0.25 && tick.sample_value <= 0.75)
+        );
+        assert!(lattice.ticks.iter().all(
+            |tick| tick.screen_y >= screen_rect.top() && tick.screen_y <= screen_rect.bottom()
+        ));
     }
 }

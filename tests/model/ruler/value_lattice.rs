@@ -18,10 +18,12 @@ fn value_lattice_full_scale_zero_is_major() {
         )
         .unwrap();
 
-    assert!(lattice
-        .ticks
-        .iter()
-        .any(|tick| tick.sample_value == 0.0 && tick.tick_type == TickType::Big));
+    assert!(
+        lattice
+            .ticks
+            .iter()
+            .any(|tick| tick.sample_value == 0.0 && tick.tick_type == TickType::Big)
+    );
     assert_eq!(lattice.major_step, 0.5);
 }
 
@@ -39,9 +41,11 @@ fn value_lattice_zoomed_range_stays_visible() {
         )
         .unwrap();
 
-    assert!(lattice
-        .ticks
-        .iter()
-        .all(|tick| tick.sample_value >= -0.2 && tick.sample_value <= 0.2));
+    assert!(
+        lattice
+            .ticks
+            .iter()
+            .all(|tick| tick.sample_value >= -0.2 && tick.sample_value <= 0.2)
+    );
     assert_eq!(lattice.major_step, 0.1);
 }
