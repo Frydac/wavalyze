@@ -49,6 +49,7 @@ pub fn ui_selection_info_toolbar(
     selection_info: SelectionInfoE,
     actions: &mut Vec<Action>,
 ) {
+    let has_selection = selection_info.is_selected();
     let (had_selection, screen_x_start, screen_x_end, mut start_val, mut length_val, mut end_val) =
         match selection_info {
             SelectionInfoE::NotSelected => (false, 0.0, 0.0, 0, 0, 0),
@@ -90,6 +91,12 @@ pub fn ui_selection_info_toolbar(
                         "keep length",
                     );
                 });
+                let zoom_button = ui
+                    .add_enabled(has_selection, egui::Button::new("🔍▭"))
+                    .on_hover_text("Zoom to selection");
+                if zoom_button.clicked() {
+                    actions.push(Action::ZoomToSelection);
+                }
             });
 
             egui::Grid::new(ui.id().with("selection_toolbar_grid"))

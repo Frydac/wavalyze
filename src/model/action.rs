@@ -16,6 +16,8 @@ pub enum Action {
     /// Set x-zoom so the longest track is full width
     /// Set y-zoom to fill the screen, with a minimum height per track
     ZoomToFull,
+    /// Set x-zoom so the current selection fills the visible width.
+    ZoomToSelection,
 
     /// Adjust height of tracks to fit the screen, keeping in mind the min_height for each track
     FillScreenHeight,
@@ -152,6 +154,9 @@ impl Action {
                 model.tracks.zoom_to_full(&model.audio)?;
                 // model.tracks.zoom_to_full();
                 // todo!();
+            }
+            Action::ZoomToSelection => {
+                model.tracks.zoom_to_selection(&model.audio)?;
             }
             Action::FillScreenHeight => {
                 let min_height = model.user_config.track.min_height;

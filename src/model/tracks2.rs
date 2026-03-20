@@ -239,6 +239,25 @@ impl Tracks {
         self.zoom_to_sample_rect(max_sample_rect, audio)
     }
 
+    pub fn zoom_to_selection(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
+        let SelectionInfoE::IsSelected(selection_info) = self.selection_info else {
+            return Ok(());
+        };
+        if selection_info.ix_rng.end <= selection_info.ix_rng.start {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            self.ruler.screen_rect().width() > 0.0,
+            "Ruler screen rect width is zero"
+        );
+        self.ruler.zoom_to_ix_range(audio::sample::FracIxRange {
+            start: selection_info.ix_rng.start as f64,
+            end: selection_info.ix_rng.end as f64,
+        });
+        self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
+        Ok(())
+    }
+
     /// Update track heights to equally distribute the available height, taking min_height into account.
     pub fn fill_screen_height(&mut self, min_height: f32) -> Result<()> {
         if self.tracks.is_empty() {
@@ -280,5 +299,69 @@ impl Tracks {
     }
     pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<f64> {
         self.ruler.screen_x_to_sample_ix(screen_x)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Tracks;
+    use crate::{
+        audio,
+        model::selection_info::{SelectionInfo, SelectionInfoE},
+        rect::Rect,
+    };
+
+    #[test]
+    fn zoom_to_selection_fits_selected_range() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (100..300).into(),
+            screen_x_start: 10.0,
+            screen_x_end: 30.0,
+        });
+
+        tracks
+            .zoom_to_selection(&audio::manager::AudioManager::default())
+            .unwrap();
+
+        assert_eq!(tracks.ruler.ix_range().unwrap().start, 100.0);
+        assert_eq!(tracks.ruler.ix_range().unwrap().end, 300.0);
+        assert_eq!(tracks.samples_per_pixel(), Some(0.2));
+    }
+
+    #[test]
+    fn zoom_to_selection_without_selection_is_noop() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+
+        tracks
+            .zoom_to_selection(&audio::manager::AudioManager::default())
+            .unwrap();
+
+        assert_eq!(tracks.ruler.ix_range(), None);
+    }
+
+    #[test]
+    fn zoom_to_selection_with_invalid_range_is_noop() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (100..100).into(),
+            screen_x_start: 10.0,
+            screen_x_end: 10.0,
+        });
+
+        tracks
+            .zoom_to_selection(&audio::manager::AudioManager::default())
+            .unwrap();
+
+        assert_eq!(tracks.ruler.ix_range(), None);
     }
 }
