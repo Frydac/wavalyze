@@ -216,7 +216,7 @@ pub fn ui_selection(ui: &mut egui::Ui, model: &mut Model, response: &egui::Respo
 
     let rect = ui.min_rect();
     let rect = egui::Rect::from_x_y_ranges(
-        *screen_x_rng.start()..=*screen_x_rng.end(),
+        *screen_x_rng.start()..=(*screen_x_rng.end()).max(*screen_x_rng.start() + 1.0),
         (rect.top() + 1.0)..=rect.bottom(),
     );
     let rect = rect.intersect(ui.min_rect());
