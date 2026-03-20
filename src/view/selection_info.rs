@@ -1,6 +1,7 @@
 use crate::{
     model::{
-        Action,
+        self, Action,
+        config::StartEditMode,
         selection_info::{SelectionInfo, SelectionInfoE},
     },
     widgets::DigitwiseNumberEditor,
@@ -9,13 +10,6 @@ use crate::{
 const SELECTION_EDITOR_DIGITS: usize = 9;
 const SELECTION_EDITOR_MAX: u64 = 999_999_999;
 const SELECTION_EDITOR_DIGIT_WIDTH: f32 = 12.0;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-enum StartEditMode {
-    #[default]
-    KeepEnd,
-    KeepLength,
-}
 
 pub fn ui_selection_info_side_panel(ui: &mut egui::Ui, selection_info: &mut SelectionInfoE) {
     ui.group(|ui| {
@@ -51,11 +45,10 @@ pub fn ui_selection_info_side_panel(ui: &mut egui::Ui, selection_info: &mut Sele
 
 pub fn ui_selection_info_toolbar(
     ui: &mut egui::Ui,
+    config: &mut model::Config,
     selection_info: SelectionInfoE,
     actions: &mut Vec<Action>,
 ) {
-    let start_edit_mode_id = ui.id().with("selection_start_edit_mode");
-    let mut start_edit_mode = load_start_edit_mode(ui.ctx(), start_edit_mode_id);
     let (had_selection, screen_x_start, screen_x_end, mut start_val, mut length_val, mut end_val) =
         match selection_info {
             SelectionInfoE::NotSelected => (false, 0.0, 0.0, 0, 0, 0),
@@ -81,16 +74,22 @@ pub fn ui_selection_info_toolbar(
         };
 
     ui.group(|ui| {
-        ui.vertical(|ui| {
-            ui.label("Selection");
-            ui.horizontal(|ui| {
-                ui.label("Start edit:");
-                ui.radio_value(&mut start_edit_mode, StartEditMode::KeepEnd, "keep end");
-                ui.radio_value(
-                    &mut start_edit_mode,
-                    StartEditMode::KeepLength,
-                    "keep length",
-                );
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+            ui.vertical(|ui| {
+                ui.heading("Selection");
+                ui.menu_button("⚙", |ui| {
+                    ui.label("Start edit");
+                    ui.radio_value(
+                        &mut config.selection.start_edit_mode,
+                        StartEditMode::KeepEnd,
+                        "keep end",
+                    );
+                    ui.radio_value(
+                        &mut config.selection.start_edit_mode,
+                        StartEditMode::KeepLength,
+                        "keep length",
+                    );
+                });
             });
 
             egui::Grid::new(ui.id().with("selection_toolbar_grid"))
@@ -147,7 +146,7 @@ pub fn ui_selection_info_toolbar(
                         }
                     } else {
                         if out_start.changed {
-                            match start_edit_mode {
+                            match config.selection.start_edit_mode {
                                 StartEditMode::KeepEnd => {
                                     if start_val > end_val {
                                         start_val = end_val;
@@ -190,13 +189,4 @@ pub fn ui_selection_info_toolbar(
                 });
         });
     });
-    store_start_edit_mode(ui.ctx(), start_edit_mode_id, start_edit_mode);
-}
-
-fn load_start_edit_mode(ctx: &egui::Context, id: egui::Id) -> StartEditMode {
-    ctx.data_mut(|data| data.get_temp(id)).unwrap_or_default()
-}
-
-fn store_start_edit_mode(ctx: &egui::Context, id: egui::Id, mode: StartEditMode) {
-    ctx.data_mut(|data| data.insert_temp(id, mode));
 }

@@ -5,6 +5,7 @@ use tracing::{error, info, trace, warn};
 pub const APP_NAME: &str = "wavalyze";
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
 pub struct Config {
     /// Factor to multiply with the scroll wheel to zoom over the X-axis
     pub zoom_x_scroll_factor: f32,
@@ -14,12 +15,34 @@ pub struct Config {
     pub show_hover_info: bool,
 
     pub tracks_width_info: f32,
+    pub selection: SelectionConfig,
     pub track: TrackConfig,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
+pub enum StartEditMode {
+    #[default]
+    KeepEnd,
+    KeepLength,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct SelectionConfig {
+    pub start_edit_mode: StartEditMode,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TrackConfig {
     pub min_height: f32,
+}
+
+impl Default for SelectionConfig {
+    fn default() -> Self {
+        Self {
+            start_edit_mode: StartEditMode::KeepEnd,
+        }
+    }
 }
 
 impl Default for TrackConfig {
@@ -34,6 +57,7 @@ impl Default for Config {
             zoom_x_scroll_factor: 4.0,
             show_hover_info: true,
             tracks_width_info: 150.0,
+            selection: SelectionConfig::default(),
             track: TrackConfig::default(),
         }
     }

@@ -84,6 +84,7 @@ impl View {
             .show(ctx, |ui| {
                 selection_info::ui_selection_info_toolbar(
                     ui,
+                    &mut self.model.user_config,
                     self.model.tracks.selection_info,
                     &mut self.model.actions,
                 );
