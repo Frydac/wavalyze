@@ -1,10 +1,15 @@
 use crate::{
     audio::{self, sample::view::ViewData},
-    model::{Action, Model, ruler::sample_value_to_screen_y, track::TrackId},
+    model::{
+        Action, Model,
+        ruler::{TickType, ValueLattice, sample_value_to_screen_y},
+        track::TrackId,
+    },
     rect::Rect,
     view::{
         track::{hover, selection},
         util::rpc,
+        value_ruler2::NR_PIXELS_PER_VALUE_TICK,
     },
 };
 use anyhow::Result;
@@ -188,27 +193,41 @@ fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRect, screen_rec
     let Some(val_rng) = sample_rect.val_rng() else {
         return;
     };
+    let mut lattice = ValueLattice::default();
+    if lattice
+        .compute_ticks(val_rng, screen_rect, NR_PIXELS_PER_VALUE_TICK)
+        .is_err()
+    {
+        return;
+    }
 
-    let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
-    let faint = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.35));
-    let mid = egui::Stroke::new(stroke.width, stroke.color.linear_multiply(0.6));
+    let zero_stroke = egui::Stroke::new(1.0, ui.style().visuals.text_color().linear_multiply(0.55));
+    let grid_stroke = egui::Stroke::new(
+        1.0,
+        ui.style()
+            .visuals
+            .widgets
+            .noninteractive
+            .bg_stroke
+            .color
+            .linear_multiply(0.7),
+    );
 
-    for (value, is_mid) in [
-        (-1.0_f32, false),
-        (-0.5_f32, false),
-        (0.0_f32, true),
-        (0.5_f32, false),
-        (1.0_f32, false),
-    ] {
-        let Some(y) = sample_value_to_screen_y(value as f64, val_rng, screen_rect) else {
-            continue;
-        };
-        if y < screen_rect.top() || y > screen_rect.bottom() {
+    for tick in &lattice.ticks {
+        // The waveform background uses a much coarser grid than the ruler on purpose.
+        // We keep only the major lines plus zero so the waveform stays readable.
+        if tick.sample_value != 0.0 && tick.tick_type != TickType::Big {
             continue;
         }
-        let left = rpc(ui, egui::pos2(screen_rect.left(), y));
-        let right = rpc(ui, egui::pos2(screen_rect.right(), y));
-        ui.painter()
-            .line_segment([left, right], if is_mid { mid } else { faint });
+        let left = rpc(ui, egui::pos2(screen_rect.left(), tick.screen_y));
+        let right = rpc(ui, egui::pos2(screen_rect.right(), tick.screen_y));
+        // Zero is highlighted slightly more than the other guides because it carries semantic
+        // meaning for audio signals, while the remaining grid lines should stay unobtrusive.
+        let stroke = if tick.sample_value == 0.0 {
+            zero_stroke
+        } else {
+            grid_stroke
+        };
+        ui.painter().line_segment([left, right], stroke);
     }
 }

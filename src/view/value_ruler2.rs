@@ -1,9 +1,13 @@
 use crate::audio::sample::{self, Sample};
 use crate::model::hover_info::HoverInfoE;
-use crate::model::ruler::{sample_value_to_screen_y, screen_y_to_sample_value};
+use crate::model::ruler::{
+    TickType, ValueLattice, sample_value_to_screen_y, screen_y_to_sample_value,
+};
 use crate::model::track::Track;
 use crate::model::{Action, track::TrackId};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
+
+pub const NR_PIXELS_PER_VALUE_TICK: f32 = 50.0;
 
 pub struct ValueRulerContext<'a> {
     pub actions: &'a mut Vec<Action>,
@@ -46,41 +50,43 @@ pub fn ui(
         return;
     };
 
-    let zero_y = sample_value_to_screen_y(0.0, val_rng, rect.into());
-
-    let painter = ui.painter();
-    let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-    let minor_stroke = Stroke::new(stroke.width, stroke.color.linear_multiply(0.6));
-    let zero_stroke = Stroke::new(stroke.width + 1.0, stroke.color);
-
-    painter.rect(rect, 0.0, Color32::TRANSPARENT, stroke);
-
-    const TICK_LEN: f32 = 10.0;
-    const MINOR_TICK_LEN: f32 = 6.0;
-
-    // Value ticks at -1.0, -0.5, 0.5, 1.0 (mapped to PCM ranges when needed).
-    for value in [-1.0_f32, -0.5_f32, 0.5_f32, 1.0_f32] {
-        let Some(y) = sample_value_to_screen_y(value as f64, val_rng, rect.into()) else {
-            continue;
-        };
-        if (rect.top()..=rect.bottom()).contains(&y) {
-            let line = [
-                Pos2::new(rect.right() - MINOR_TICK_LEN, y),
-                Pos2::new(rect.right(), y),
-            ];
-            painter.line_segment(line, minor_stroke);
-        }
+    let mut lattice = ValueLattice::default();
+    if lattice
+        .compute_ticks(val_rng, rect.into(), NR_PIXELS_PER_VALUE_TICK)
+        .is_err()
+    {
+        return;
     }
 
-    // Zero tick line (short, like the time ruler ticks).
-    if let Some(zero_y) = zero_y
-        && (rect.top()..=rect.bottom()).contains(&zero_y)
-    {
-        let zero_line = [
-            Pos2::new(rect.right() - TICK_LEN, zero_y),
-            Pos2::new(rect.right(), zero_y),
+    let painter = ui.painter();
+    let border_stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
+    // Match the time ruler tick color exactly so both rulers read as the same UI element.
+    let tick_color = ui.style().visuals.text_color();
+    let tick_stroke = Stroke::new(1.0, tick_color);
+    let zero_stroke = Stroke::new(1.0, tick_color);
+
+    painter.rect(rect, 0.0, Color32::TRANSPARENT, border_stroke);
+
+    const TICK_LEN_LONG: f32 = 10.0;
+    const TICK_LEN_MID: f32 = 8.0;
+    const TICK_LEN_SHORT: f32 = 6.0;
+
+    for tick in &lattice.ticks {
+        let tick_len = match tick.tick_type {
+            TickType::Big => TICK_LEN_LONG,
+            TickType::Mid => TICK_LEN_MID,
+            TickType::Small => TICK_LEN_SHORT,
+        };
+        let tick_stroke = if tick.sample_value == 0.0 {
+            zero_stroke
+        } else {
+            tick_stroke
+        };
+        let line = [
+            Pos2::new(rect.right() - tick_len, tick.screen_y),
+            Pos2::new(rect.right(), tick.screen_y),
         ];
-        painter.line_segment(zero_line, zero_stroke);
+        painter.line_segment(line, tick_stroke);
     }
 
     // Dragging the value ruler pans the value range of this track.
@@ -111,7 +117,7 @@ pub fn ui(
         rect,
         &mut occupied,
     );
-    draw_lattice_labels(ui, ctx.audio, track, rect, val_rng, &mut occupied);
+    draw_lattice_labels(ui, rect, &lattice, &mut occupied);
 }
 
 fn handle_value_ruler_scroll(
@@ -148,27 +154,43 @@ fn handle_value_ruler_scroll(
     }
 }
 
-fn format_tick_label(
-    value: f64,
-    audio: &crate::audio::manager::AudioManager,
-    track: &Track,
-) -> String {
-    let Ok(buffer) = audio.get_buffer(track.single.item.buffer_id) else {
-        return format!("{value:.2}");
-    };
-    match buffer {
-        crate::audio::buffer::BufferE::F32(_) => format!("{value:.2}"),
-        crate::audio::buffer::BufferE::I16(_) => {
-            let scaled = (value * sample::convert::float2pcm_factor(16) as f64).round() as i16;
-            format!("{scaled}")
+fn format_tick_label(value: f64, step: f64) -> String {
+    // Precision follows the active lattice step, not the absolute value. Without that, zooming
+    // around 0.5 would stay stuck at one decimal place even when nearby ticks differ by 0.01.
+    let decimals = decimals_for_step(step);
+    let mut text = format!("{value:.decimals$}");
+    if text.contains('.') {
+        while text.ends_with('0') {
+            text.pop();
         }
-        crate::audio::buffer::BufferE::I32(buffer) => {
-            let bit_depth = buffer.bit_depth.clamp(1, 32) as u32;
-            let scaled =
-                (value * sample::convert::float2pcm_factor(bit_depth) as f64).round() as i32;
-            format!("{scaled}")
+        if text.ends_with('.') {
+            text.pop();
         }
     }
+    if text == "-0" {
+        String::from("0")
+    } else {
+        text
+    }
+}
+
+fn decimals_for_step(step: f64) -> usize {
+    if step <= 0.0 {
+        return 0;
+    }
+
+    let normalized_step = normalize_step(step);
+    if normalized_step >= 1.0 {
+        return 0;
+    }
+
+    // `0.5 -> 1`, `0.05 -> 2`, `0.005 -> 3`, etc.
+    let decimals = (-normalized_step.log10()).ceil().max(0.0) as usize;
+    decimals.min(6)
+}
+
+fn normalize_step(step: f64) -> f64 {
+    if step.abs() < 1e-9 { 0.0 } else { step.abs() }
 }
 
 fn draw_value_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) -> Rect {
@@ -414,24 +436,53 @@ fn draw_hover_value_from_y(
 
 fn draw_lattice_labels(
     ui: &egui::Ui,
-    audio: &crate::audio::manager::AudioManager,
-    track: &Track,
     rect: Rect,
-    val_rng: sample::ValRange<f64>,
+    lattice: &ValueLattice,
     occupied: &mut Vec<Rect>,
 ) {
-    for value in [-1.0_f64, -0.5_f64, 0.0_f64, 0.5_f64, 1.0_f64] {
-        let Some(y) = sample_value_to_screen_y(value, val_rng, rect.into()) else {
-            continue;
+    for tick_type in [TickType::Big, TickType::Mid] {
+        // Mid labels intentionally use half the major step, so when the lattice shows e.g.
+        // `0.50, 0.55, 0.60`, the mid label can carry the extra precision it needs.
+        let step = match tick_type {
+            TickType::Big => lattice.major_step,
+            TickType::Mid => lattice.major_step / 2.0,
+            TickType::Small => continue,
         };
-        if (rect.top()..=rect.bottom()).contains(&y) {
-            let text = format_tick_label(value, audio, track);
-            let (label_rect, _galleys, _color) = layout_value_label(ui, rect, y, &text);
+        for tick in lattice.ticks.iter().filter(|tick| tick.tick_type == tick_type) {
+            let text = format_tick_label(tick.sample_value, step);
+            let (label_rect, _galleys, _color) =
+                layout_value_label(ui, rect, tick.screen_y, &text);
             if occupied.iter().any(|r| r.intersects(label_rect)) {
                 continue;
             }
-            draw_value_label(ui, rect, y, text);
+            draw_value_label(ui, rect, tick.screen_y, text);
             occupied.push(label_rect);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{decimals_for_step, format_tick_label};
+
+    #[test]
+    fn step_based_precision_allows_more_digits_away_from_zero() {
+        assert_eq!(format_tick_label(0.5, 0.1), "0.5");
+        assert_eq!(format_tick_label(0.5, 0.01), "0.5");
+        assert_eq!(format_tick_label(0.51, 0.01), "0.51");
+        assert_eq!(format_tick_label(0.55, 0.05), "0.55");
+    }
+
+    #[test]
+    fn step_precision_scales_with_lattice_spacing() {
+        assert_eq!(decimals_for_step(1.0), 0);
+        assert_eq!(decimals_for_step(0.5), 1);
+        assert_eq!(decimals_for_step(0.05), 2);
+        assert_eq!(decimals_for_step(0.005), 3);
+    }
+
+    #[test]
+    fn negative_zero_label_is_normalized() {
+        assert_eq!(format_tick_label(-0.0, 0.01), "0");
     }
 }
