@@ -15,5 +15,3 @@ target_wasm
 data
 
 perf.*
-
-AGENTS.md
