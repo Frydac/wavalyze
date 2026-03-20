@@ -144,7 +144,8 @@ fn ui_waveform(
                         // column exactly.
                         let pos_centered = rpc(ui, pos.into());
                         let pos_centered_x = egui::pos2(pos_centered.x, pos.y);
-                        ui.painter().circle_filled(pos_centered_x, circle_size, color);
+                        ui.painter()
+                            .circle_filled(pos_centered_x, circle_size, color);
                     } else {
                         pos = screen_rect.clip_pos(pos);
                     };
