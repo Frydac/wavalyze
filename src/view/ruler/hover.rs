@@ -37,8 +37,9 @@ pub(crate) fn ui_hover_interaction_and_tick(
 
     let mut hover_text_rect = None;
     if let HoverInfoE::IsHovered(hover_info) = &model.tracks.hover_info {
+        let theme_colors = model.user_config.active_theme_colors(ui.visuals());
         hover_text_rect = ui_hover_tick_label(ui, hover_info);
-        ui_hover_tick_line_triangle(ui, hover_info);
+        ui_hover_tick_line_triangle(ui, hover_info, theme_colors.accent);
     }
     Ok(hover_text_rect)
 }
@@ -54,14 +55,13 @@ fn ui_hover_tick_label(ui: &mut egui::Ui, hover_info: &HoverInfo) -> Option<egui
     )
 }
 
-fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo) {
+fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo, color: egui::Color32) {
     let screen_x = hover_info.screen_pos.x;
     let rect_x_range = ui.min_rect().left()..ui.min_rect().right();
     if !rect_x_range.contains(&screen_x) {
         tracing::trace!("screen_x {} not in rect {:?}", screen_x, rect_x_range);
         return;
     }
-    let color = egui::Color32::LIGHT_BLUE;
     ticks::ui_tick_line(ui, screen_x, ticks::TICK_HEIGHT_LONG - 2.0, Some(color));
-    ticks::ui_triangle(ui, screen_x, TriangleType::Full);
+    ticks::ui_triangle(ui, screen_x, TriangleType::Full, color);
 }

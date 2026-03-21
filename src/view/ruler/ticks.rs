@@ -162,7 +162,12 @@ pub(crate) fn ui_tick_label(
     Some(layout.text_rect)
 }
 
-pub(crate) fn ui_triangle(ui: &mut egui::Ui, screen_x: f32, triangle_type: TriangleType) {
+pub(crate) fn ui_triangle(
+    ui: &mut egui::Ui,
+    screen_x: f32,
+    triangle_type: TriangleType,
+    color: egui::Color32,
+) {
     let height = TICK_HEIGHT_LONG;
     let side = 10.0;
     let screen_y_top = ui.min_rect().bottom() - height - 2.0;
@@ -195,8 +200,6 @@ pub(crate) fn ui_triangle(ui: &mut egui::Ui, screen_x: f32, triangle_type: Trian
             points.push(bottom);
         }
     }
-
-    let color = egui::Color32::LIGHT_BLUE;
     ui.painter().add(egui::Shape::convex_polygon(
         points,
         color,

@@ -5,6 +5,7 @@ use crate::{
     },
     model::{
         Action, Model,
+        config::ThemeColors,
         ruler::{TickType, ValueLattice, sample_value_to_screen_y},
         track::TrackId,
     },
@@ -22,6 +23,7 @@ pub fn ui_waveform_canvas(
     model: &mut Model,
     track_id: TrackId,
     rect: egui::Rect,
+    theme_colors: &ThemeColors,
 ) -> Result<()> {
     let size = ui.available_size();
     ui.set_max_size(size);
@@ -36,9 +38,9 @@ pub fn ui_waveform_canvas(
         egui::Sense::drag(),
     );
     handle_pan_drag(ui, model, track_id, &waveform_response);
-    ui_waveform(ui, model, track_id, rect)?;
-    hover::ui_hover(ui, model, track_id);
-    selection::ui_selection(ui, model, &waveform_response);
+    ui_waveform(ui, model, track_id, rect, theme_colors)?;
+    hover::ui_hover(ui, model, track_id, theme_colors);
+    selection::ui_selection(ui, model, &waveform_response, theme_colors);
 
     Ok(())
 }
@@ -77,6 +79,7 @@ fn ui_waveform(
     model: &mut Model,
     track_id: TrackId,
     rect: egui::Rect,
+    theme_colors: &ThemeColors,
 ) -> Result<()> {
     let sample_ix_range = model
         .tracks
@@ -95,7 +98,7 @@ fn ui_waveform(
     track.update_sample_view(&mut model.audio, display_scale)?;
     let sample_view = track.get_sample_view()?;
 
-    let color = egui::Color32::LIGHT_RED;
+    let color = theme_colors.waveform;
     let line_color = color.linear_multiply(0.7);
     let screen_rect = track
         .screen_rect
@@ -124,9 +127,9 @@ fn ui_waveform(
                     let stroke_width = if is_hovered { 2.0 } else { 1.0 };
 
                     let color = if is_hovered {
-                        egui::Color32::WHITE
+                        theme_colors.waveform_hovered_sample
                     } else {
-                        egui::Color32::LIGHT_RED
+                        theme_colors.waveform
                     };
                     let line_color = color.linear_multiply(0.7);
 
@@ -179,7 +182,7 @@ fn ui_waveform(
                 if !screen_rect.contains(min.into()) && !screen_rect.contains(max.into()) {
                     return;
                 }
-                let color = egui::Color32::LIGHT_RED;
+                let color = theme_colors.waveform;
                 ui.painter()
                     .line_segment([min, max], egui::Stroke::new(1.0, color));
             });

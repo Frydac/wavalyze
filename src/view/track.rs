@@ -15,6 +15,7 @@ mod selection;
 mod waveform;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
+    let theme_colors = model.user_config.active_theme_colors(ui.visuals()).clone();
     let min_height = track::min_total_height(&model.user_config.track);
     let width = ui.available_width().max(0.0);
     let width_info = model.user_config.tracks_width_info.min(width);
@@ -74,6 +75,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                     track_id,
                     ruler_rect,
                     value_ruler_config,
+                    &theme_colors,
                     &mut value_ruler_ctx,
                 );
             }
@@ -104,7 +106,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 ui.set_max_size(size);
                 ui.set_min_size(size);
                 let waveform_rect = ui.min_rect();
-                let _ = waveform::ui_waveform_canvas(ui, model, track_id, waveform_rect);
+                let _ =
+                    waveform::ui_waveform_canvas(ui, model, track_id, waveform_rect, &theme_colors);
             });
         });
     });

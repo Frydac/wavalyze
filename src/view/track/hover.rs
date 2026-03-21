@@ -1,13 +1,19 @@
 use crate::{
     model::{
         Action, Model,
+        config::ThemeColors,
         hover_info::{HoverInfo, HoverInfoE},
         track::TrackId,
     },
     view::util::rpc,
 };
 
-pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
+pub fn ui_hover(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    theme_colors: &ThemeColors,
+) {
     match &model.tracks.hover_info {
         HoverInfoE::NotHovered => {}
         HoverInfoE::IsHovered(hover_info) => {
@@ -19,7 +25,7 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                 let pos_max = rpc(ui, egui::pos2(pos_x, pos_y_max));
                 ui.painter().line_segment(
                     [pos_min, pos_max],
-                    egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE),
+                    egui::Stroke::new(1.0, theme_colors.accent),
                 );
             }
 
@@ -33,7 +39,7 @@ pub fn ui_hover(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) {
                     let pos_max = rpc(ui, egui::pos2(pos_x_max, pos_y));
                     ui.painter().line_segment(
                         [pos_min, pos_max],
-                        egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE),
+                        egui::Stroke::new(1.0, theme_colors.accent),
                     );
                 }
             }

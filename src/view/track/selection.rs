@@ -2,6 +2,7 @@ use crate::{
     audio::sample,
     model::{
         Action, Model,
+        config::ThemeColors,
         selection_info::{SelectionInfo, SelectionInfoE},
     },
 };
@@ -217,7 +218,12 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
     );
 }
 
-pub fn ui_selection(ui: &mut egui::Ui, model: &mut Model, response: &egui::Response) {
+pub fn ui_selection(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    response: &egui::Response,
+    theme_colors: &ThemeColors,
+) {
     ui_selection_interaction(ui, model, response);
 
     let Some((_sel_ix_rng, screen_x_rng)) = selection_screen_x_range(model) else {
@@ -233,7 +239,7 @@ pub fn ui_selection(ui: &mut egui::Ui, model: &mut Model, response: &egui::Respo
     ui.painter().rect(
         rect,
         0.0,
-        egui::Color32::LIGHT_GRAY.linear_multiply(0.05),
+        theme_colors.waveform_selection_fill,
         egui::Stroke::NONE,
     );
 }

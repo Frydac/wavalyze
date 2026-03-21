@@ -25,6 +25,7 @@ pub fn ui_selection_interaction_and_tics(
         };
 
     let mut result = Vec::new();
+    let accent = model.user_config.active_theme_colors(ui.visuals()).accent;
 
     // For each visible selection edge, draw its tick/triangle immediately and keep the
     // corresponding label payload around for the placement pass below.
@@ -36,7 +37,7 @@ pub fn ui_selection_interaction_and_tics(
         .filter(|&left_x| selection_edge_is_renderable(rect, left_x))
         .map(|left_x| {
             ticks::ui_tick_line(ui, left_x, ticks::TICK_HEIGHT_LONG, None);
-            ticks::ui_triangle(ui, left_x, TriangleType::Left);
+            ticks::ui_triangle(ui, left_x, TriangleType::Left, accent);
             (left_x, TickLabel::Text(left_ix.separate_with_commas()))
         });
 
@@ -47,7 +48,7 @@ pub fn ui_selection_interaction_and_tics(
         .filter(|&right_x| selection_edge_is_renderable(rect, right_x))
         .map(|right_x| {
             ticks::ui_tick_line(ui, right_x, ticks::TICK_HEIGHT_LONG, None);
-            ticks::ui_triangle(ui, right_x - 1.0, TriangleType::Right);
+            ticks::ui_triangle(ui, right_x - 1.0, TriangleType::Right, accent);
             (right_x, TickLabel::Text(right_ix.separate_with_commas()))
         });
 

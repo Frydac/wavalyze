@@ -1,4 +1,5 @@
 use crate::audio::sample::{self, Sample};
+use crate::model::config::ThemeColors;
 use crate::model::hover_info::HoverInfoE;
 use crate::model::ruler::{
     TickType, ValueDisplayScale, ValueLattice, sample_value_to_screen_y, screen_y_to_sample_value,
@@ -21,6 +22,12 @@ pub struct ValueRulerConfig {
     pub show_hover_tick: bool,
 }
 
+#[derive(Clone, Copy)]
+struct HoverValueStyle<'a> {
+    theme_colors: &'a ThemeColors,
+    display_scale: ValueDisplayScale,
+}
+
 impl Default for ValueRulerConfig {
     fn default() -> Self {
         Self {
@@ -37,6 +44,7 @@ pub fn ui(
     track_id: TrackId,
     rect: Rect,
     config: ValueRulerConfig,
+    theme_colors: &ThemeColors,
     ctx: &mut ValueRulerContext<'_>,
 ) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
@@ -111,6 +119,10 @@ pub fn ui(
     handle_value_ruler_scroll(ui, rect, track_id, ctx);
 
     let mut occupied: Vec<Rect> = Vec::new();
+    let hover_style = HoverValueStyle {
+        theme_colors,
+        display_scale: ctx.display_scale,
+    };
     if config.show_hover_tick {
         draw_hover_value_from_y(
             ui,
@@ -119,7 +131,7 @@ pub fn ui(
             track,
             rect,
             &mut occupied,
-            ctx.display_scale,
+            hover_style,
         );
     }
     draw_hover_value(
@@ -127,10 +139,9 @@ pub fn ui(
         ctx.hover_info,
         ctx.audio,
         track,
-        track_id,
         rect,
         &mut occupied,
-        ctx.display_scale,
+        hover_style,
     );
     draw_lattice_labels(ui, rect, &lattice, &mut occupied);
 }
@@ -262,10 +273,9 @@ fn draw_hover_value(
     hover_info: &HoverInfoE,
     audio: &crate::audio::manager::AudioManager,
     track: &Track,
-    track_id: TrackId,
     rect: Rect,
     occupied: &mut Vec<Rect>,
-    display_scale: ValueDisplayScale,
+    style: HoverValueStyle<'_>,
 ) {
     let HoverInfoE::IsHovered(hover_info) = hover_info else {
         return;
@@ -318,7 +328,7 @@ fn draw_hover_value(
                     (*sample_value).to_norm(buffer.bit_depth),
                     val_rng,
                     ruler_rect,
-                    display_scale,
+                    style.display_scale,
                 ),
                 format!("{sample_value:.3}\n{db:.3} dB"),
             )
@@ -334,7 +344,7 @@ fn draw_hover_value(
                     (*sample_value).to_norm(buffer.bit_depth),
                     val_rng,
                     ruler_rect,
-                    display_scale,
+                    style.display_scale,
                 ),
                 format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
             )
@@ -350,7 +360,7 @@ fn draw_hover_value(
                     (*sample_value).to_norm(buffer.bit_depth),
                     val_rng,
                     ruler_rect,
-                    display_scale,
+                    style.display_scale,
                 ),
                 format!("{sample_value}\n{scaled:.3}\n{db:.3} dB"),
             )
@@ -363,7 +373,7 @@ fn draw_hover_value(
         return;
     }
 
-    let label_rect = draw_hover_label(ui, rect, y, label, Color32::LIGHT_BLUE);
+    let label_rect = draw_hover_label(ui, rect, y, label, style.theme_colors.accent);
     occupied.push(label_rect);
 }
 
@@ -374,7 +384,7 @@ fn draw_hover_value_from_y(
     track: &Track,
     rect: Rect,
     occupied: &mut Vec<Rect>,
-    display_scale: ValueDisplayScale,
+    style: HoverValueStyle<'_>,
 ) {
     let HoverInfoE::IsHovered(hover_info) = hover_info else {
         return;
@@ -405,12 +415,12 @@ fn draw_hover_value_from_y(
     let hover_label = match buffer {
         crate::audio::buffer::BufferE::F32(_) => {
             let Some(sample_value) =
-                screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect, display_scale)
+                screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect, style.display_scale)
             else {
                 return;
             };
             let Some(y_ruler) =
-                sample_value_to_screen_y(sample_value, val_rng, ruler_rect, display_scale)
+                sample_value_to_screen_y(sample_value, val_rng, ruler_rect, style.display_scale)
             else {
                 return;
             };
@@ -419,12 +429,12 @@ fn draw_hover_value_from_y(
         }
         crate::audio::buffer::BufferE::I16(_) => {
             let Some(sample_value) =
-                screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect, display_scale)
+                screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect, style.display_scale)
             else {
                 return;
             };
             let Some(y_ruler) =
-                sample_value_to_screen_y(sample_value, val_rng, ruler_rect, display_scale)
+                sample_value_to_screen_y(sample_value, val_rng, ruler_rect, style.display_scale)
             else {
                 return;
             };
@@ -434,12 +444,12 @@ fn draw_hover_value_from_y(
         }
         crate::audio::buffer::BufferE::I32(buffer_t) => {
             let Some(sample_value) =
-                screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect, display_scale)
+                screen_y_to_sample_value(hover_pos.y, val_rng, screen_rect, style.display_scale)
             else {
                 return;
             };
             let Some(y_ruler) =
-                sample_value_to_screen_y(sample_value, val_rng, ruler_rect, display_scale)
+                sample_value_to_screen_y(sample_value, val_rng, ruler_rect, style.display_scale)
             else {
                 return;
             };
@@ -458,8 +468,7 @@ fn draw_hover_value_from_y(
         return;
     }
 
-    let tick_color = ui.style().visuals.text_color();
-    let label_rect = draw_hover_label(ui, rect, y_ruler, label, tick_color);
+    let label_rect = draw_hover_label(ui, rect, y_ruler, label, style.theme_colors.accent);
     occupied.push(label_rect);
 }
 
