@@ -6,7 +6,7 @@ use crate::{
     model::{
         Action, Model,
         config::ThemeColors,
-        ruler::{TickType, ValueLattice, sample_value_to_screen_y},
+        ruler::{ValueLattice, sample_value_to_screen_y},
         track::TrackId,
     },
     rect::Rect,
@@ -227,9 +227,7 @@ fn draw_value_grid(
     );
 
     for tick in &lattice.ticks {
-        // The waveform background uses a much coarser grid than the ruler on purpose.
-        // We keep only the major lines plus zero so the waveform stays readable.
-        if tick.sample_value != 0.0 && tick.tick_type != TickType::Big {
+        if tick.sample_value != 0.0 && tick.tick_type != crate::model::ruler::TickType::Big {
             continue;
         }
         let left = rpc(ui, egui::pos2(screen_rect.left(), tick.screen_y));

@@ -478,28 +478,29 @@ fn draw_lattice_labels(
     lattice: &ValueLattice,
     occupied: &mut Vec<Rect>,
 ) {
-    for tick_type in [TickType::Big, TickType::Mid] {
-        // Mid labels intentionally use half the major step, so when the lattice shows e.g.
-        // `0.50, 0.55, 0.60`, the mid label can carry the extra precision it needs.
-        let step = match tick_type {
-            TickType::Big => lattice.major_step,
-            TickType::Mid => lattice.major_step / 2.0,
-            TickType::Small => continue,
-        };
-        for tick in lattice
-            .ticks
-            .iter()
-            .filter(|tick| tick.tick_type == tick_type)
-        {
-            let text = format_tick_label(tick.sample_value, step);
-            let (label_rect, _galleys, _color) = layout_value_label(ui, rect, tick.screen_y, &text);
-            if occupied.iter().any(|r| r.intersects(label_rect)) {
-                continue;
-            }
-            draw_value_label(ui, rect, tick.screen_y, text);
-            occupied.push(label_rect);
+    // Labels follow the lattice's chosen label cadence, which may be denser than the big-tick
+    // cadence. For example, `0.05` can be labeled while still rendering as a mid tick.
+    for tick in lattice
+        .ticks
+        .iter()
+        .filter(|tick| is_multiple_of(tick.sample_value, lattice.label_step))
+    {
+        let text = format_tick_label(tick.sample_value, lattice.label_step);
+        let (label_rect, _galleys, _color) = layout_value_label(ui, rect, tick.screen_y, &text);
+        if occupied.iter().any(|r| r.intersects(label_rect)) {
+            continue;
         }
+        draw_value_label(ui, rect, tick.screen_y, text);
+        occupied.push(label_rect);
     }
+}
+
+fn is_multiple_of(value: f64, step: f64) -> bool {
+    if step <= 0.0 {
+        return false;
+    }
+    let quotient = value / step;
+    (quotient - quotient.round()).abs() < 1e-6
 }
 
 #[cfg(test)]

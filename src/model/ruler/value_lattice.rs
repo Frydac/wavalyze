@@ -14,7 +14,14 @@ pub struct ValueTick {
 #[derive(Debug, Clone, Default)]
 pub struct ValueLattice {
     pub ticks: Vec<ValueTick>,
+    /// Long tick spacing used by the ruler and waveform grid.
     pub major_step: f64,
+    /// Optional midpoint cadence between adjacent major ticks.
+    pub mid_step: Option<f64>,
+    /// Finest tick spacing currently shown on the ruler.
+    pub minor_step: f64,
+    /// Values that should receive text labels on the ruler.
+    pub label_step: f64,
 }
 
 impl ValueLattice {
@@ -39,28 +46,33 @@ impl ValueLattice {
             return Ok(());
         }
 
-        // Use a "nice" decimal major step so the ruler stays readable while zooming.
-        // Everything else derives from that single choice: mid ticks split it in half,
-        // minor ticks split it into tenths, and label precision follows the same step.
-        let min_major_step = range_len / max_nr_ticks as f64;
-        let major_step = nice_step(min_major_step);
-        let mid_step = major_step / 2.0;
-        let minor_step = major_step / 10.0;
-        self.major_step = major_step;
+        let min_label_step = range_len / max_nr_ticks as f64;
+        // The cadence is the single source of truth for how dense the ruler should look at the
+        // current zoom level. Views consume the emitted tick types and label spacing directly
+        // instead of reconstructing their own hierarchy.
+        let cadence = lattice_steps(min_label_step);
+        self.major_step = cadence.major_step;
+        self.mid_step = cadence.mid_step;
+        self.minor_step = cadence.minor_step;
+        self.label_step = cadence.label_step;
 
-        // Snap the visible range to the minor grid first so iteration is stable and we do not
-        // accumulate floating-point drift as the user pans around non-zero regions.
-        let start_value = ceil_to_multiple_f64(visible_range.min, minor_step);
-        let end_value = floor_to_multiple_f64(visible_range.max, minor_step);
+        // Snap the visible range to the active minor grid first so iteration is stable and we do
+        // not accumulate floating-point drift as the user pans around non-zero regions.
+        let start_value = ceil_to_multiple_f64(visible_range.min, cadence.minor_step);
+        let end_value = floor_to_multiple_f64(visible_range.max, cadence.minor_step);
         if start_value > end_value {
             return Ok(());
         }
 
         let mut step_ix = 0_u64;
-        let max_steps = (((end_value - start_value) / minor_step).round() as u64).saturating_add(1);
+        let max_steps =
+            (((end_value - start_value) / cadence.minor_step).round() as u64).saturating_add(1);
         while step_ix <= max_steps {
-            let value = quantize_to_step(start_value + step_ix as f64 * minor_step, minor_step);
-            if value > visible_range.max + minor_step * 0.5 {
+            let value = quantize_to_step(
+                start_value + step_ix as f64 * cadence.minor_step,
+                cadence.minor_step,
+            );
+            if value > visible_range.max + cadence.minor_step * 0.5 {
                 break;
             }
             let Some(screen_y) =
@@ -74,17 +86,10 @@ impl ValueLattice {
                 continue;
             }
 
-            let tick_type = if is_multiple_of(value, major_step) {
-                TickType::Big
-            } else if is_multiple_of(value, mid_step) {
-                TickType::Mid
-            } else {
-                TickType::Small
-            };
             self.ticks.push(ValueTick {
                 sample_value: value,
                 screen_y,
-                tick_type,
+                tick_type: classify_tick_type(value, cadence),
             });
             step_ix += 1;
         }
@@ -128,15 +133,78 @@ fn is_multiple_of(value: f64, step: f64) -> bool {
     (quotient - quotient.round()).abs() < 1e-6
 }
 
+fn classify_tick_type(value: f64, cadence: ValueTickCadence) -> TickType {
+    if is_multiple_of(value, cadence.major_step) {
+        TickType::Big
+    } else if cadence
+        .mid_step
+        .is_some_and(|mid_step| is_multiple_of(value, mid_step))
+    {
+        TickType::Mid
+    } else {
+        TickType::Small
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ValueTickCadence {
+    major_step: f64,
+    mid_step: Option<f64>,
+    minor_step: f64,
+    label_step: f64,
+}
+
+fn lattice_steps(min_label_step: f64) -> ValueTickCadence {
+    let label_step = nice_step(min_label_step);
+    let (major_step, mid_step, minor_step) = if is_power_of_ten_step(label_step) && label_step < 1.0
+    {
+        // Decimal label states such as `0.1, 0.2, ...` read best with `0.05` mid ticks and
+        // `0.01` small ticks instead of awkward `0.02` spacing.
+        (label_step, Some(label_step / 2.0), label_step / 10.0)
+    } else if is_five_step(label_step) && label_step < 0.1 {
+        // When labels themselves land on `...0.05`, keep them as midpoint labels under the
+        // surrounding `0.1` majors.
+        (label_step * 2.0, Some(label_step), label_step / 5.0)
+    } else {
+        // Coarser states such as `0.5` or `1.0` do not need a dedicated midpoint hierarchy.
+        (label_step, None, label_step / 5.0)
+    };
+    ValueTickCadence {
+        major_step,
+        mid_step,
+        minor_step,
+        label_step,
+    }
+}
+
+fn is_five_step(step: f64) -> bool {
+    if step <= 0.0 {
+        return false;
+    }
+    let exponent = step.log10().floor();
+    let base = 10.0_f64.powf(exponent);
+    ((step / base) - 5.0).abs() < 1e-6
+}
+
+fn is_power_of_ten_step(step: f64) -> bool {
+    if step <= 0.0 {
+        return false;
+    }
+    let exponent = step.log10().floor();
+    let base = 10.0_f64.powf(exponent);
+    ((step / base) - 1.0).abs() < 1e-6
+}
+
 fn nice_step(min_step: f64) -> f64 {
     if min_step <= 0.0 {
         return 1.0;
     }
 
-    // Standard 1/2/5 progression gives predictable decimal labels across wide zoom ranges.
+    // A 1/5/10 progression avoids the intermediate 2x states that make the value ruler
+    // jump through extra major-tick layouts while resizing track height.
     let exponent = min_step.log10().floor();
     let base = 10.0_f64.powf(exponent);
-    for factor in [1.0, 2.0, 5.0, 10.0] {
+    for factor in [1.0, 5.0, 10.0] {
         let candidate = factor * base;
         if candidate >= min_step {
             return candidate;
@@ -190,12 +258,25 @@ mod tests {
 
         assert_eq!(major_values, vec![-1.0, -0.5, 0.0, 0.5, 1.0]);
         assert_eq!(lattice.major_step, 0.5);
+        assert_eq!(lattice.mid_step, None);
+        assert_eq!(lattice.minor_step, 0.1);
+        assert_eq!(lattice.label_step, 0.5);
         assert!(
             lattice
                 .ticks
                 .iter()
                 .any(|tick| tick.sample_value == 0.0 && tick.tick_type == TickType::Big)
         );
+        let between_neg_one_and_neg_half = lattice
+            .ticks
+            .iter()
+            .filter(|tick| {
+                tick.tick_type == TickType::Small
+                    && tick.sample_value > -1.0
+                    && tick.sample_value < -0.5
+            })
+            .count();
+        assert_eq!(between_neg_one_and_neg_half, 4);
     }
 
     #[test]
@@ -223,11 +304,139 @@ mod tests {
 
         assert_eq!(major_values, vec![-0.2, -0.1, 0.0, 0.1, 0.2]);
         assert_eq!(lattice.major_step, 0.1);
+        assert_eq!(lattice.mid_step, Some(0.05));
+        assert_eq!(lattice.minor_step, 0.01);
+        assert_eq!(lattice.label_step, 0.1);
         assert!(
             lattice
                 .ticks
                 .iter()
                 .all(|tick| tick.sample_value >= -0.2 && tick.sample_value <= 0.2)
+        );
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .any(|tick| tick.sample_value == -0.19 && tick.tick_type == TickType::Small)
+        );
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .any(|tick| tick.sample_value == -0.15 && tick.tick_type == TickType::Mid)
+        );
+        let between_neg_point_two_and_neg_point_one = lattice
+            .ticks
+            .iter()
+            .filter(|tick| {
+                tick.tick_type == TickType::Small
+                    && tick.sample_value > -0.2
+                    && tick.sample_value < -0.1
+            })
+            .count();
+        assert_eq!(between_neg_point_two_and_neg_point_one, 8);
+    }
+
+    #[test]
+    fn lattice_steps_keep_minor_spacing_in_one_place() {
+        assert_eq!(
+            lattice_steps(1.0),
+            ValueTickCadence {
+                major_step: 1.0,
+                mid_step: None,
+                minor_step: 0.2,
+                label_step: 1.0,
+            }
+        );
+        assert_eq!(
+            lattice_steps(0.5),
+            ValueTickCadence {
+                major_step: 0.5,
+                mid_step: None,
+                minor_step: 0.1,
+                label_step: 0.5,
+            }
+        );
+        assert_eq!(
+            lattice_steps(0.1),
+            ValueTickCadence {
+                major_step: 0.1,
+                mid_step: Some(0.05),
+                minor_step: 0.01,
+                label_step: 0.1,
+            }
+        );
+        assert_eq!(
+            lattice_steps(0.05),
+            ValueTickCadence {
+                major_step: 0.1,
+                mid_step: Some(0.05),
+                minor_step: 0.01,
+                label_step: 0.05,
+            }
+        );
+        assert_eq!(
+            lattice_steps(0.01),
+            ValueTickCadence {
+                major_step: 0.01,
+                mid_step: Some(0.005),
+                minor_step: 0.001,
+                label_step: 0.01,
+            }
+        );
+    }
+
+    #[test]
+    fn nice_step_skips_two_x_progression() {
+        assert_eq!(nice_step(1.0), 1.0);
+        assert_eq!(nice_step(0.6), 1.0);
+        assert_eq!(nice_step(0.5), 0.5);
+        assert_eq!(nice_step(0.2), 0.5);
+        assert_eq!(nice_step(0.11), 0.5);
+        assert_eq!(nice_step(0.1), 0.1);
+        assert_eq!(nice_step(0.06), 0.1);
+        assert_eq!(nice_step(0.05), 0.05);
+        assert_eq!(nice_step(0.02), 0.05);
+        assert_eq!(nice_step(0.01), 0.01);
+    }
+
+    #[test]
+    fn five_hundredth_labels_use_mid_ticks() {
+        let mut lattice = ValueLattice::default();
+        let screen_rect = rect::Rect::new(0.0, 0.0, 60.0, 240.0);
+        lattice
+            .compute_ticks(
+                sample::ValRange {
+                    min: -0.12,
+                    max: 0.12,
+                },
+                screen_rect,
+                50.0,
+                ValueDisplayScale::default(),
+            )
+            .unwrap();
+
+        assert_eq!(lattice.major_step, 0.1);
+        assert_eq!(lattice.mid_step, Some(0.05));
+        assert_eq!(lattice.minor_step, 0.01);
+        assert_eq!(lattice.label_step, 0.05);
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .any(|tick| tick.sample_value == 0.0 && tick.tick_type == TickType::Big)
+        );
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .any(|tick| tick.sample_value == 0.05 && tick.tick_type == TickType::Mid)
+        );
+        assert!(
+            lattice
+                .ticks
+                .iter()
+                .any(|tick| tick.sample_value == 0.1 && tick.tick_type == TickType::Big)
         );
     }
 
