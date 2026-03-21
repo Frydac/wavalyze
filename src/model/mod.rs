@@ -6,6 +6,7 @@ pub mod load_manager;
 pub mod ruler;
 pub mod sample_ix_zoom;
 pub mod selection_info;
+pub mod shortcuts;
 pub mod track;
 pub mod tracks2;
 pub mod types;

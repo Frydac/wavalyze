@@ -7,7 +7,7 @@ pub mod track;
 pub mod util;
 pub mod value_ruler2;
 
-use crate::model::{Action, hover_info::HoverInfoE};
+use crate::model::{Action, hover_info::HoverInfoE, shortcuts};
 use crate::{model, wav};
 use anyhow::Result;
 use egui;
@@ -51,6 +51,12 @@ impl View {
         self.model
             .actions
             .push(Action::SetHoverInfo(HoverInfoE::NotHovered));
+        shortcuts::dispatch_shortcuts(
+            ctx,
+            &self.model.tracks,
+            &self.model.user_config.shortcuts,
+            &mut self.model.actions,
+        );
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);

@@ -3,6 +3,7 @@ use egui::{self, Align2, Color32, EventFilter, FontId, Response, Sense, Stroke, 
 const MAX_U64_DIGITS: usize = 20;
 const DRAG_START_THRESHOLD_PX: f32 = 4.0;
 const DRAG_STEP_PX: f32 = 12.0;
+const DIGITWISE_EDITOR_IDS_DATA_KEY: &str = "digitwise_number_editor_ids";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DigitwiseNumberEditorAction {
@@ -146,6 +147,7 @@ impl<'a> DigitwiseNumberEditor<'a> {
         for digit in &rendered_digits {
             response = response.union(digit.response.clone());
         }
+        register_digit_ids(ui.ctx(), rendered_digits.iter().map(|digit| digit.id));
 
         let mut drag_focus_digit = None;
         if let Some(mut active_drag) = drag_state {
@@ -297,8 +299,31 @@ impl<'a> DigitwiseNumberEditor<'a> {
     }
 }
 
+pub fn focused_widget_is_digitwise_editor(ctx: &egui::Context) -> bool {
+    let Some(focused_id) = ctx.memory(|memory| memory.focused()) else {
+        return false;
+    };
+    ctx.data(|data| {
+        data.get_temp::<Vec<egui::Id>>(egui::Id::new(DIGITWISE_EDITOR_IDS_DATA_KEY))
+            .is_some_and(|ids| ids.contains(&focused_id))
+    })
+}
+
 fn load_state(ctx: &egui::Context, id: egui::Id) -> EditorState {
     ctx.data_mut(|data| data.get_temp(id)).unwrap_or_default()
+}
+
+fn register_digit_ids(ctx: &egui::Context, ids: impl IntoIterator<Item = egui::Id>) {
+    let data_id = egui::Id::new(DIGITWISE_EDITOR_IDS_DATA_KEY);
+    ctx.data_mut(|data| {
+        let mut known_ids = data.get_temp::<Vec<egui::Id>>(data_id).unwrap_or_default();
+        for id in ids {
+            if !known_ids.contains(&id) {
+                known_ids.push(id);
+            }
+        }
+        data.insert_temp(data_id, known_ids);
+    });
 }
 
 fn store_state(ctx: &egui::Context, id: egui::Id, state: EditorState) {

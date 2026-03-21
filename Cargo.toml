@@ -62,6 +62,7 @@ opt-level = 2
 
 [dev-dependencies]
 hound = "3.5.1"
+toml = "0.8.19"
 tracing-test = "0.2.5"
 
 [[test]]

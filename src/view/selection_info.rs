@@ -100,6 +100,7 @@ pub fn ui_selection_info_toolbar(
             });
 
             egui::Grid::new(ui.id().with("selection_toolbar_grid"))
+                .striped(true)
                 .num_columns(2)
                 .spacing([8.0, 4.0])
                 .show(ui, |ui| {

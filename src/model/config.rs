@@ -1,4 +1,5 @@
 // Store all app config in one place
+use crate::model::shortcuts::ShortcutConfig;
 
 use tracing::{error, info, trace, warn};
 
@@ -15,6 +16,7 @@ pub struct Config {
     pub show_hover_info: bool,
 
     pub tracks_width_info: f32,
+    pub shortcuts: ShortcutConfig,
     pub selection: SelectionConfig,
     pub track: TrackConfig,
 }
@@ -57,6 +59,7 @@ impl Default for Config {
             zoom_x_scroll_factor: 4.0,
             show_hover_info: true,
             tracks_width_info: 150.0,
+            shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
             track: TrackConfig::default(),
         }
@@ -64,13 +67,22 @@ impl Default for Config {
 }
 
 impl Config {
+    pub fn reset_to_default(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn reset_shortcuts_to_default(&mut self) {
+        self.shortcuts = ShortcutConfig::default();
+    }
+
     /// Load config from file or use default
     /// Creates the config file if it doesn't exist.
     pub fn load_from_storage_or_default() -> Self {
-        let user_config: Self = confy::load(APP_NAME, None).unwrap_or_else(|e| {
+        let mut user_config: Self = confy::load(APP_NAME, None).unwrap_or_else(|e| {
             warn!(error = %e, "Failed to load config, using defaults");
             Default::default()
         });
+        user_config.shortcuts.normalize();
         info!(
             "Config loaded from {}: {user_config:#?}",
             confy::get_configuration_file_path("wavalyze", None)
@@ -94,5 +106,34 @@ impl Config {
                     .unwrap_or("<failed to get path>".into())
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+    use crate::model::shortcuts::{ShortcutAction, ShortcutScope};
+
+    #[test]
+    fn default_config_has_shortcuts() {
+        let config = Config::default();
+
+        assert_eq!(
+            config.shortcuts.bindings.len(),
+            ShortcutAction::ALL.len() * ShortcutScope::ALL.len()
+        );
+    }
+
+    #[test]
+    fn old_config_without_shortcuts_uses_defaults() {
+        let config: Config = toml::from_str(
+            "zoom_x_scroll_factor = 2.0\nshow_hover_info = true\ntracks_width_info = 120.0\n",
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.shortcuts.bindings.len(),
+            ShortcutAction::ALL.len() * ShortcutScope::ALL.len()
+        );
     }
 }
