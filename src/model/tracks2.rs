@@ -386,9 +386,8 @@ mod tests {
     use super::Tracks;
     use crate::{
         audio,
-        model::action::SelectionEdge,
-        model::config::TrackConfig,
         model::selection_info::{SelectionInfo, SelectionInfoE},
+        model::{action::SelectionEdge, config::TrackConfig, ruler::ValueDisplayScale},
         rect::Rect,
     };
 
@@ -399,6 +398,23 @@ mod tests {
         let buffer =
             audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, nr_samples));
         audio.buffers.insert(buffer)
+    }
+
+    fn track_with_value_range(
+        tracks: &mut Tracks,
+        audio: &mut audio::manager::AudioManager,
+        val_rng: audio::sample::ValRange<f64>,
+    ) -> crate::model::track::TrackId {
+        let track_id = tracks
+            .add_track_to_end(insert_buffer(audio, 64), &TrackConfig::default())
+            .unwrap();
+        let track = tracks.get_track_mut(track_id).unwrap();
+        track.set_screen_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+        let mut sample_rect =
+            audio::SampleRect::from_buffere(audio.get_buffer(track.single.item.buffer_id).unwrap());
+        sample_rect.set_val_rng(val_rng);
+        track.set_sample_rect(sample_rect);
+        track_id
     }
 
     #[test]
@@ -619,5 +635,95 @@ mod tests {
         assert_eq!(tracks.ruler.ix_range().unwrap().end, 64.0);
         assert_eq!(visible_track.sample_rect.unwrap().ix_rng().end, 64.0);
         assert_eq!(hidden_track.sample_rect.unwrap().ix_rng().end, 64.0);
+    }
+
+    #[test]
+    fn pan_track_value_range_can_move_below_full_scale_when_linear() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+
+        tracks
+            .pan_track_value_range(track_id, -100.0, ValueDisplayScale::default())
+            .unwrap();
+
+        let val_rng = tracks
+            .get_track(track_id)
+            .unwrap()
+            .sample_rect
+            .unwrap()
+            .val_rng
+            .unwrap();
+        assert_eq!(val_rng.min, -3.0);
+        assert_eq!(val_rng.max, -1.0);
+    }
+
+    #[test]
+    fn pan_track_value_range_can_move_below_full_scale_when_skewed() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+
+        tracks
+            .pan_track_value_range(track_id, -100.0, ValueDisplayScale { skew_factor: 1.0 })
+            .unwrap();
+
+        let val_rng = tracks
+            .get_track(track_id)
+            .unwrap()
+            .sample_rect
+            .unwrap()
+            .val_rng
+            .unwrap();
+        assert!(val_rng.min < -1.0);
+        assert!(val_rng.max <= -1.0);
+    }
+
+    #[test]
+    fn recenter_track_value_range_restores_full_scale_after_out_of_range_pan() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+
+        tracks
+            .pan_track_value_range(track_id, -100.0, ValueDisplayScale::default())
+            .unwrap();
+        tracks.recenter_track_value_range(track_id).unwrap();
+
+        let val_rng = tracks
+            .get_track(track_id)
+            .unwrap()
+            .sample_rect
+            .unwrap()
+            .val_rng
+            .unwrap();
+        assert_eq!(
+            val_rng,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0
+            }
+        );
     }
 }

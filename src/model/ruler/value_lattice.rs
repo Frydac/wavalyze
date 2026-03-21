@@ -33,6 +33,12 @@ impl ValueLattice {
 
         self.ticks.clear();
 
+        let visible_range = visible_tick_range(val_range, display_scale);
+        let range_len = visible_range.len();
+        if range_len == 0.0 {
+            return Ok(());
+        }
+
         // Use a "nice" decimal major step so the ruler stays readable while zooming.
         // Everything else derives from that single choice: mid ticks split it in half,
         // minor ticks split it into tenths, and label precision follows the same step.
@@ -44,8 +50,8 @@ impl ValueLattice {
 
         // Snap the visible range to the minor grid first so iteration is stable and we do not
         // accumulate floating-point drift as the user pans around non-zero regions.
-        let start_value = ceil_to_multiple_f64(val_range.min, minor_step);
-        let end_value = floor_to_multiple_f64(val_range.max, minor_step);
+        let start_value = ceil_to_multiple_f64(visible_range.min, minor_step);
+        let end_value = floor_to_multiple_f64(visible_range.max, minor_step);
         if start_value > end_value {
             return Ok(());
         }
@@ -54,7 +60,7 @@ impl ValueLattice {
         let max_steps = (((end_value - start_value) / minor_step).round() as u64).saturating_add(1);
         while step_ix <= max_steps {
             let value = quantize_to_step(start_value + step_ix as f64 * minor_step, minor_step);
-            if value > val_range.max + minor_step * 0.5 {
+            if value > visible_range.max + minor_step * 0.5 {
                 break;
             }
             let Some(screen_y) =
@@ -84,6 +90,20 @@ impl ValueLattice {
         }
 
         Ok(())
+    }
+}
+
+fn visible_tick_range(
+    val_range: sample::ValRange<f64>,
+    display_scale: ValueDisplayScale,
+) -> sample::ValRange<f64> {
+    if display_scale.skew_factor == 0.0 {
+        return val_range;
+    }
+
+    sample::ValRange {
+        min: val_range.min.max(-1.0),
+        max: val_range.max.min(1.0),
     }
 }
 
@@ -260,5 +280,55 @@ mod tests {
                 .windows(2)
                 .all(|pair| pair[0].screen_y >= pair[1].screen_y)
         );
+    }
+
+    #[test]
+    fn linear_ticks_can_extend_outside_full_scale() {
+        let mut lattice = ValueLattice::default();
+        let screen_rect = rect::Rect::new(0.0, 0.0, 60.0, 220.0);
+        lattice
+            .compute_ticks(
+                sample::ValRange { min: 1.1, max: 1.9 },
+                screen_rect,
+                50.0,
+                ValueDisplayScale::default(),
+            )
+            .unwrap();
+
+        assert!(!lattice.ticks.is_empty());
+        assert!(lattice.ticks.iter().all(|tick| tick.sample_value > 1.0));
+    }
+
+    #[test]
+    fn skewed_ticks_clip_to_full_scale() {
+        let mut lattice = ValueLattice::default();
+        let screen_rect = rect::Rect::new(0.0, 0.0, 60.0, 220.0);
+        lattice
+            .compute_ticks(
+                sample::ValRange { min: 0.5, max: 1.5 },
+                screen_rect,
+                50.0,
+                ValueDisplayScale { skew_factor: 1.0 },
+            )
+            .unwrap();
+
+        assert!(!lattice.ticks.is_empty());
+        assert!(lattice.ticks.iter().all(|tick| tick.sample_value <= 1.0));
+    }
+
+    #[test]
+    fn skewed_ticks_are_hidden_when_visible_range_is_outside_full_scale() {
+        let mut lattice = ValueLattice::default();
+        let screen_rect = rect::Rect::new(0.0, 0.0, 60.0, 220.0);
+        lattice
+            .compute_ticks(
+                sample::ValRange { min: 1.1, max: 1.9 },
+                screen_rect,
+                50.0,
+                ValueDisplayScale { skew_factor: 1.0 },
+            )
+            .unwrap();
+
+        assert!(lattice.ticks.is_empty());
     }
 }

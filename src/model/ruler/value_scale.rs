@@ -21,21 +21,19 @@ impl ValueDisplayScale {
     }
 
     pub fn sample_to_display(self, sample_value: f64) -> f64 {
-        let value = sample_value.clamp(-1.0, 1.0);
-        if value == 0.0 {
+        if sample_value == 0.0 {
             return 0.0;
         }
 
-        value.signum() * value.abs().powf(self.exponent())
+        sample_value.signum() * sample_value.abs().powf(self.exponent())
     }
 
     pub fn display_to_sample(self, display_value: f64) -> f64 {
-        let value = display_value.clamp(-1.0, 1.0);
-        if value == 0.0 {
+        if display_value == 0.0 {
             return 0.0;
         }
 
-        value.signum() * value.abs().powf(1.0 / self.exponent())
+        display_value.signum() * display_value.abs().powf(1.0 / self.exponent())
     }
 }
 
@@ -82,11 +80,33 @@ mod tests {
     fn inverse_round_trip_is_stable() {
         let scale = ValueDisplayScale { skew_factor: 0.65 };
 
-        for sample_value in [-1.0, -0.5, -0.1, 0.0, 0.1, 0.5, 1.0] {
+        for sample_value in [-2.0, -1.5, -1.0, -0.5, -0.1, 0.0, 0.1, 0.5, 1.0, 1.5, 2.0] {
             let display_value = scale.sample_to_display(sample_value);
             let round_trip = scale.display_to_sample(display_value);
 
             assert!((sample_value - round_trip).abs() < 1e-9);
         }
+    }
+
+    #[test]
+    fn linear_scale_preserves_out_of_range_values() {
+        let scale = ValueDisplayScale::default();
+
+        assert_eq!(scale.sample_to_display(-2.0), -2.0);
+        assert_eq!(scale.sample_to_display(2.0), 2.0);
+        assert_eq!(scale.display_to_sample(-1.5), -1.5);
+        assert_eq!(scale.display_to_sample(1.5), 1.5);
+    }
+
+    #[test]
+    fn skewed_scale_is_monotonic_outside_full_scale() {
+        let scale = ValueDisplayScale { skew_factor: 1.0 };
+        let inputs = [-2.0, -1.5, -1.0, -0.5, 0.5, 1.0, 1.5, 2.0];
+        let outputs: Vec<_> = inputs
+            .into_iter()
+            .map(|value| scale.sample_to_display(value))
+            .collect();
+
+        assert!(outputs.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }
