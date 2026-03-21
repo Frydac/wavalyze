@@ -13,6 +13,8 @@ use crate::{
 };
 use anyhow::{Result, anyhow, ensure};
 
+pub const SINGLE_SAMPLE_DRAW_MAX_SPP: f32 = 0.25;
+
 /// Represents a pixel column defined by 2 positions with the same x coordinate.
 #[derive(Debug, PartialEq, Clone)]
 pub struct MinMaxPos {
@@ -74,8 +76,14 @@ impl MinMaxPos {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ViewData {
-    Single(Vec<Pos>),
+    Single(SingleViewData),
     MinMax(Vec<MinMaxPos>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SingleViewData {
+    pub samples: Vec<Pos>,
+    pub line_segments: Vec<Vec<Pos>>,
 }
 
 impl ViewData {
@@ -159,7 +167,15 @@ impl View {
             for (ix, sample) in buffer.iter().enumerate().skip(start_ix).take(nr_samples) {
                 data.push(get_pos(ix, *sample)?);
             }
-            ViewData::Single(data)
+            let line_segments = if samples_per_pixel < SINGLE_SAMPLE_DRAW_MAX_SPP {
+                Vec::new()
+            } else {
+                build_visible_line_segments(&data, screen_rect)
+            };
+            ViewData::Single(SingleViewData {
+                samples: data,
+                line_segments,
+            })
         } else {
             // We have 2 or more samples per pixel, we draw the min/max of the samples per
             // pixel column (x coordinate).
@@ -328,7 +344,10 @@ impl View {
 
     fn empty_for_zoom(sample_rect: SampleRect, samples_per_pixel: f32) -> Self {
         let data = if samples_per_pixel < 2.0 {
-            ViewData::Single(vec![])
+            ViewData::Single(SingleViewData {
+                samples: vec![],
+                line_segments: vec![],
+            })
         } else {
             ViewData::MinMax(vec![])
         };
@@ -338,6 +357,45 @@ impl View {
             sample_ix_start: sample_rect.ix_rng.start,
         }
     }
+}
+
+fn build_visible_line_segments(points: &[Pos], screen_rect: Rect) -> Vec<Vec<Pos>> {
+    let clamp_y = |pos: Pos| Pos::new(pos.x, pos.y.clamp(screen_rect.top(), screen_rect.bottom()));
+    let mut segments = Vec::new();
+    let mut ix = 0;
+
+    while ix < points.len() {
+        while ix < points.len() && !screen_rect.contains_y(points[ix].y) {
+            ix += 1;
+        }
+        if ix >= points.len() {
+            break;
+        }
+
+        let start_ix = ix;
+        while ix < points.len() && screen_rect.contains_y(points[ix].y) {
+            ix += 1;
+        }
+        let end_ix = ix;
+
+        let mut segment = Vec::with_capacity(end_ix - start_ix + 2);
+        if start_ix > 0 {
+            let prev = points[start_ix - 1];
+            if !screen_rect.contains_y(prev.y) {
+                segment.push(clamp_y(prev));
+            }
+        }
+        segment.extend_from_slice(&points[start_ix..end_ix]);
+        if end_ix < points.len() {
+            let next = points[end_ix];
+            if !screen_rect.contains_y(next.y) {
+                segment.push(clamp_y(next));
+            }
+        }
+        segments.push(segment);
+    }
+
+    segments
 }
 pub fn clip_view_data(view_data: &mut [MinMaxPos], screen_rect: Rect) {
     // Keep smoothing enabled for now; it avoids visible breaks between adjacent min/max columns.
@@ -432,6 +490,13 @@ mod tests {
         let mut rect = SampleRect::from_buffere(&BufferE::F32(test_buffer()));
         rect.set_ix_rng((ix_start..ix_end).into());
         rect
+    }
+
+    fn single_view(samples: Vec<Pos>, line_segments: Vec<Vec<Pos>>) -> ViewData {
+        ViewData::Single(SingleViewData {
+            samples,
+            line_segments,
+        })
     }
 
     #[test]
@@ -594,7 +659,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(view.data, ViewData::Single(vec![]));
+        assert_eq!(view.data, single_view(vec![], vec![]));
     }
 
     #[test]
@@ -626,5 +691,79 @@ mod tests {
         .unwrap();
 
         assert_eq!(view.data, ViewData::MinMax(vec![]));
+    }
+
+    #[test]
+    fn build_visible_line_segments_keeps_single_visible_run_together() {
+        let points = vec![
+            Pos::new(0.0, 12.0),
+            Pos::new(1.0, 14.0),
+            Pos::new(2.0, 18.0),
+        ];
+
+        let segments = build_visible_line_segments(&points, rect_001());
+
+        assert_eq!(segments, vec![points]);
+    }
+
+    #[test]
+    fn build_visible_line_segments_splits_runs_across_hidden_gap() {
+        let points = vec![
+            Pos::new(0.0, 12.0),
+            Pos::new(1.0, 14.0),
+            Pos::new(2.0, 24.0),
+            Pos::new(3.0, 25.0),
+            Pos::new(4.0, 16.0),
+            Pos::new(5.0, 17.0),
+        ];
+
+        let segments = build_visible_line_segments(&points, rect_001());
+
+        assert_eq!(
+            segments,
+            vec![
+                vec![
+                    Pos::new(0.0, 12.0),
+                    Pos::new(1.0, 14.0),
+                    Pos::new(2.0, 20.0),
+                ],
+                vec![
+                    Pos::new(3.0, 20.0),
+                    Pos::new(4.0, 16.0),
+                    Pos::new(5.0, 17.0),
+                ],
+            ]
+        );
+    }
+
+    #[test]
+    fn build_visible_line_segments_clamps_hidden_neighbors_on_both_sides() {
+        let points = vec![
+            Pos::new(0.0, 4.0),
+            Pos::new(1.0, 12.0),
+            Pos::new(2.0, 18.0),
+            Pos::new(3.0, 26.0),
+        ];
+
+        let segments = build_visible_line_segments(&points, rect_001());
+
+        assert_eq!(
+            segments,
+            vec![vec![
+                Pos::new(0.0, 10.0),
+                Pos::new(1.0, 12.0),
+                Pos::new(2.0, 18.0),
+                Pos::new(3.0, 20.0),
+            ]]
+        );
+    }
+
+    #[test]
+    fn build_visible_line_segments_returns_empty_when_nothing_is_visible() {
+        let points = vec![Pos::new(0.0, 4.0), Pos::new(1.0, 6.0), Pos::new(2.0, 24.0)];
+
+        let segments = build_visible_line_segments(&points, rect_001());
+
+        assert!(segments.is_empty());
     }
 }

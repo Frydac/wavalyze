@@ -201,7 +201,9 @@ mod tests {
             .unwrap();
 
         let initial_view = track.get_sample_view().unwrap();
-        assert!(matches!(initial_view.data, ViewData::Single(ref data) if !data.is_empty()));
+        assert!(
+            matches!(initial_view.data, ViewData::Single(ref data) if !data.samples.is_empty())
+        );
 
         track.set_ix_range((64.0..96.0).into(), &audio).unwrap();
         track

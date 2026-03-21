@@ -1,5 +1,8 @@
 use crate::{
-    audio::{self, sample::view::ViewData},
+    audio::{
+        self,
+        sample::view::{SINGLE_SAMPLE_DRAW_MAX_SPP, ViewData},
+    },
     model::{
         Action, Model,
         ruler::{TickType, ValueLattice, sample_value_to_screen_y},
@@ -105,9 +108,9 @@ fn ui_waveform(
     draw_value_grid(ui, sample_rect, screen_rect, display_scale);
 
     match sample_view.data {
-        ViewData::Single(ref positions) => {
-            if sample_view.samples_per_pixel < 0.25 {
-                positions.iter().for_each(|pos| {
+        ViewData::Single(ref single_view) => {
+            if sample_view.samples_per_pixel < SINGLE_SAMPLE_DRAW_MAX_SPP {
+                single_view.samples.iter().for_each(|pos| {
                     let Some(val_rng) = sample_rect.val_rng() else {
                         return;
                     };
@@ -162,13 +165,11 @@ fn ui_waveform(
                     );
                 });
             } else {
-                let positions = positions
-                    .iter()
-                    .map(|pos| rpc(ui, pos.into()))
-                    .filter(|pos| screen_rect.contains((*pos).into()))
-                    .collect();
-                ui.painter()
-                    .line(positions, egui::Stroke::new(1.0, line_color));
+                single_view.line_segments.iter().for_each(|segment| {
+                    let positions = segment.iter().map(|pos| rpc(ui, pos.into())).collect();
+                    ui.painter()
+                        .line(positions, egui::Stroke::new(1.0, line_color));
+                });
             }
         }
         ViewData::MinMax(ref mix_max_positions) => {
