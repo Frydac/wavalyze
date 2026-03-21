@@ -1,4 +1,5 @@
 pub mod config;
+pub mod file;
 pub mod fps;
 pub mod grid;
 pub mod ruler;
@@ -126,10 +127,10 @@ impl View {
         egui::SidePanel::left("left_panel")
             .resizable(true)
             .default_width(150.0)
-            .width_range(80.0..=ctx.available_rect().width() / 1.5)
+            // .width_range(80.0..=ctx.available_rect().width())
+            .width_range(80.0..=500.0)
             .show(ctx, |ui| {
-
-                // ui.separator();
+                file::ui(ui, &mut self.model);
             });
     }
 
@@ -227,6 +228,13 @@ impl View {
         {
             for track_ix in 0..model.tracks.tracks_order.len() {
                 let track_id = model.tracks.tracks_order[track_ix];
+                if model
+                    .tracks
+                    .get_track(track_id)
+                    .is_none_or(|track| !track.visible)
+                {
+                    continue;
+                }
                 ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
                 crate::view::track::ui(ui, model, track_id)?;
             }

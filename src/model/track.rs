@@ -54,6 +54,7 @@ pub struct Track {
     track_md: TrackMetaData,
 
     pub height: f32,
+    pub visible: bool,
 }
 
 impl Track {
@@ -72,6 +73,7 @@ impl Track {
             update_view_buffer_: false,
             track_md: TrackMetaData::None,
             height: track_config.min_height,
+            visible: true,
         })
 
         // todo!()

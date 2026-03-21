@@ -25,6 +25,10 @@ pub struct Tracks {
 }
 
 impl Tracks {
+    pub fn visible_tracks_len(&self) -> usize {
+        self.tracks.values().filter(|track| track.visible).count()
+    }
+
     pub fn add_track_to_end(
         &mut self,
         buffer_id: BufferId,
@@ -69,6 +73,14 @@ impl Tracks {
 
     pub fn get_track_height(&self, track_id: TrackId) -> Option<f32> {
         self.tracks.get(track_id).map(|track| track.height)
+    }
+
+    pub fn set_track_visibility(&mut self, track_id: TrackId, visible: bool) {
+        if let Some(track) = self.tracks.get_mut(track_id) {
+            track.visible = visible;
+        } else {
+            tracing::warn!("Track {:?} not found", track_id);
+        }
     }
 
     pub fn set_track_height(&mut self, track_id: TrackId, height: f32) {
@@ -132,7 +144,9 @@ impl Tracks {
     /// Reset the value range to full scale (pan/zoom reset) for all tracks.
     pub fn recenter_all_value_ranges(&mut self) -> Result<()> {
         for track_id in self.tracks_order.clone() {
-            self.recenter_track_value_range(track_id)?;
+            if self.tracks.get(track_id).is_some_and(|track| track.visible) {
+                self.recenter_track_value_range(track_id)?;
+            }
         }
         Ok(())
     }
@@ -218,6 +232,9 @@ impl Tracks {
         // }
         let mut max_sample_rect: Option<audio::SampleRect> = None;
         for track in self.tracks.values() {
+            if !track.visible {
+                continue;
+            }
             let buffer_id = track.single.item.buffer_id;
             let buffer = audio.get_buffer(buffer_id).ok()?;
             let sample_rect = audio::SampleRect::from_buffere(buffer);
@@ -260,12 +277,15 @@ impl Tracks {
 
     /// Update track heights to equally distribute the available height, taking min_height into account.
     pub fn fill_screen_height(&mut self, min_height: f32) -> Result<()> {
-        if self.tracks.is_empty() {
+        let visible_tracks = self.visible_tracks_len();
+        if visible_tracks == 0 {
             return Ok(());
         }
-        let track_height = self.available_height / self.tracks.len() as f32;
+        let track_height = self.available_height / visible_tracks as f32;
         for track in self.tracks.values_mut() {
-            track.height = track_height.max(min_height);
+            if track.visible {
+                track.height = track_height.max(min_height);
+            }
         }
         Ok(())
     }
@@ -307,9 +327,19 @@ mod tests {
     use super::Tracks;
     use crate::{
         audio,
+        model::config::TrackConfig,
         model::selection_info::{SelectionInfo, SelectionInfoE},
         rect::Rect,
     };
+
+    fn insert_buffer(
+        audio: &mut audio::manager::AudioManager,
+        nr_samples: usize,
+    ) -> audio::BufferId {
+        let buffer =
+            audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, nr_samples));
+        audio.buffers.insert(buffer)
+    }
 
     #[test]
     fn zoom_to_selection_fits_selected_range() {
@@ -363,5 +393,57 @@ mod tests {
             .unwrap();
 
         assert_eq!(tracks.ruler.ix_range(), None);
+    }
+
+    #[test]
+    fn fill_screen_height_only_updates_visible_tracks() {
+        let mut tracks = Tracks {
+            available_height: 120.0,
+            ..Tracks::default()
+        };
+        let config = TrackConfig { min_height: 10.0 };
+        let mut audio = audio::manager::AudioManager::default();
+        let visible_a = insert_buffer(&mut audio, 64);
+        let visible_b = insert_buffer(&mut audio, 64);
+        let hidden = insert_buffer(&mut audio, 64);
+
+        let visible_a = tracks.add_track_to_end(visible_a, &config).unwrap();
+        let visible_b = tracks.add_track_to_end(visible_b, &config).unwrap();
+        let hidden = tracks.add_track_to_end(hidden, &config).unwrap();
+
+        tracks.set_track_height(visible_a, 10.0);
+        tracks.set_track_height(visible_b, 15.0);
+        tracks.set_track_height(hidden, 25.0);
+        tracks.set_track_visibility(hidden, false);
+
+        tracks.fill_screen_height(config.min_height).unwrap();
+
+        assert_eq!(tracks.get_track_height(visible_a), Some(60.0));
+        assert_eq!(tracks.get_track_height(visible_b), Some(60.0));
+        assert_eq!(tracks.get_track_height(hidden), Some(25.0));
+    }
+
+    #[test]
+    fn zoom_to_full_uses_only_visible_tracks() {
+        let mut tracks = Tracks::default();
+        let config = TrackConfig { min_height: 10.0 };
+        let mut audio = audio::manager::AudioManager::default();
+        let short = insert_buffer(&mut audio, 64);
+        let long_hidden = insert_buffer(&mut audio, 640);
+
+        let short = tracks.add_track_to_end(short, &config).unwrap();
+        let long_hidden = tracks.add_track_to_end(long_hidden, &config).unwrap();
+        tracks.set_track_visibility(long_hidden, false);
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 64.0, 100.0));
+
+        tracks.zoom_to_full(&audio).unwrap();
+
+        let visible_track = tracks.get_track(short).unwrap();
+        let hidden_track = tracks.get_track(long_hidden).unwrap();
+        assert_eq!(tracks.ruler.ix_range().unwrap().end, 64.0);
+        assert_eq!(visible_track.sample_rect.unwrap().ix_rng().end, 64.0);
+        assert_eq!(hidden_track.sample_rect.unwrap().ix_rng().end, 64.0);
     }
 }

@@ -40,6 +40,13 @@ pub struct Model {
     pub load_mgr: LoadManager,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileVisibilityState {
+    NoneVisible,
+    PartiallyVisible,
+    AllVisible,
+}
+
 impl Model {
     pub fn new() -> Self {
         let mut res = Self::default();
@@ -85,6 +92,69 @@ impl Model {
             }
         }
         None
+    }
+
+    pub fn find_track_id_for_buffer(&self, buffer_id: audio::BufferId) -> Option<TrackId> {
+        self.tracks
+            .find_track(buffer_id)
+            .map(|(track_id, _)| track_id)
+    }
+
+    pub fn file_visibility_state(&self, file: &wav::file2::File) -> FileVisibilityState {
+        let mut any_visible = false;
+        let mut any_hidden = false;
+
+        for channel in file.channels.values() {
+            match self.find_track_id_for_buffer(channel.buffer_id) {
+                Some(track_id) => {
+                    let is_visible = self
+                        .tracks
+                        .get_track(track_id)
+                        .is_some_and(|track| track.visible);
+                    if is_visible {
+                        any_visible = true;
+                    } else {
+                        any_hidden = true;
+                    }
+                }
+                None => {
+                    any_hidden = true;
+                }
+            }
+        }
+
+        match (any_visible, any_hidden) {
+            (true, true) => FileVisibilityState::PartiallyVisible,
+            (true, false) => FileVisibilityState::AllVisible,
+            _ => FileVisibilityState::NoneVisible,
+        }
+    }
+
+    pub fn set_channel_visible(&mut self, buffer_id: audio::BufferId, visible: bool) -> bool {
+        let Some(track_id) = self.find_track_id_for_buffer(buffer_id) else {
+            return false;
+        };
+        self.tracks.set_track_visibility(track_id, visible);
+        true
+    }
+
+    pub fn set_file_visible(&mut self, file: &wav::file2::File, visible: bool) {
+        for channel in file.channels.values() {
+            self.set_channel_visible(channel.buffer_id, visible);
+        }
+    }
+
+    pub fn file_visibility_state_at(&self, file_ix: usize) -> Option<FileVisibilityState> {
+        let file = self.files2.get(file_ix)?;
+        Some(self.file_visibility_state(file))
+    }
+
+    pub fn set_file_visible_at(&mut self, file_ix: usize, visible: bool) -> bool {
+        let Some(file) = self.files2.get(file_ix).cloned() else {
+            return false;
+        };
+        self.set_file_visible(&file, visible);
+        true
     }
 
     pub fn zoom_to_full(&mut self) -> Result<()> {
@@ -174,5 +244,80 @@ impl Model {
             action.process(self)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{FileVisibilityState, Model};
+    use crate::{
+        audio,
+        wav::{self, file2},
+    };
+
+    fn add_buffer(model: &mut Model) -> audio::BufferId {
+        model.audio.buffers.insert(audio::buffer::BufferE::F32(
+            audio::buffer::Buffer::with_size(48_000, 32, 16),
+        ))
+    }
+
+    fn make_file(buffers: &[audio::BufferId]) -> file2::File {
+        let channels = buffers
+            .iter()
+            .enumerate()
+            .map(|(ch_ix, buffer_id)| {
+                (
+                    ch_ix as wav::read::ChIx,
+                    file2::Channel {
+                        ch_ix: ch_ix as wav::read::ChIx,
+                        buffer_id: *buffer_id,
+                        channel_id: None,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        file2::File {
+            channels,
+            sample_type: audio::SampleType::Float,
+            bit_depth: 32,
+            sample_rate: 48_000,
+            layout: None,
+            path: None,
+            nr_samples: 16,
+        }
+    }
+
+    #[test]
+    fn file_visibility_state_tracks_partial_visibility() {
+        let mut model = Model::new();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.files2.push(file);
+
+        assert_eq!(
+            model.file_visibility_state_at(0),
+            Some(FileVisibilityState::AllVisible)
+        );
+
+        model.set_channel_visible(buffers[0], false);
+
+        assert_eq!(
+            model.file_visibility_state_at(0),
+            Some(FileVisibilityState::PartiallyVisible)
+        );
+
+        model.set_file_visible_at(0, false);
+
+        assert_eq!(
+            model.file_visibility_state_at(0),
+            Some(FileVisibilityState::NoneVisible)
+        );
     }
 }
