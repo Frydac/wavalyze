@@ -175,8 +175,10 @@ impl Model {
         let track_id = self
             .tracks
             .insert_track(buffer_id, insert_ix, &self.user_config.track)?;
-        self.tracks
-            .set_track_height(track_id, crate::model::track::min_total_height(&self.user_config.track));
+        self.tracks.set_track_height(
+            track_id,
+            crate::model::track::min_total_height(&self.user_config.track),
+        );
         Ok(true)
     }
 

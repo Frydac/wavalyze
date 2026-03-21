@@ -179,12 +179,15 @@ mod tests {
 
     fn insert_buffer(audio: &mut AudioManager, nr_samples: usize) -> BufferId {
         let mut buffer = Buffer::new(48_000, 32);
-        buffer.data = (0..nr_samples).map(|i| i as f32 / nr_samples as f32).collect();
+        buffer.data = (0..nr_samples)
+            .map(|i| i as f32 / nr_samples as f32)
+            .collect();
         let buffere = BufferE::F32(buffer);
         let buffer_id = audio.buffers.insert(buffere.clone());
-        audio
-            .thumbnails
-            .insert(buffer_id, audio::thumbnail::ThumbnailE::from_buffer_e(&buffere, None));
+        audio.thumbnails.insert(
+            buffer_id,
+            audio::thumbnail::ThumbnailE::from_buffer_e(&buffere, None),
+        );
         buffer_id
     }
 
