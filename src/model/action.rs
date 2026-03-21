@@ -18,6 +18,10 @@ pub enum Action {
     ZoomToFull,
     /// Set x-zoom so the current selection fills the visible width.
     ZoomToSelection,
+    /// Set x-zoom to sample-level detail, centered on the left edge of the current selection.
+    ZoomToSelectionLeftEdge,
+    /// Set x-zoom to sample-level detail, centered on the right edge of the current selection.
+    ZoomToSelectionRightEdge,
 
     /// Adjust height of tracks to fit the screen, keeping in mind the min_height for each track
     FillScreenHeight,
@@ -158,6 +162,13 @@ impl Action {
             Action::ZoomToSelection => {
                 model.tracks.zoom_to_selection(&model.audio)?;
             }
+            Action::ZoomToSelectionLeftEdge => {
+                model.tracks.zoom_to_selection_edge(&model.audio, SelectionEdge::Left)?;
+            }
+            Action::ZoomToSelectionRightEdge => {
+                model.tracks
+                    .zoom_to_selection_edge(&model.audio, SelectionEdge::Right)?;
+            }
             Action::FillScreenHeight => {
                 let min_height = model.user_config.track.min_height;
                 model.tracks.fill_screen_height(min_height)?;
@@ -202,4 +213,10 @@ impl Action {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionEdge {
+    Left,
+    Right,
 }

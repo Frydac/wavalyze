@@ -7,14 +7,18 @@ use tracing::warn;
 #[serde(rename_all = "snake_case")]
 pub enum ShortcutAction {
     ZoomToSelection,
+    ZoomToSelectionLeftEdge,
+    ZoomToSelectionRightEdge,
     ZoomToFull,
     FillScreenHeight,
     RecenterYAll,
 }
 
 impl ShortcutAction {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 6] = [
         Self::ZoomToSelection,
+        Self::ZoomToSelectionLeftEdge,
+        Self::ZoomToSelectionRightEdge,
         Self::ZoomToFull,
         Self::FillScreenHeight,
         Self::RecenterYAll,
@@ -23,6 +27,8 @@ impl ShortcutAction {
     pub fn label(self) -> &'static str {
         match self {
             Self::ZoomToSelection => "Zoom To Selection",
+            Self::ZoomToSelectionLeftEdge => "Zoom To Selection Left Edge",
+            Self::ZoomToSelectionRightEdge => "Zoom To Selection Right Edge",
             Self::ZoomToFull => "Reset X Zoom",
             Self::FillScreenHeight => "Fill Screen Height",
             Self::RecenterYAll => "Recenter Y",
@@ -32,6 +38,8 @@ impl ShortcutAction {
     pub fn to_model_action(self) -> Action {
         match self {
             Self::ZoomToSelection => Action::ZoomToSelection,
+            Self::ZoomToSelectionLeftEdge => Action::ZoomToSelectionLeftEdge,
+            Self::ZoomToSelectionRightEdge => Action::ZoomToSelectionRightEdge,
             Self::ZoomToFull => Action::ZoomToFull,
             Self::FillScreenHeight => Action::FillScreenHeight,
             Self::RecenterYAll => Action::RecenterYAll,
@@ -182,6 +190,18 @@ impl ShortcutConfig {
             }
             (ShortcutAction::ZoomToSelection, ShortcutScope::OneHand) => {
                 ShortcutBinding::new(action, "S").with_scope(scope)
+            }
+            (ShortcutAction::ZoomToSelectionLeftEdge, ShortcutScope::Global) => {
+                ShortcutBinding::new(action, "[").with_scope(scope).with_command()
+            }
+            (ShortcutAction::ZoomToSelectionLeftEdge, ShortcutScope::OneHand) => {
+                ShortcutBinding::new(action, "[").with_scope(scope)
+            }
+            (ShortcutAction::ZoomToSelectionRightEdge, ShortcutScope::Global) => {
+                ShortcutBinding::new(action, "]").with_scope(scope).with_command()
+            }
+            (ShortcutAction::ZoomToSelectionRightEdge, ShortcutScope::OneHand) => {
+                ShortcutBinding::new(action, "]").with_scope(scope)
             }
             (ShortcutAction::ZoomToFull, ShortcutScope::Global) => {
                 ShortcutBinding::new(action, "0")
@@ -382,7 +402,10 @@ mod tests {
 
         config.normalize();
 
-        assert_eq!(config.bindings.len(), 8);
+        assert_eq!(
+            config.bindings.len(),
+            ShortcutAction::ALL.len() * ShortcutScope::ALL.len()
+        );
         assert_eq!(
             config.bindings[0],
             ShortcutConfig::default_binding_for(
@@ -408,7 +431,7 @@ mod tests {
         config.normalize();
 
         assert_eq!(
-            config.bindings[2],
+            config.bindings[6],
             ShortcutBinding::new(ShortcutAction::ZoomToFull, "1")
                 .with_scope(ShortcutScope::Global)
                 .with_command()
@@ -437,6 +460,24 @@ mod tests {
                 .with_command()
                 .with_shift()
         );
+        assert_eq!(
+            ShortcutConfig::default_binding_for(
+                ShortcutAction::ZoomToSelectionLeftEdge,
+                ShortcutScope::Global,
+            ),
+            ShortcutBinding::new(ShortcutAction::ZoomToSelectionLeftEdge, "[")
+                .with_scope(ShortcutScope::Global)
+                .with_command()
+        );
+        assert_eq!(
+            ShortcutConfig::default_binding_for(
+                ShortcutAction::ZoomToSelectionRightEdge,
+                ShortcutScope::Global,
+            ),
+            ShortcutBinding::new(ShortcutAction::ZoomToSelectionRightEdge, "]")
+                .with_scope(ShortcutScope::Global)
+                .with_command()
+        );
     }
 
     #[test]
@@ -452,6 +493,22 @@ mod tests {
         assert_eq!(
             ShortcutConfig::default_binding_for(ShortcutAction::ZoomToFull, ShortcutScope::OneHand),
             ShortcutBinding::new(ShortcutAction::ZoomToFull, "R")
+                .with_scope(ShortcutScope::OneHand)
+        );
+        assert_eq!(
+            ShortcutConfig::default_binding_for(
+                ShortcutAction::ZoomToSelectionLeftEdge,
+                ShortcutScope::OneHand,
+            ),
+            ShortcutBinding::new(ShortcutAction::ZoomToSelectionLeftEdge, "[")
+                .with_scope(ShortcutScope::OneHand)
+        );
+        assert_eq!(
+            ShortcutConfig::default_binding_for(
+                ShortcutAction::ZoomToSelectionRightEdge,
+                ShortcutScope::OneHand,
+            ),
+            ShortcutBinding::new(ShortcutAction::ZoomToSelectionRightEdge, "]")
                 .with_scope(ShortcutScope::OneHand)
         );
     }
@@ -492,7 +549,7 @@ mod tests {
         config.normalize();
 
         assert_eq!(
-            config.bindings[4],
+            config.bindings[8],
             ShortcutConfig::default_binding_for(
                 ShortcutAction::FillScreenHeight,
                 ShortcutScope::Global,
@@ -582,7 +639,7 @@ mod tests {
                 events: vec![
                     Event::PointerMoved(egui::pos2(10.0, 10.0)),
                     Event::Key {
-                        key: Key::S,
+                        key: Key::OpenBracket,
                         physical_key: None,
                         pressed: true,
                         repeat: false,
@@ -596,6 +653,6 @@ mod tests {
             },
         );
 
-        assert_eq!(actions, vec![Action::ZoomToSelection]);
+        assert_eq!(actions, vec![Action::ZoomToSelectionLeftEdge]);
     }
 }

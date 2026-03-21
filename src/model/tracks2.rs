@@ -1,6 +1,9 @@
 use crate::{
     audio::{self, BufferId},
-    model::{config::TrackConfig, hover_info::HoverInfoE, ruler, selection_info::SelectionInfoE},
+    model::{
+        action::SelectionEdge, config::TrackConfig, hover_info::HoverInfoE, ruler,
+        selection_info::SelectionInfoE,
+    },
 };
 use anyhow::Result;
 use slotmap::SlotMap;
@@ -25,6 +28,8 @@ pub struct Tracks {
 }
 
 impl Tracks {
+    const SELECTION_EDGE_ZOOM_SAMPLES_PER_PIXEL: f64 = 0.1;
+
     pub fn visible_tracks_len(&self) -> usize {
         self.tracks.values().filter(|track| track.visible).count()
     }
@@ -275,6 +280,37 @@ impl Tracks {
         Ok(())
     }
 
+    pub fn zoom_to_selection_edge(
+        &mut self,
+        audio: &audio::manager::AudioManager,
+        edge: SelectionEdge,
+    ) -> Result<()> {
+        let SelectionInfoE::IsSelected(selection_info) = self.selection_info else {
+            return Ok(());
+        };
+        if selection_info.ix_rng.end <= selection_info.ix_rng.start {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            self.ruler.screen_rect().width() > 0.0,
+            "Ruler screen rect width is zero"
+        );
+
+        let edge_ix = match edge {
+            SelectionEdge::Left => selection_info.ix_rng.start as f64,
+            SelectionEdge::Right => selection_info.ix_rng.end as f64,
+        };
+        let visible_len =
+            self.ruler.screen_rect().width() as f64 * Self::SELECTION_EDGE_ZOOM_SAMPLES_PER_PIXEL;
+        let half_visible_len = visible_len / 2.0;
+        self.ruler.zoom_to_ix_range(audio::sample::FracIxRange {
+            start: edge_ix - half_visible_len,
+            end: edge_ix + half_visible_len,
+        });
+        self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
+        Ok(())
+    }
+
     /// Update track heights to equally distribute the available height, taking min_height into account.
     pub fn fill_screen_height(&mut self, min_height: f32) -> Result<()> {
         let visible_tracks = self.visible_tracks_len();
@@ -327,6 +363,7 @@ mod tests {
     use super::Tracks;
     use crate::{
         audio,
+        model::action::SelectionEdge,
         model::config::TrackConfig,
         model::selection_info::{SelectionInfo, SelectionInfoE},
         rect::Rect,
@@ -390,6 +427,85 @@ mod tests {
 
         tracks
             .zoom_to_selection(&audio::manager::AudioManager::default())
+            .unwrap();
+
+        assert_eq!(tracks.ruler.ix_range(), None);
+    }
+
+    #[test]
+    fn zoom_to_selection_left_edge_centers_edge_and_uses_sample_level_zoom() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (100..300).into(),
+            screen_x_start: 10.0,
+            screen_x_end: 30.0,
+        });
+
+        tracks
+            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Left)
+            .unwrap();
+
+        let ix_range = tracks.ruler.ix_range().unwrap();
+        assert_eq!(tracks.samples_per_pixel(), Some(0.1));
+        assert_eq!(ix_range.start, 50.0);
+        assert_eq!(ix_range.end, 150.0);
+        assert_eq!(tracks.sample_ix_to_screen_x(100.0), Some(500.0));
+    }
+
+    #[test]
+    fn zoom_to_selection_right_edge_centers_edge_and_uses_sample_level_zoom() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (100..300).into(),
+            screen_x_start: 10.0,
+            screen_x_end: 30.0,
+        });
+
+        tracks
+            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Right)
+            .unwrap();
+
+        let ix_range = tracks.ruler.ix_range().unwrap();
+        assert_eq!(tracks.samples_per_pixel(), Some(0.1));
+        assert_eq!(ix_range.start, 250.0);
+        assert_eq!(ix_range.end, 350.0);
+        assert_eq!(tracks.sample_ix_to_screen_x(300.0), Some(500.0));
+    }
+
+    #[test]
+    fn zoom_to_selection_edge_without_selection_is_noop() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+
+        tracks
+            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Left)
+            .unwrap();
+
+        assert_eq!(tracks.ruler.ix_range(), None);
+    }
+
+    #[test]
+    fn zoom_to_selection_edge_with_invalid_range_is_noop() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (100..100).into(),
+            screen_x_start: 10.0,
+            screen_x_end: 10.0,
+        });
+
+        tracks
+            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Left)
             .unwrap();
 
         assert_eq!(tracks.ruler.ix_range(), None);
