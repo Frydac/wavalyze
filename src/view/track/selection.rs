@@ -44,23 +44,15 @@ fn selection_screen_x_range(
 }
 
 fn hovered_selection_edge(
-    model: &Model,
+    ix_rng: sample::IxRange,
+    screen_x_rng: std::ops::RangeInclusive<f32>,
     rect: egui::Rect,
     pointer_x: f32,
 ) -> Option<(SelectionResizeEdge, sample::Ix)> {
-    let (ix_rng, screen_x_rng) = selection_screen_x_range(model)?;
     let left_x = *screen_x_rng.start();
     let right_x = *screen_x_rng.end();
-    let left_dist = if (rect.left()..=rect.right()).contains(&left_x) {
-        (pointer_x - left_x).abs()
-    } else {
-        f32::INFINITY
-    };
-    let right_dist = if (rect.left()..=rect.right()).contains(&right_x) {
-        (pointer_x - right_x).abs()
-    } else {
-        f32::INFINITY
-    };
+    let left_dist = selection_edge_hit_distance(rect, left_x, pointer_x);
+    let right_dist = selection_edge_hit_distance(rect, right_x, pointer_x);
 
     if left_dist > SELECTION_EDGE_HIT_RADIUS_PX && right_dist > SELECTION_EDGE_HIT_RADIUS_PX {
         return None;
@@ -71,6 +63,25 @@ fn hovered_selection_edge(
     } else {
         Some((SelectionResizeEdge::Right, ix_rng.start))
     }
+}
+
+fn selection_edge_hit_distance(rect: egui::Rect, edge_x: f32, pointer_x: f32) -> f32 {
+    if !(rect.left() - SELECTION_EDGE_HIT_RADIUS_PX..=rect.right() + SELECTION_EDGE_HIT_RADIUS_PX)
+        .contains(&edge_x)
+    {
+        return f32::INFINITY;
+    }
+
+    (pointer_x - edge_x).abs()
+}
+
+fn hovered_selection_edge_for_model(
+    model: &Model,
+    rect: egui::Rect,
+    pointer_x: f32,
+) -> Option<(SelectionResizeEdge, sample::Ix)> {
+    let (ix_rng, screen_x_rng) = selection_screen_x_range(model)?;
+    hovered_selection_edge(ix_rng, screen_x_rng, rect, pointer_x)
 }
 
 fn set_selection_from_drag(
@@ -102,7 +113,7 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
         .pointer_hover_pos()
         .filter(|&pos| ui.min_rect().contains(pos));
     let hover_edge = if modifiers.shift {
-        hover_pos.and_then(|pos| hovered_selection_edge(model, ui.min_rect(), pos.x))
+        hover_pos.and_then(|pos| hovered_selection_edge_for_model(model, ui.min_rect(), pos.x))
     } else {
         None
     };
@@ -125,10 +136,9 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
         if let Some((edge, anchor_sample_ix)) =
             ui.input(|i| i.pointer.press_origin())
                 .and_then(|press_origin| {
-                    modifiers
-                        .shift
-                        .then_some(press_origin)
-                        .and_then(|origin| hovered_selection_edge(model, ui.min_rect(), origin.x))
+                    modifiers.shift.then_some(press_origin).and_then(|origin| {
+                        hovered_selection_edge_for_model(model, ui.min_rect(), origin.x)
+                    })
                 })
         {
             ui.data_mut(|data| {
@@ -226,4 +236,45 @@ pub fn ui_selection(ui: &mut egui::Ui, model: &mut Model, response: &egui::Respo
         egui::Color32::LIGHT_GRAY.linear_multiply(0.05),
         egui::Stroke::NONE,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SelectionResizeEdge, hovered_selection_edge};
+
+    #[test]
+    fn hovered_selection_edge_keeps_visible_left_edge_draggable() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let edge = hovered_selection_edge((10..20).into(), 4.0..=40.0, rect, 5.0);
+
+        assert_eq!(edge, Some((SelectionResizeEdge::Left, 19)));
+    }
+
+    #[test]
+    fn hovered_selection_edge_keeps_left_edge_draggable_just_outside_rect() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let edge = hovered_selection_edge((10..20).into(), -3.0..=40.0, rect, 0.0);
+
+        assert_eq!(edge, Some((SelectionResizeEdge::Left, 19)));
+    }
+
+    #[test]
+    fn hovered_selection_edge_keeps_right_edge_draggable_just_outside_rect() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let edge = hovered_selection_edge((10..20).into(), 20.0..=103.0, rect, 100.0);
+
+        assert_eq!(edge, Some((SelectionResizeEdge::Right, 10)));
+    }
+
+    #[test]
+    fn hovered_selection_edge_rejects_edges_too_far_outside_rect() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let edge = hovered_selection_edge((10..20).into(), -9.0..=40.0, rect, 0.0);
+
+        assert_eq!(edge, None);
+    }
 }

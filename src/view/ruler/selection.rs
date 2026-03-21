@@ -4,6 +4,13 @@ use thousands::Separable;
 
 use super::ticks::{self, TickLabel, TriangleType};
 
+const SELECTION_EDGE_RENDER_SLACK_PX: f32 = 8.0;
+
+fn selection_edge_is_renderable(rect: egui::Rect, edge_x: f32) -> bool {
+    (rect.min.x - SELECTION_EDGE_RENDER_SLACK_PX..=rect.max.x + SELECTION_EDGE_RENDER_SLACK_PX)
+        .contains(&edge_x)
+}
+
 pub fn ui_selection_interaction_and_tics(
     ui: &mut egui::Ui,
     model: &mut model::Model,
@@ -26,7 +33,7 @@ pub fn ui_selection_interaction_and_tics(
     let left_label = model
         .tracks
         .sample_ix_to_screen_x(left_ix as f64)
-        .filter(|&left_x| left_x > rect.min.x && left_x < rect.max.x)
+        .filter(|&left_x| selection_edge_is_renderable(rect, left_x))
         .map(|left_x| {
             ticks::ui_tick_line(ui, left_x, ticks::TICK_HEIGHT_LONG, None);
             ticks::ui_triangle(ui, left_x, TriangleType::Left);
@@ -37,7 +44,7 @@ pub fn ui_selection_interaction_and_tics(
     let right_label = model
         .tracks
         .sample_ix_to_screen_x(right_ix as f64)
-        .filter(|&right_x| right_x > rect.min.x && right_x < rect.max.x)
+        .filter(|&right_x| selection_edge_is_renderable(rect, right_x))
         .map(|right_x| {
             ticks::ui_tick_line(ui, right_x, ticks::TICK_HEIGHT_LONG, None);
             ticks::ui_triangle(ui, right_x - 1.0, TriangleType::Right);
@@ -101,4 +108,32 @@ pub fn ui_selection_interaction_and_tics(
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selection_edge_is_renderable;
+
+    #[test]
+    fn selection_edge_is_renderable_inside_rect() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        assert!(selection_edge_is_renderable(rect, 50.0));
+    }
+
+    #[test]
+    fn selection_edge_is_renderable_just_outside_rect() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        assert!(selection_edge_is_renderable(rect, -3.0));
+        assert!(selection_edge_is_renderable(rect, 103.0));
+    }
+
+    #[test]
+    fn selection_edge_is_not_renderable_too_far_outside_rect() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        assert!(!selection_edge_is_renderable(rect, -9.0));
+        assert!(!selection_edge_is_renderable(rect, 109.0));
+    }
 }
