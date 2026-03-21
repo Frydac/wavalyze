@@ -1082,6 +1082,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_custom_widgets"
+version = "0.1.0"
+source = "git+https://github.com/Frydac/egui_custom_widgets#13ba2a125d925f4ca1f3f522a2a079cd05de4ba0"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui_glow"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3523,6 +3531,7 @@ dependencies = [
  "console_error_panic_hook",
  "eframe",
  "egui",
+ "egui_custom_widgets",
  "env_logger",
  "hound",
  "itertools",

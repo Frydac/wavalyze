@@ -1,6 +1,6 @@
 use crate::model::{Action, tracks2::Tracks};
-use crate::widgets::digitwise_number_editor;
 use egui::{Key, KeyboardShortcut, Modifiers};
+use egui_custom_widgets::focused_widget_is_digitwise_editor;
 use tracing::warn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
@@ -303,9 +303,7 @@ fn dispatch_global_shortcuts(
     shortcut_config: &ShortcutConfig,
     actions: &mut Vec<Action>,
 ) {
-    if ctx.wants_keyboard_input()
-        && !digitwise_number_editor::focused_widget_is_digitwise_editor(ctx)
-    {
+    if ctx.wants_keyboard_input() && !focused_widget_is_digitwise_editor(ctx) {
         return;
     }
     dispatch_scoped_shortcuts(shortcut_config, ShortcutScope::Global, ctx, actions);

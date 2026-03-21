@@ -1,11 +1,9 @@
-use crate::{
-    model::{
-        self, Action,
-        config::StartEditMode,
-        selection_info::{SelectionInfo, SelectionInfoE},
-    },
-    widgets::DigitwiseNumberEditor,
+use crate::model::{
+    self, Action,
+    config::StartEditMode,
+    selection_info::{SelectionInfo, SelectionInfoE},
 };
+use egui_custom_widgets::DigitwiseNumberEditor;
 
 const SELECTION_EDITOR_DIGITS: usize = 9;
 const SELECTION_EDITOR_MAX: u64 = 999_999_999;

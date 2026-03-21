@@ -1,5 +1,5 @@
 use eframe::egui;
-use wavalyze::widgets::{
+use egui_custom_widgets::{
     DigitwiseNumberEditor, DigitwiseNumberEditorAction, DigitwiseNumberEditorOutput,
 };
 
