@@ -192,13 +192,17 @@ impl ShortcutConfig {
                 ShortcutBinding::new(action, "S").with_scope(scope)
             }
             (ShortcutAction::ZoomToSelectionLeftEdge, ShortcutScope::Global) => {
-                ShortcutBinding::new(action, "[").with_scope(scope).with_command()
+                ShortcutBinding::new(action, "[")
+                    .with_scope(scope)
+                    .with_command()
             }
             (ShortcutAction::ZoomToSelectionLeftEdge, ShortcutScope::OneHand) => {
                 ShortcutBinding::new(action, "[").with_scope(scope)
             }
             (ShortcutAction::ZoomToSelectionRightEdge, ShortcutScope::Global) => {
-                ShortcutBinding::new(action, "]").with_scope(scope).with_command()
+                ShortcutBinding::new(action, "]")
+                    .with_scope(scope)
+                    .with_command()
             }
             (ShortcutAction::ZoomToSelectionRightEdge, ShortcutScope::OneHand) => {
                 ShortcutBinding::new(action, "]").with_scope(scope)

@@ -87,6 +87,25 @@ impl Time {
         self.time_line.as_mut().unwrap().ix_start = ix_range.start;
     }
 
+    pub fn zoom_to_ix_range_clamped(&mut self, ix_range: sample::FracIxRange) {
+        if self.screen_rect.width() == 0.0 {
+            return;
+        }
+
+        let screen_width = self.screen_rect.width() as f64;
+        let requested_spp = ix_range.len() / screen_width;
+        let samples_per_pixel = requested_spp.max(MIN_SAMPLES_PER_PIXEL);
+        self.set_samples_per_pixel(samples_per_pixel);
+
+        let ix_start = if samples_per_pixel > requested_spp {
+            let visible_len = screen_width * samples_per_pixel;
+            (ix_range.start + ix_range.end) / 2.0 - visible_len / 2.0
+        } else {
+            ix_range.start
+        };
+        self.time_line.as_mut().unwrap().ix_start = ix_start;
+    }
+
     pub fn sample_ix_to_screen_x(&self, sample_ix: f64) -> Option<f32> {
         let time_line = self.time_line.as_ref().or_else(|| {
             tracing::trace!("No time line");

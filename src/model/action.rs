@@ -163,10 +163,13 @@ impl Action {
                 model.tracks.zoom_to_selection(&model.audio)?;
             }
             Action::ZoomToSelectionLeftEdge => {
-                model.tracks.zoom_to_selection_edge(&model.audio, SelectionEdge::Left)?;
+                model
+                    .tracks
+                    .zoom_to_selection_edge(&model.audio, SelectionEdge::Left)?;
             }
             Action::ZoomToSelectionRightEdge => {
-                model.tracks
+                model
+                    .tracks
                     .zoom_to_selection_edge(&model.audio, SelectionEdge::Right)?;
             }
             Action::FillScreenHeight => {

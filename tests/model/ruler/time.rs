@@ -10,6 +10,22 @@ fn setup_time(screen_rect: Rect, samples_per_pixel: f64) -> Time {
     time
 }
 
+#[test]
+fn test_zoom_to_ix_range_clamped_centers_target_range() {
+    let screen_rect = Rect::new(0.0, 0.0, 1000.0, 100.0);
+    let mut time = Time::default();
+    time.set_screen_rect(screen_rect);
+
+    time.zoom_to_ix_range_clamped(audio::sample::FracIxRange {
+        start: 100.0,
+        end: 101.0,
+    });
+
+    let ix_range = time.ix_range().unwrap();
+    assert_eq!(time.samples_per_pixel(), Some(0.002));
+    assert_eq!((ix_range.start + ix_range.end) / 2.0, 100.5);
+}
+
 fn setup_time_with_ix_range(screen_rect: Rect, sample_range: audio::sample::FracIxRange) -> Time {
     let mut time = Time::default();
     time.set_screen_rect(screen_rect);

@@ -272,10 +272,11 @@ impl Tracks {
             self.ruler.screen_rect().width() > 0.0,
             "Ruler screen rect width is zero"
         );
-        self.ruler.zoom_to_ix_range(audio::sample::FracIxRange {
-            start: selection_info.ix_rng.start as f64,
-            end: selection_info.ix_rng.end as f64,
-        });
+        self.ruler
+            .zoom_to_ix_range_clamped(audio::sample::FracIxRange {
+                start: selection_info.ix_rng.start as f64,
+                end: selection_info.ix_rng.end as f64,
+            });
         self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
         Ok(())
     }
@@ -400,6 +401,29 @@ mod tests {
     }
 
     #[test]
+    fn zoom_to_selection_clamps_to_max_zoom_and_centers_selection() {
+        let mut tracks = Tracks::default();
+        tracks
+            .ruler
+            .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (100..101).into(),
+            screen_x_start: 10.0,
+            screen_x_end: 11.0,
+        });
+
+        tracks
+            .zoom_to_selection(&audio::manager::AudioManager::default())
+            .unwrap();
+
+        let ix_range = tracks.ruler.ix_range().unwrap();
+        let selection_center = 100.5;
+        let view_center = (ix_range.start + ix_range.end) / 2.0;
+        assert_eq!(tracks.samples_per_pixel(), Some(0.002));
+        assert!((view_center - selection_center).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn zoom_to_selection_without_selection_is_noop() {
         let mut tracks = Tracks::default();
         tracks
@@ -445,7 +469,10 @@ mod tests {
         });
 
         tracks
-            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Left)
+            .zoom_to_selection_edge(
+                &audio::manager::AudioManager::default(),
+                SelectionEdge::Left,
+            )
             .unwrap();
 
         let ix_range = tracks.ruler.ix_range().unwrap();
@@ -468,7 +495,10 @@ mod tests {
         });
 
         tracks
-            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Right)
+            .zoom_to_selection_edge(
+                &audio::manager::AudioManager::default(),
+                SelectionEdge::Right,
+            )
             .unwrap();
 
         let ix_range = tracks.ruler.ix_range().unwrap();
@@ -486,7 +516,10 @@ mod tests {
             .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
 
         tracks
-            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Left)
+            .zoom_to_selection_edge(
+                &audio::manager::AudioManager::default(),
+                SelectionEdge::Left,
+            )
             .unwrap();
 
         assert_eq!(tracks.ruler.ix_range(), None);
@@ -505,7 +538,10 @@ mod tests {
         });
 
         tracks
-            .zoom_to_selection_edge(&audio::manager::AudioManager::default(), SelectionEdge::Left)
+            .zoom_to_selection_edge(
+                &audio::manager::AudioManager::default(),
+                SelectionEdge::Left,
+            )
             .unwrap();
 
         assert_eq!(tracks.ruler.ix_range(), None);
