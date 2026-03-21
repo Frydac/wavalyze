@@ -4,6 +4,7 @@ const MAX_U64_DIGITS: usize = 20;
 const DRAG_START_THRESHOLD_PX: f32 = 4.0;
 const DRAG_STEP_PX: f32 = 12.0;
 const DIGITWISE_EDITOR_IDS_DATA_KEY: &str = "digitwise_number_editor_ids";
+const GROUP_SEPARATOR_WIDTH_FACTOR: f32 = 0.6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DigitwiseNumberEditorAction {
@@ -31,11 +32,13 @@ pub struct DigitwiseNumberEditor<'a> {
     digits: usize,
     max: u64,
     digit_width: Option<f32>,
+    dim_leading_zeroes: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 struct EditorState {
     selected_digit: usize,
+    has_saved_selection: bool,
     has_focus: bool,
 }
 
@@ -60,6 +63,7 @@ impl<'a> DigitwiseNumberEditor<'a> {
             digits: 1,
             max: u64::MAX,
             digit_width: None,
+            dim_leading_zeroes: false,
         }
     }
 
@@ -78,11 +82,17 @@ impl<'a> DigitwiseNumberEditor<'a> {
         self
     }
 
+    pub fn dim_leading_zeroes(mut self, dim_leading_zeroes: bool) -> Self {
+        self.dim_leading_zeroes = dim_leading_zeroes;
+        self
+    }
+
     pub fn show(self, ui: &mut Ui) -> DigitwiseNumberEditorOutput {
         let digits = normalize_digits(self.digits);
         let clamped_max = self.max.min(max_value_for_digits(digits));
         *self.value = (*self.value).min(clamped_max);
 
+        let editor_id = self.id_source.with("editor");
         let mut state = load_state(ui.ctx(), self.id_source);
         state.selected_digit = state.selected_digit.min(digits - 1);
         let drag_state_id = self.id_source.with("drag_state");
@@ -95,7 +105,7 @@ impl<'a> DigitwiseNumberEditor<'a> {
 
         let mut changed = false;
         let mut action = None;
-        let mut focus_digit = None;
+        let mut request_editor_focus = false;
         let mut rendered_digits = Vec::with_capacity(digits);
 
         let inner = ui.horizontal(|ui| {
@@ -104,7 +114,7 @@ impl<'a> DigitwiseNumberEditor<'a> {
             for (digit_index, digit_char) in digit_chars.iter().copied().enumerate() {
                 let digit_id = self.id_source.with(("digit", digit_index));
                 let (rect, _) = ui.allocate_exact_size(digit_size, Sense::hover());
-                let response = ui.interact(rect, digit_id, Sense::click_and_drag());
+                let response = ui.interact(rect, digit_id, digit_interaction_sense());
 
                 if response.drag_started()
                     && let Some(pointer_pos) = response.interact_pointer_pos()
@@ -119,18 +129,18 @@ impl<'a> DigitwiseNumberEditor<'a> {
 
                 if response.clicked() {
                     state.selected_digit = digit_index;
+                    state.has_saved_selection = true;
                     state.has_focus = true;
                     action = Some(DigitwiseNumberEditorAction::FocusDigit);
-                    focus_digit = Some(digit_index);
+                    request_editor_focus = true;
                 }
 
-                let has_focus = ui.memory(|memory| memory.has_focus(digit_id))
-                    || (state.has_focus && state.selected_digit == digit_index);
-                if has_focus {
-                    state.selected_digit = digit_index;
-                }
+                let has_focus = ui.memory(|memory| memory.has_focus(editor_id))
+                    && state.selected_digit == digit_index;
 
-                paint_digit(ui, rect, digit_char, &font_id, has_focus);
+                let is_leading_zero =
+                    self.dim_leading_zeroes && is_leading_zero_digit(&digit_chars, digit_index);
+                paint_digit(ui, rect, digit_char, &font_id, has_focus, is_leading_zero);
 
                 rendered_digits.push(RenderedDigit {
                     id: digit_id,
@@ -147,7 +157,15 @@ impl<'a> DigitwiseNumberEditor<'a> {
         for digit in &rendered_digits {
             response = response.union(digit.response.clone());
         }
-        register_digit_ids(ui.ctx(), rendered_digits.iter().map(|digit| digit.id));
+        response = response.union(ui.interact(
+            response.rect,
+            editor_id,
+            Sense::focusable_noninteractive(),
+        ));
+        register_digit_ids(
+            ui.ctx(),
+            std::iter::once(editor_id).chain(rendered_digits.iter().map(|digit| digit.id)),
+        );
 
         let mut drag_focus_digit = None;
         if let Some(mut active_drag) = drag_state {
@@ -171,6 +189,8 @@ impl<'a> DigitwiseNumberEditor<'a> {
                             );
                             active_drag.applied_steps = total_steps;
                             drag_focus_digit = Some(digit_index);
+                            state.has_saved_selection = true;
+                            request_editor_focus = true;
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
                             if any_change {
                                 changed = true;
@@ -188,10 +208,16 @@ impl<'a> DigitwiseNumberEditor<'a> {
         }
 
         let focused_digit = rendered_digits
-            .iter()
-            .position(|digit| ui.memory(|memory| memory.has_focus(digit.id)))
+            .first()
+            .and(ui.memory(|memory| memory.has_focus(editor_id)).then_some(
+                if state.has_saved_selection {
+                    state.selected_digit
+                } else {
+                    first_significant_digit_index(&digit_chars)
+                },
+            ))
             .or(drag_focus_digit)
-            .or_else(|| focus_digit.map(|_| state.selected_digit));
+            .or(request_editor_focus.then_some(state.selected_digit));
 
         if let Some(focused_digit) = focused_digit {
             state.selected_digit = focused_digit;
@@ -199,7 +225,7 @@ impl<'a> DigitwiseNumberEditor<'a> {
 
             ui.memory_mut(|memory| {
                 memory.set_focus_lock_filter(
-                    rendered_digits[focused_digit].id,
+                    editor_id,
                     EventFilter {
                         horizontal_arrows: true,
                         vertical_arrows: true,
@@ -215,12 +241,12 @@ impl<'a> DigitwiseNumberEditor<'a> {
 
             if left_presses > 0 && focused_digit > 0 {
                 state.selected_digit = focused_digit - 1;
+                state.has_saved_selection = true;
                 action = Some(DigitwiseNumberEditorAction::MoveLeft);
-                focus_digit = Some(focused_digit - 1);
             } else if right_presses > 0 && focused_digit + 1 < digits {
                 state.selected_digit = focused_digit + 1;
+                state.has_saved_selection = true;
                 action = Some(DigitwiseNumberEditorAction::MoveRight);
-                focus_digit = Some(focused_digit + 1);
             } else if up_presses > 0 {
                 let mut any_change = false;
                 for _ in 0..up_presses {
@@ -230,9 +256,9 @@ impl<'a> DigitwiseNumberEditor<'a> {
                 }
                 if any_change {
                     changed = true;
+                    state.has_saved_selection = true;
                     action = Some(DigitwiseNumberEditorAction::IncrementPlace);
                 }
-                focus_digit = Some(focused_digit);
             } else if down_presses > 0 {
                 let mut any_change = false;
                 for _ in 0..down_presses {
@@ -242,9 +268,9 @@ impl<'a> DigitwiseNumberEditor<'a> {
                 }
                 if any_change {
                     changed = true;
+                    state.has_saved_selection = true;
                     action = Some(DigitwiseNumberEditorAction::DecrementPlace);
                 }
-                focus_digit = Some(focused_digit);
             } else if let Some(input) = typed_digit_input(ui) {
                 let current_digit =
                     digit_chars[focused_digit].to_digit(10).expect("digit char") as u8;
@@ -254,10 +280,8 @@ impl<'a> DigitwiseNumberEditor<'a> {
                     if new_digit == current_digit {
                         if next_digit != focused_digit {
                             state.selected_digit = next_digit;
-                            focus_digit = Some(next_digit);
+                            state.has_saved_selection = true;
                             action = Some(DigitwiseNumberEditorAction::MoveRight);
-                        } else {
-                            focus_digit = Some(focused_digit);
                         }
                     } else if apply_replace_digit(
                         self.value,
@@ -269,21 +293,16 @@ impl<'a> DigitwiseNumberEditor<'a> {
                         changed = true;
                         action = Some(DigitwiseNumberEditorAction::ReplaceDigit);
                         state.selected_digit = next_digit;
-                        focus_digit = Some(next_digit);
-                    } else {
-                        focus_digit = Some(focused_digit);
+                        state.has_saved_selection = true;
                     }
-                } else {
-                    focus_digit = Some(focused_digit);
                 }
             }
         } else {
             state.has_focus = false;
         }
 
-        if let Some(digit_index) = focus_digit {
-            ui.memory_mut(|memory| memory.request_focus(rendered_digits[digit_index].id));
-            state.selected_digit = digit_index;
+        if request_editor_focus {
+            ui.memory_mut(|memory| memory.request_focus(editor_id));
             state.has_focus = true;
         }
 
@@ -352,6 +371,14 @@ fn digit_size(ui: &Ui, digit_width: Option<f32>) -> egui::Vec2 {
     )
 }
 
+fn digit_interaction_sense() -> Sense {
+    Sense {
+        click: true,
+        drag: true,
+        focusable: false,
+    }
+}
+
 fn glyph_size(ui: &Ui) -> egui::Vec2 {
     let galley = WidgetText::from("0").into_galley(
         ui,
@@ -362,12 +389,24 @@ fn glyph_size(ui: &Ui) -> egui::Vec2 {
     galley.size()
 }
 
-fn paint_digit(ui: &Ui, rect: egui::Rect, digit_char: char, font_id: &FontId, has_focus: bool) {
+fn paint_digit(
+    ui: &Ui,
+    rect: egui::Rect,
+    digit_char: char,
+    font_id: &FontId,
+    has_focus: bool,
+    is_leading_zero: bool,
+) {
     let base_bg = ui.visuals().extreme_bg_color;
     let bg_fill = if has_focus {
         base_bg.linear_multiply(5.0)
     } else {
         base_bg.linear_multiply(0.9)
+    };
+    let text_color = if is_leading_zero && !has_focus {
+        ui.visuals().weak_text_color()
+    } else {
+        ui.visuals().text_color()
     };
 
     ui.painter()
@@ -377,14 +416,19 @@ fn paint_digit(ui: &Ui, rect: egui::Rect, digit_char: char, font_id: &FontId, ha
         Align2::CENTER_CENTER,
         digit_char,
         font_id.clone(),
-        ui.visuals().text_color(),
+        text_color,
     );
 }
 
 fn paint_separator(ui: &mut Ui, font_id: &FontId) {
     let glyph_size = glyph_size(ui);
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(glyph_size.x, glyph_size.y + 4.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(
+            glyph_size.x * GROUP_SEPARATOR_WIDTH_FACTOR,
+            glyph_size.y + 4.0,
+        ),
+        Sense::hover(),
+    );
     ui.painter().text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -429,6 +473,21 @@ fn max_value_for_digits(digits: usize) -> u64 {
 
 fn format_value(value: u64, digits: usize) -> String {
     format!("{value:0digits$}")
+}
+
+fn is_leading_zero_digit(digit_chars: &[char], digit_index: usize) -> bool {
+    digit_chars.get(digit_index) == Some(&'0')
+        && digit_chars
+            .iter()
+            .take(digit_index + 1)
+            .all(|digit_char| *digit_char == '0')
+}
+
+fn first_significant_digit_index(digit_chars: &[char]) -> usize {
+    digit_chars
+        .iter()
+        .position(|digit_char| *digit_char != '0')
+        .unwrap_or(digit_chars.len().saturating_sub(1))
 }
 
 fn has_group_separator(digits: usize, digit_index: usize) -> bool {
@@ -577,6 +636,49 @@ mod tests {
     #[test]
     fn format_value_keeps_leading_zeroes() {
         assert_eq!(format_value(42, 6), "000042");
+    }
+
+    #[test]
+    fn leading_zero_detection_marks_prefix_zeroes_only() {
+        let digits: Vec<char> = "000042".chars().collect();
+        assert!(is_leading_zero_digit(&digits, 0));
+        assert!(is_leading_zero_digit(&digits, 3));
+        assert!(!is_leading_zero_digit(&digits, 4));
+        assert!(!is_leading_zero_digit(&digits, 5));
+    }
+
+    #[test]
+    fn leading_zero_detection_marks_all_zero_value_digits() {
+        let digits: Vec<char> = "000000".chars().collect();
+        for index in 0..digits.len() {
+            assert!(is_leading_zero_digit(&digits, index));
+        }
+    }
+
+    #[test]
+    fn leading_zero_detection_ignores_non_zero_prefixes() {
+        let digits: Vec<char> = "120000".chars().collect();
+        for index in 0..digits.len() {
+            assert!(!is_leading_zero_digit(&digits, index));
+        }
+    }
+
+    #[test]
+    fn first_significant_digit_skips_leading_zeroes() {
+        let digits: Vec<char> = "000042".chars().collect();
+        assert_eq!(first_significant_digit_index(&digits), 4);
+    }
+
+    #[test]
+    fn first_significant_digit_uses_last_digit_for_zero_value() {
+        let digits: Vec<char> = "000000".chars().collect();
+        assert_eq!(first_significant_digit_index(&digits), 5);
+    }
+
+    #[test]
+    fn first_significant_digit_uses_leftmost_non_zero_when_present() {
+        let digits: Vec<char> = "120000".chars().collect();
+        assert_eq!(first_significant_digit_index(&digits), 0);
     }
 
     #[test]

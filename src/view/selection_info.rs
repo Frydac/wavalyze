@@ -108,6 +108,7 @@ pub fn ui_selection_info_toolbar(
                     let out_start = DigitwiseNumberEditor::new("selection_start", &mut start_val)
                         .digits(SELECTION_EDITOR_DIGITS)
                         .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
+                        .dim_leading_zeroes(true)
                         .max(SELECTION_EDITOR_MAX)
                         .show(ui);
                     ui.end_row();
@@ -117,6 +118,7 @@ pub fn ui_selection_info_toolbar(
                         DigitwiseNumberEditor::new("selection_length", &mut length_val)
                             .digits(SELECTION_EDITOR_DIGITS)
                             .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
+                            .dim_leading_zeroes(true)
                             .max(SELECTION_EDITOR_MAX)
                             .show(ui);
                     ui.end_row();
@@ -125,6 +127,7 @@ pub fn ui_selection_info_toolbar(
                     let out_end = DigitwiseNumberEditor::new("selection_end", &mut end_val)
                         .digits(SELECTION_EDITOR_DIGITS)
                         .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
+                        .dim_leading_zeroes(true)
                         .max(SELECTION_EDITOR_MAX)
                         .show(ui);
                     ui.end_row();
