@@ -167,3 +167,48 @@ impl Track {
     //     todo!()
     // }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::{
+        buffer::{Buffer, BufferE},
+        sample::view::ViewData,
+    };
+    use crate::model::config::TrackConfig;
+
+    fn insert_buffer(audio: &mut AudioManager, nr_samples: usize) -> BufferId {
+        let mut buffer = Buffer::new(48_000, 32);
+        buffer.data = (0..nr_samples).map(|i| i as f32 / nr_samples as f32).collect();
+        let buffere = BufferE::F32(buffer);
+        let buffer_id = audio.buffers.insert(buffere.clone());
+        audio
+            .thumbnails
+            .insert(buffer_id, audio::thumbnail::ThumbnailE::from_buffer_e(&buffere, None));
+        buffer_id
+    }
+
+    #[test]
+    fn update_sample_view_replaces_stale_waveform_with_empty_view() {
+        let mut audio = AudioManager::default();
+        let buffer_id = insert_buffer(&mut audio, 32);
+        let mut track = Track::new2(buffer_id, &TrackConfig::default()).unwrap();
+        track.set_screen_rect(Rect::new(0.0, 0.0, 16.0, 40.0));
+
+        track.set_ix_range((0.0..16.0).into(), &audio).unwrap();
+        track
+            .update_sample_view(&mut audio, ValueDisplayScale::default())
+            .unwrap();
+
+        let initial_view = track.get_sample_view().unwrap();
+        assert!(matches!(initial_view.data, ViewData::Single(ref data) if !data.is_empty()));
+
+        track.set_ix_range((64.0..96.0).into(), &audio).unwrap();
+        track
+            .update_sample_view(&mut audio, ValueDisplayScale::default())
+            .unwrap();
+
+        let updated_view = track.get_sample_view().unwrap();
+        assert_eq!(updated_view.data, ViewData::MinMax(vec![]));
+    }
+}

@@ -75,15 +75,11 @@ fn ui_waveform(
     track_id: TrackId,
     rect: egui::Rect,
 ) -> Result<()> {
-    let sample_ix_range = {
-        let time_line = model
-            .tracks
-            .ruler
-            .time_line
-            .as_ref()
-            .ok_or(anyhow::anyhow!("No time line"))?;
-        time_line.get_ix_range(ui.min_rect().width() as f64)
-    };
+    let sample_ix_range = model
+        .tracks
+        .ruler
+        .ix_range()
+        .ok_or(anyhow::anyhow!("No time line"))?;
     let hover_info = model.tracks.hover_info;
     let display_scale = model.user_config.value_display_scale;
     let track = model

@@ -136,8 +136,11 @@ impl View {
 
         // Get visible range of sample indices present in the buffer
         let start_ix = sample_rect.ix_rng.start.max(0.0).ceil() as usize;
+        let start_ix = start_ix.min(buffer.len());
         let end_ix = ((sample_rect.ix_rng.end + 1.0).max(0.0).floor() as usize).min(buffer.len());
-        ensure!(end_ix >= start_ix, "end_ix < start_ix");
+        if end_ix <= start_ix {
+            return Ok(Self::empty_for_zoom(sample_rect, samples_per_pixel));
+        }
         let nr_samples = end_ix - start_ix;
 
         // Get screen position for sample, with floored x coordinate.
@@ -160,13 +163,6 @@ impl View {
         } else {
             // We have 2 or more samples per pixel, we draw the min/max of the samples per
             // pixel column (x coordinate).
-            if nr_samples == 0 {
-                return Ok(Self {
-                    data: ViewData::MinMax(vec![]),
-                    samples_per_pixel,
-                    sample_ix_start: sample_rect.ix_rng.start,
-                });
-            }
             let mut data = Vec::<MinMaxPos>::with_capacity(screen_rect.width() as usize);
 
             // Convert all samples to min/max positions even if outside of the screen rect.
@@ -253,18 +249,13 @@ impl View {
         let end_ix = (sample_rect.ix_rng.end + 1.0).max(0.0).floor();
         let start_ix = start_ix / level_data.samples_per_pixel;
         let end_ix = end_ix / level_data.samples_per_pixel;
-        let start_ix = start_ix as usize;
+        let start_ix = (start_ix as usize).min(level_data.data.len());
         let end_ix = end_ix as usize;
         let end_ix = end_ix.min(level_data.data.len());
-        ensure!(end_ix >= start_ix, "end_ix < start_ix");
-        let nr_samples = end_ix - start_ix;
-        if nr_samples == 0 {
-            return Ok(Self {
-                data: ViewData::MinMax(vec![]),
-                samples_per_pixel,
-                sample_ix_start: sample_rect.ix_rng.start,
-            });
+        if end_ix <= start_ix {
+            return Ok(Self::empty_for_zoom(sample_rect, samples_per_pixel));
         }
+        let nr_samples = end_ix - start_ix;
 
         // Get screen positions for min/max sample, with floored x coordinate.
         let get_min_max_pos = |ix_in_level_data: usize,
@@ -333,6 +324,19 @@ impl View {
             samples_per_pixel,
             sample_ix_start: sample_rect.ix_rng.start,
         })
+    }
+
+    fn empty_for_zoom(sample_rect: SampleRect, samples_per_pixel: f32) -> Self {
+        let data = if samples_per_pixel < 2.0 {
+            ViewData::Single(vec![])
+        } else {
+            ViewData::MinMax(vec![])
+        };
+        Self {
+            data,
+            samples_per_pixel,
+            sample_ix_start: sample_rect.ix_rng.start,
+        }
     }
 }
 pub fn clip_view_data(view_data: &mut [MinMaxPos], screen_rect: Rect) {
@@ -404,12 +408,30 @@ pub fn clip_view_data(view_data: &mut [MinMaxPos], screen_rect: Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::{
+        SampleRect,
+        buffer::{Buffer, BufferE},
+        thumbnail::LevelData,
+    };
+    use crate::model::ruler::ValueDisplayScale;
 
     fn rect_001() -> Rect {
         Rect {
             min: Pos::new(10.0, 10.0),
             max: Pos::new(20.0, 20.0),
         }
+    }
+
+    fn test_buffer() -> Buffer<f32> {
+        let mut buffer = Buffer::new(48_000, 32);
+        buffer.data = (0..16).map(|i| i as f32 / 16.0).collect();
+        buffer
+    }
+
+    fn sample_rect_from_range(ix_start: f64, ix_end: f64) -> SampleRect {
+        let mut rect = SampleRect::from_buffere(&BufferE::F32(test_buffer()));
+        rect.set_ix_rng((ix_start..ix_end).into());
+        rect
     }
 
     #[test]
@@ -560,5 +582,49 @@ mod tests {
             max: Pos::new(0.0, 6.0),
         };
         assert_eq!(min_max_pos_act, min_max_pos_exp);
+    }
+
+    #[test]
+    fn from_buffer_returns_empty_single_view_when_range_is_past_buffer_end() {
+        let view = View::from_buffer(
+            &test_buffer(),
+            sample_rect_from_range(20.0, 28.0),
+            Rect::new(0.0, 0.0, 16.0, 20.0),
+            ValueDisplayScale::default(),
+        )
+        .unwrap();
+
+        assert_eq!(view.data, ViewData::Single(vec![]));
+    }
+
+    #[test]
+    fn from_buffer_returns_empty_minmax_view_when_zoomed_out_past_buffer_end() {
+        let view = View::from_buffer(
+            &test_buffer(),
+            sample_rect_from_range(20.0, 60.0),
+            Rect::new(0.0, 0.0, 10.0, 20.0),
+            ValueDisplayScale::default(),
+        )
+        .unwrap();
+
+        assert_eq!(view.data, ViewData::MinMax(vec![]));
+    }
+
+    #[test]
+    fn from_level_data_returns_empty_view_when_range_is_past_buffer_end() {
+        let buffer = test_buffer();
+        let level_data = LevelData::from_buffer(&buffer, 4);
+        let mut rect = SampleRect::from_buffere(&BufferE::F32(buffer.clone()));
+        rect.set_ix_rng((20.0..60.0).into());
+
+        let view = View::from_level_data(
+            &level_data,
+            rect,
+            Rect::new(0.0, 0.0, 10.0, 20.0),
+            ValueDisplayScale::default(),
+        )
+        .unwrap();
+
+        assert_eq!(view.data, ViewData::MinMax(vec![]));
     }
 }
