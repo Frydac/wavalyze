@@ -2,7 +2,7 @@ use crate::{
     audio::{self, BufferId},
     model::{
         action::SelectionEdge, config::TrackConfig, hover_info::HoverInfoE, ruler,
-        selection_info::SelectionInfoE,
+        selection_info::SelectionInfoE, track,
     },
 };
 use anyhow::Result;
@@ -39,9 +39,24 @@ impl Tracks {
         buffer_id: BufferId,
         track_config: &TrackConfig,
     ) -> Result<TrackId> {
+        self.insert_track(buffer_id, self.tracks_order.len(), track_config)
+    }
+
+    pub fn insert_track(
+        &mut self,
+        buffer_id: BufferId,
+        insert_ix: usize,
+        track_config: &TrackConfig,
+    ) -> Result<TrackId> {
+        anyhow::ensure!(
+            self.find_track(buffer_id).is_none(),
+            "Track for buffer {:?} already exists",
+            buffer_id
+        );
         let track = Track::new2(buffer_id, track_config)?;
         let track_id = self.tracks.insert(track);
-        self.tracks_order.push(track_id);
+        let insert_ix = insert_ix.min(self.tracks_order.len());
+        self.tracks_order.insert(insert_ix, track_id);
         Ok(track_id)
     }
 
@@ -319,9 +334,10 @@ impl Tracks {
             return Ok(());
         }
         let track_height = self.available_height / visible_tracks as f32;
+        let min_total_height = min_height + track::HEADER_HEIGHT;
         for track in self.tracks.values_mut() {
             if track.visible {
-                track.height = track_height.max(min_height);
+                track.height = track_height.max(min_total_height);
             }
         }
         Ok(())

@@ -1,5 +1,8 @@
 use crate::{
-    model::{Action, Model, track::TrackId},
+    model::{
+        Action, Model,
+        track::{self, TrackId},
+    },
     view::value_ruler2,
 };
 use anyhow::Result;
@@ -11,10 +14,8 @@ mod selection;
 #[path = "track/waveform.rs"]
 mod waveform;
 
-const HEADER_HEIGHT: f32 = 22.0;
-
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
-    let min_height: f32 = model.user_config.track.min_height;
+    let min_height = track::min_total_height(&model.user_config.track);
     let width = ui.available_width().max(0.0);
     let width_info = model.user_config.tracks_width_info.min(width);
     let height = model
@@ -48,7 +49,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
 
             // sample value ruler
             let ruler_width = 100.0;
-            let ruler_height = (height - HEADER_HEIGHT).max(0.0);
+            let ruler_height = (height - track::HEADER_HEIGHT).max(0.0);
             let ruler_min = info_rect.max - egui::vec2(ruler_width, ruler_height);
             let ruler_size = egui::vec2(ruler_width, ruler_height);
             let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
@@ -87,7 +88,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             ui.set_min_size(size);
             let rect_wf_group = ui.min_rect();
 
-            ui.allocate_ui([size.x.max(0.0), HEADER_HEIGHT].into(), |ui| {
+            ui.allocate_ui([size.x.max(0.0), track::HEADER_HEIGHT].into(), |ui| {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_max_size(size);
@@ -95,7 +96,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 let _ = ui_header(ui, model, track_id);
             });
 
-            let waveform_height = (size.y - HEADER_HEIGHT).max(0.0);
+            let waveform_height = (size.y - track::HEADER_HEIGHT).max(0.0);
             ui.allocate_ui([size.x.max(0.0), waveform_height].into(), |ui| {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
@@ -110,7 +111,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     // -- Resize handle across full track width --
     {
         const RESIZE_HANDLE_HEIGHT: f32 = 3.0;
-        let min_height: f32 = model.user_config.track.min_height + HEADER_HEIGHT;
+        let min_height = track::min_total_height(&model.user_config.track);
         let resize_handle_rect = egui::Rect::from_min_size(
             egui::pos2(
                 track_rect.left(),
@@ -166,7 +167,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
             let rect = ui.max_rect();
             let rect = egui::Rect::from_min_size(
                 rect.min,
-                egui::vec2(rect.width().max(0.0), HEADER_HEIGHT),
+                egui::vec2(rect.width().max(0.0), track::HEADER_HEIGHT),
             );
             ui.set_clip_rect(rect);
 
@@ -186,7 +187,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                     .size();
                 egui::vec2(
                     text_size.x + padding.x * 2.0,
-                    (text_size.y + padding.y * 2.0).min(HEADER_HEIGHT),
+                    (text_size.y + padding.y * 2.0).min(track::HEADER_HEIGHT),
                 )
             };
 

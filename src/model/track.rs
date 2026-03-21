@@ -17,6 +17,11 @@ use crate::{
 use single::Single;
 
 new_key_type! { pub struct TrackId; }
+pub const HEADER_HEIGHT: f32 = 22.0;
+
+pub fn min_total_height(track_config: &TrackConfig) -> f32 {
+    track_config.min_height + HEADER_HEIGHT
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrackMetaData {
@@ -72,7 +77,7 @@ impl Track {
             single,
             update_view_buffer_: false,
             track_md: TrackMetaData::None,
-            height: track_config.min_height,
+            height: min_total_height(track_config),
             visible: true,
         })
 

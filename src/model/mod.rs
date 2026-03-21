@@ -157,6 +157,44 @@ impl Model {
         true
     }
 
+    pub fn remove_channel_track(&mut self, buffer_id: audio::BufferId) -> bool {
+        let Some(track_id) = self.find_track_id_for_buffer(buffer_id) else {
+            return false;
+        };
+        self.tracks.remove_track(track_id);
+        true
+    }
+
+    pub fn restore_channel_track(&mut self, buffer_id: audio::BufferId) -> Result<bool> {
+        if self.find_track_id_for_buffer(buffer_id).is_some() {
+            return Ok(false);
+        }
+        let Some(insert_ix) = self.track_insert_index_for_buffer(buffer_id) else {
+            return Ok(false);
+        };
+        let track_id = self
+            .tracks
+            .insert_track(buffer_id, insert_ix, &self.user_config.track)?;
+        self.tracks
+            .set_track_height(track_id, crate::model::track::min_total_height(&self.user_config.track));
+        Ok(true)
+    }
+
+    fn track_insert_index_for_buffer(&self, buffer_id: audio::BufferId) -> Option<usize> {
+        let mut insert_ix = 0;
+        for file in &self.files2 {
+            for channel in file.channels.values() {
+                if channel.buffer_id == buffer_id {
+                    return Some(insert_ix);
+                }
+                if self.find_track_id_for_buffer(channel.buffer_id).is_some() {
+                    insert_ix += 1;
+                }
+            }
+        }
+        None
+    }
+
     pub fn zoom_to_full(&mut self) -> Result<()> {
         self.tracks.zoom_to_full(&self.audio)
     }
@@ -254,6 +292,7 @@ mod tests {
     use super::{FileVisibilityState, Model};
     use crate::{
         audio,
+        model::track,
         wav::{self, file2},
     };
 
@@ -319,5 +358,139 @@ mod tests {
             model.file_visibility_state_at(0),
             Some(FileVisibilityState::NoneVisible)
         );
+    }
+
+    #[test]
+    fn remove_channel_track_marks_channel_missing() {
+        let mut model = Model::new();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.files2.push(file.clone());
+
+        assert!(model.remove_channel_track(buffers[0]));
+        assert!(model.find_track_id_for_buffer(buffers[0]).is_none());
+        assert_eq!(
+            model.file_visibility_state_at(0),
+            Some(FileVisibilityState::PartiallyVisible)
+        );
+        assert!(
+            model
+                .get_file_channel_for_track(model.find_track_id_for_buffer(buffers[1]).unwrap())
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn restore_channel_track_recreates_missing_track() {
+        let mut model = Model::new();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.files2.push(file);
+
+        assert!(model.remove_channel_track(buffers[0]));
+        assert!(model.restore_channel_track(buffers[0]).unwrap());
+        let restored_track_id = model.find_track_id_for_buffer(buffers[0]).unwrap();
+
+        assert_eq!(model.tracks.tracks_order.len(), 2);
+        assert_eq!(model.tracks.tracks_order[0], restored_track_id);
+        assert!(model.tracks.get_track(restored_track_id).unwrap().visible);
+        assert_eq!(
+            model.file_visibility_state_at(0),
+            Some(FileVisibilityState::AllVisible)
+        );
+    }
+
+    #[test]
+    fn restore_channel_track_uses_minimum_track_height() {
+        let mut model = Model::new();
+        model.user_config.track.min_height = 42.0;
+        let buffers = [add_buffer(&mut model)];
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.files2.push(file);
+
+        let track_id = model.find_track_id_for_buffer(buffers[0]).unwrap();
+        model.tracks.set_track_height(track_id, 120.0);
+
+        assert!(model.remove_channel_track(buffers[0]));
+        assert!(model.restore_channel_track(buffers[0]).unwrap());
+
+        let restored_track_id = model.find_track_id_for_buffer(buffers[0]).unwrap();
+        assert_eq!(
+            model.tracks.get_track(restored_track_id).unwrap().height,
+            42.0 + track::HEADER_HEIGHT
+        );
+    }
+
+    #[test]
+    fn restore_channel_track_preserves_file_channel_order() {
+        let mut model = Model::new();
+        let first_file_buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let second_file_buffers = [add_buffer(&mut model)];
+        let first_file = make_file(&first_file_buffers);
+        let second_file = make_file(&second_file_buffers);
+
+        model
+            .tracks
+            .add_tracks_from_file(&first_file, &model.user_config.track)
+            .unwrap();
+        model
+            .tracks
+            .add_tracks_from_file(&second_file, &model.user_config.track)
+            .unwrap();
+        model.files2.push(first_file);
+        model.files2.push(second_file);
+
+        assert!(model.remove_channel_track(first_file_buffers[1]));
+        assert!(model.restore_channel_track(first_file_buffers[1]).unwrap());
+
+        let ordered_buffers: Vec<_> = model
+            .tracks
+            .tracks_order
+            .iter()
+            .map(|track_id| {
+                model
+                    .tracks
+                    .get_track(*track_id)
+                    .unwrap()
+                    .single
+                    .item
+                    .buffer_id
+            })
+            .collect();
+        assert_eq!(
+            ordered_buffers,
+            vec![
+                first_file_buffers[0],
+                first_file_buffers[1],
+                second_file_buffers[0]
+            ]
+        );
+    }
+
+    #[test]
+    fn restore_channel_track_is_noop_when_track_already_loaded() {
+        let mut model = Model::new();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.files2.push(file);
+
+        assert!(!model.restore_channel_track(buffers[0]).unwrap());
+        assert_eq!(model.tracks.tracks_order.len(), 2);
     }
 }

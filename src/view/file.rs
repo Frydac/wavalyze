@@ -96,7 +96,27 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                             } else {
                                 channel.label
                             };
-                            add_row_label(ui, channel_label);
+                            add_row_label(ui, channel_label).context_menu(|ui| {
+                                let button_label = if channel.missing_track {
+                                    "Load track"
+                                } else {
+                                    "Remove track"
+                                };
+                                if ui.button(button_label).clicked() {
+                                    let result = if channel.missing_track {
+                                        model.restore_channel_track(channel.buffer_id)
+                                    } else {
+                                        Ok(model.remove_channel_track(channel.buffer_id))
+                                    };
+                                    if let Err(err) = result {
+                                        tracing::error!(
+                                            "Failed to toggle track for buffer {:?}: {err}",
+                                            channel.buffer_id
+                                        );
+                                    }
+                                    ui.close_menu();
+                                }
+                            });
                         });
                     }
                 });
