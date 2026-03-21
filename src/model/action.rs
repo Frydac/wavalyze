@@ -189,7 +189,11 @@ impl Action {
                 track_id,
                 nr_pixels,
             } => {
-                model.tracks.pan_track_value_range(*track_id, *nr_pixels)?;
+                model.tracks.pan_track_value_range(
+                    *track_id,
+                    *nr_pixels,
+                    model.user_config.value_display_scale,
+                )?;
             }
             Action::RecenterY { track_id } => {
                 model.tracks.recenter_track_value_range(*track_id)?;
@@ -202,9 +206,12 @@ impl Action {
                 nr_pixels,
                 center_y,
             } => {
-                model
-                    .tracks
-                    .zoom_track_value_range(*track_id, *nr_pixels, *center_y)?;
+                model.tracks.zoom_track_value_range(
+                    *track_id,
+                    *nr_pixels,
+                    *center_y,
+                    model.user_config.value_display_scale,
+                )?;
             }
             Action::SetHoverInfo(hover_info) => {
                 model.tracks.hover_info = *hover_info;

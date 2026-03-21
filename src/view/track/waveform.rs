@@ -85,6 +85,7 @@ fn ui_waveform(
         time_line.get_ix_range(ui.min_rect().width() as f64)
     };
     let hover_info = model.tracks.hover_info;
+    let display_scale = model.user_config.value_display_scale;
     let track = model
         .tracks
         .get_track_mut(track_id)
@@ -92,7 +93,7 @@ fn ui_waveform(
 
     track.set_ix_range(sample_ix_range, &model.audio)?;
     track.set_screen_rect(rect.into());
-    track.update_sample_view(&mut model.audio)?;
+    track.update_sample_view(&mut model.audio, display_scale)?;
     let sample_view = track.get_sample_view()?;
 
     let color = egui::Color32::LIGHT_RED;
@@ -105,7 +106,7 @@ fn ui_waveform(
         .item
         .sample_rect()
         .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
-    draw_value_grid(ui, sample_rect, screen_rect);
+    draw_value_grid(ui, sample_rect, screen_rect, display_scale);
 
     match sample_view.data {
         ViewData::Single(ref positions) => {
@@ -114,7 +115,9 @@ fn ui_waveform(
                     let Some(val_rng) = sample_rect.val_rng() else {
                         return;
                     };
-                    let Some(y_mid) = sample_value_to_screen_y(0.0, val_rng, screen_rect) else {
+                    let Some(y_mid) =
+                        sample_value_to_screen_y(0.0, val_rng, screen_rect, display_scale)
+                    else {
                         return;
                     };
                     let pos_mid = crate::Pos { x: pos.x, y: y_mid };
@@ -189,13 +192,23 @@ fn ui_waveform(
     Ok(())
 }
 
-fn draw_value_grid(ui: &mut egui::Ui, sample_rect: audio::SampleRect, screen_rect: Rect) {
+fn draw_value_grid(
+    ui: &mut egui::Ui,
+    sample_rect: audio::SampleRect,
+    screen_rect: Rect,
+    display_scale: crate::model::ruler::ValueDisplayScale,
+) {
     let Some(val_rng) = sample_rect.val_rng() else {
         return;
     };
     let mut lattice = ValueLattice::default();
     if lattice
-        .compute_ticks(val_rng, screen_rect, NR_PIXELS_PER_VALUE_TICK)
+        .compute_ticks(
+            val_rng,
+            screen_rect,
+            NR_PIXELS_PER_VALUE_TICK,
+            display_scale,
+        )
         .is_err()
     {
         return;

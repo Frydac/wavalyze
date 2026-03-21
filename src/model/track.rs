@@ -1,6 +1,6 @@
 use crate::{
     audio::{self, sample},
-    model::config::TrackConfig,
+    model::{config::TrackConfig, ruler::ValueDisplayScale},
     wav,
 };
 use anyhow::{Result, anyhow};
@@ -55,6 +55,7 @@ pub struct Track {
 
     /// Dirty flag for the inputs of the view buffer
     update_view_buffer_: bool,
+    sample_view_scale: ValueDisplayScale,
 
     track_md: TrackMetaData,
 
@@ -76,6 +77,7 @@ impl Track {
             view_buffer: None,
             single,
             update_view_buffer_: false,
+            sample_view_scale: ValueDisplayScale::default(),
             track_md: TrackMetaData::None,
             height: min_total_height(track_config),
             visible: true,
@@ -121,7 +123,14 @@ impl Track {
         Ok(())
     }
 
-    pub fn update_sample_view(&mut self, audio: &mut AudioManager) -> Result<()> {
+    pub fn update_sample_view(
+        &mut self,
+        audio: &mut AudioManager,
+        display_scale: ValueDisplayScale,
+    ) -> Result<()> {
+        if self.sample_view_scale != display_scale {
+            self.update_view_buffer_ = true;
+        }
         if !self.update_view_buffer_ {
             return Ok(());
         }
@@ -138,7 +147,8 @@ impl Track {
         let buffer_id = self.single.item.buffer_id;
 
         self.single.item.sample_view =
-            Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect)?);
+            Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect, display_scale)?);
+        self.sample_view_scale = display_scale;
 
         // trace!("self.single.item.sample_view: {:?}", self.single.item.sample_view);
 

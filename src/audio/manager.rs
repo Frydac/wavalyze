@@ -78,6 +78,7 @@ impl AudioManager {
         buffer_id: BufferId,
         sample_rect: SampleRect,
         screen_rect: Rect,
+        display_scale: crate::model::ruler::ValueDisplayScale,
     ) -> Result<sample::View> {
         let target_spp = sample_rect.width() / screen_rect.width();
         let thumbnail = self.thumbnails.get(buffer_id);
@@ -86,13 +87,13 @@ impl AudioManager {
             .map(|spp| spp as f32);
         if thumbnail_spp.is_none() || thumbnail_spp.unwrap() > target_spp {
             let buffere = self.get_buffer(buffer_id)?;
-            sample::View::from_buffere(buffere, sample_rect, screen_rect)
+            sample::View::from_buffere(buffere, sample_rect, screen_rect, display_scale)
         } else {
             let thumbnail = thumbnail.unwrap();
             let level_data = thumbnail
                 .get_level_data(target_spp)
                 .ok_or(anyhow!("level_data not found"))?;
-            sample::View::from_level_data_e(&level_data, sample_rect, screen_rect)
+            sample::View::from_level_data_e(&level_data, sample_rect, screen_rect, display_scale)
         }
     }
 }

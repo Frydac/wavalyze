@@ -1,6 +1,6 @@
 use wavalyze::{
     audio::sample,
-    model::ruler::{TickType, ValueLattice},
+    model::ruler::{TickType, ValueDisplayScale, ValueLattice},
     rect::Rect,
 };
 
@@ -15,6 +15,7 @@ fn value_lattice_full_scale_zero_is_major() {
             },
             Rect::new(0.0, 0.0, 40.0, 220.0),
             50.0,
+            ValueDisplayScale::default(),
         )
         .unwrap();
 
@@ -38,6 +39,7 @@ fn value_lattice_zoomed_range_stays_visible() {
             },
             Rect::new(0.0, 0.0, 40.0, 240.0),
             50.0,
+            ValueDisplayScale::default(),
         )
         .unwrap();
 

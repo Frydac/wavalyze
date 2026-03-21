@@ -78,7 +78,12 @@ impl Item {
             .get(self.buffer_id)
             .ok_or(anyhow!("Buffer {:?} not found", self.buffer_id))?;
 
-        let sample_view = audio.get_sample_view(self.buffer_id, *sample_rect, *screen_rect)?;
+        let sample_view = audio.get_sample_view(
+            self.buffer_id,
+            *sample_rect,
+            *screen_rect,
+            crate::model::ruler::ValueDisplayScale::default(),
+        )?;
         self.sample_view = Some(sample_view);
 
         self.sample_rect = Some(*sample_rect);

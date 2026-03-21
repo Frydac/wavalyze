@@ -63,6 +63,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                     hover_info: &hover_info,
                     audio: &model.audio,
                     zoom_y_factor: model.user_config.zoom_x_scroll_factor,
+                    display_scale: model.user_config.value_display_scale,
                 };
                 let value_ruler_config = value_ruler2::ValueRulerConfig {
                     show_hover_tick: false,

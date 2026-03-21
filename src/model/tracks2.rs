@@ -117,7 +117,12 @@ impl Tracks {
         }
     }
 
-    pub fn pan_track_value_range(&mut self, track_id: TrackId, delta_pixels: f32) -> Result<()> {
+    pub fn pan_track_value_range(
+        &mut self,
+        track_id: TrackId,
+        delta_pixels: f32,
+        display_scale: ruler::ValueDisplayScale,
+    ) -> Result<()> {
         let track = self
             .tracks
             .get_mut(track_id)
@@ -132,8 +137,12 @@ impl Tracks {
             return Ok(());
         };
 
-        let delta_val = ruler::value::pixels_to_value_delta(delta_pixels, val_rng, screen_rect);
-        let shifted = ruler::value::pan_val_range(val_rng, delta_val);
+        let shifted = ruler::value::pan_val_range_with_scale(
+            val_rng,
+            delta_pixels,
+            screen_rect,
+            display_scale,
+        );
         let mut sample_rect = sample_rect;
         sample_rect.set_val_rng(shifted);
         track.set_sample_rect(sample_rect);
@@ -176,6 +185,7 @@ impl Tracks {
         track_id: TrackId,
         delta_pixels: f32,
         center_y: f32,
+        display_scale: ruler::ValueDisplayScale,
     ) -> Result<()> {
         if delta_pixels == 0.0 {
             return Ok(());
@@ -193,17 +203,13 @@ impl Tracks {
         let Some(val_rng) = sample_rect.val_rng() else {
             return Ok(());
         };
-        if !screen_rect.contains_y(center_y) {
-            return Ok(());
-        }
-        // Invert Y so higher sample values map toward the top of the screen.
-        let center_frac = (screen_rect.max.y - center_y) / screen_rect.height();
-        let delta_val = ruler::value::pixels_to_value_delta(delta_pixels, val_rng, screen_rect);
-        let range_len = ruler::value::val_range_len(val_rng);
-        if delta_val < 0.0 && delta_val.abs() >= range_len {
-            return Ok(());
-        }
-        let zoomed = ruler::value::zoom_val_range(val_rng, delta_val, center_frac as f64);
+        let zoomed = ruler::value::zoom_val_range_with_scale(
+            val_rng,
+            delta_pixels,
+            center_y,
+            screen_rect,
+            display_scale,
+        );
         if zoomed.is_empty() {
             return Ok(());
         }

@@ -1,5 +1,5 @@
 // Store all app config in one place
-use crate::model::shortcuts::ShortcutConfig;
+use crate::model::{ruler::ValueDisplayScale, shortcuts::ShortcutConfig};
 
 use tracing::{error, info, trace, warn};
 
@@ -16,6 +16,7 @@ pub struct Config {
     pub show_hover_info: bool,
 
     pub tracks_width_info: f32,
+    pub value_display_scale: ValueDisplayScale,
     pub shortcuts: ShortcutConfig,
     pub selection: SelectionConfig,
     pub track: TrackConfig,
@@ -59,6 +60,7 @@ impl Default for Config {
             zoom_x_scroll_factor: 4.0,
             show_hover_info: true,
             tracks_width_info: 150.0,
+            value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
             track: TrackConfig::default(),
@@ -112,7 +114,10 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::Config;
-    use crate::model::shortcuts::{ShortcutAction, ShortcutScope};
+    use crate::model::{
+        ruler::ValueDisplayScale,
+        shortcuts::{ShortcutAction, ShortcutScope},
+    };
 
     #[test]
     fn default_config_has_shortcuts() {
@@ -131,6 +136,7 @@ mod tests {
         )
         .unwrap();
 
+        assert_eq!(config.value_display_scale, ValueDisplayScale::default());
         assert_eq!(
             config.shortcuts.bindings.len(),
             ShortcutAction::ALL.len() * ShortcutScope::ALL.len()

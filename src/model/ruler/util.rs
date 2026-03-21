@@ -1,5 +1,7 @@
 use crate::{audio::sample, rect::Rect};
 
+use super::{ValueDisplayScale, display_range};
+
 // assumes both ranges are valid
 // This one is visually less stable, adjacent sample ix bin grouping shifts depending on
 // parameters.
@@ -54,10 +56,12 @@ pub fn sample_value_to_screen_y(
     sample_value: f64,
     val_range: sample::ValRange<f64>,
     screen_rect: Rect,
+    display_scale: ValueDisplayScale,
 ) -> Option<f32> {
-    let min = val_range.min;
-    let max = val_range.max;
-    let value = sample_value;
+    let display_range = display_range::sample_to_display_range(val_range, display_scale);
+    let min = display_range.min;
+    let max = display_range.max;
+    let value = display_scale.sample_to_display(sample_value);
     let range_len = max - min;
     if range_len == 0.0 {
         return None;
@@ -74,9 +78,11 @@ pub fn screen_y_to_sample_value(
     screen_y: f32,
     val_range: sample::ValRange<f64>,
     screen_rect: Rect,
+    display_scale: ValueDisplayScale,
 ) -> Option<f64> {
-    let min = val_range.min;
-    let max = val_range.max;
+    let display_range = display_range::sample_to_display_range(val_range, display_scale);
+    let min = display_range.min;
+    let max = display_range.max;
     let range_len = max - min;
     if range_len == 0.0 {
         return None;
@@ -85,7 +91,7 @@ pub fn screen_y_to_sample_value(
     // Normalize screen Y into [0, 1], inverted
     let frac = (screen_rect.bottom() - screen_y) as f64 / screen_rect.height() as f64;
 
-    Some(min + frac * range_len)
+    Some(display_scale.display_to_sample(min + frac * range_len))
 }
 
 // smallest multiple of m that is >= x
@@ -106,6 +112,7 @@ pub fn floor_to_multiple(x: i64, m: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::ruler::ValueDisplayScale;
 
     #[test]
     fn test_ceil_to_multiple() {
@@ -136,9 +143,10 @@ mod tests {
             min: -1.0f64,
             max: 1.0,
         };
+        let display_scale = ValueDisplayScale::default();
 
-        let y_top = sample_value_to_screen_y(1.0, range, rect).unwrap();
-        let y_bottom = sample_value_to_screen_y(-1.0, range, rect).unwrap();
+        let y_top = sample_value_to_screen_y(1.0, range, rect, display_scale).unwrap();
+        let y_bottom = sample_value_to_screen_y(-1.0, range, rect, display_scale).unwrap();
 
         assert!((y_top - rect.top()).abs() < 0.001);
         assert!((y_bottom - rect.bottom()).abs() < 0.001);
@@ -151,8 +159,9 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
+        let display_scale = ValueDisplayScale::default();
 
-        let y = sample_value_to_screen_y(0.0, range, rect).unwrap();
+        let y = sample_value_to_screen_y(0.0, range, rect, display_scale).unwrap();
 
         assert!((y - 50.0).abs() < 1.0);
     }
@@ -164,10 +173,27 @@ mod tests {
             min: -1.0f64,
             max: 1.0,
         };
+        let display_scale = ValueDisplayScale::default();
 
         let original_y = 42.0;
-        let sample = screen_y_to_sample_value(original_y, range, rect).unwrap();
-        let y_back = sample_value_to_screen_y(sample, range, rect).unwrap();
+        let sample = screen_y_to_sample_value(original_y, range, rect, display_scale).unwrap();
+        let y_back = sample_value_to_screen_y(sample, range, rect, display_scale).unwrap();
+
+        assert!((original_y - y_back).abs() < 0.5);
+    }
+
+    #[test]
+    fn skewed_round_trip_is_reasonable() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
+        let range = sample::ValRange {
+            min: -1.0f64,
+            max: 1.0,
+        };
+        let display_scale = ValueDisplayScale { skew_factor: 1.0 };
+
+        let original_y = 25.0;
+        let sample = screen_y_to_sample_value(original_y, range, rect, display_scale).unwrap();
+        let y_back = sample_value_to_screen_y(sample, range, rect, display_scale).unwrap();
 
         assert!((original_y - y_back).abs() < 0.5);
     }

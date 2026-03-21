@@ -103,11 +103,18 @@ impl View {
         buffere: &BufferE,
         sample_rect: SampleRect,
         screen_rect: Rect,
+        display_scale: crate::model::ruler::ValueDisplayScale,
     ) -> Result<Self> {
         match buffere {
-            BufferE::F32(buffer) => View::from_buffer(buffer, sample_rect, screen_rect),
-            BufferE::I32(buffer) => View::from_buffer(buffer, sample_rect, screen_rect),
-            BufferE::I16(buffer) => View::from_buffer(buffer, sample_rect, screen_rect),
+            BufferE::F32(buffer) => {
+                View::from_buffer(buffer, sample_rect, screen_rect, display_scale)
+            }
+            BufferE::I32(buffer) => {
+                View::from_buffer(buffer, sample_rect, screen_rect, display_scale)
+            }
+            BufferE::I16(buffer) => {
+                View::from_buffer(buffer, sample_rect, screen_rect, display_scale)
+            }
         }
     }
 
@@ -115,6 +122,7 @@ impl View {
         buffer: &Buffer<T>,
         sample_rect: SampleRect,
         screen_rect: Rect,
+        display_scale: crate::model::ruler::ValueDisplayScale,
     ) -> Result<Self> {
         ensure!(screen_rect.width() > 0.0, "screen_rect emtpy");
         ensure!(sample_rect.width() > 0.0, "sample_rect empty");
@@ -137,7 +145,7 @@ impl View {
             let pos_x = sample_ix_to_screen_x(ix as f64, sample_rect.ix_rng, screen_rect);
             let pos_x = pos_x.floor();
             let sample_norm = sample.to_norm(buffer.bit_depth);
-            let pos_y = sample_value_to_screen_y(sample_norm, val_rng, screen_rect)
+            let pos_y = sample_value_to_screen_y(sample_norm, val_rng, screen_rect, display_scale)
                 .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             Ok(Pos::new(pos_x, pos_y))
         };
@@ -205,16 +213,17 @@ impl View {
         level_data: &LevelDataERef<'_>,
         sample_rect: SampleRect,
         screen_rect: Rect,
+        display_scale: crate::model::ruler::ValueDisplayScale,
     ) -> Result<Self> {
         match level_data {
             LevelDataERef::F32(level_data) => {
-                Self::from_level_data(level_data, sample_rect, screen_rect)
+                Self::from_level_data(level_data, sample_rect, screen_rect, display_scale)
             }
             LevelDataERef::I32(level_data) => {
-                Self::from_level_data(level_data, sample_rect, screen_rect)
+                Self::from_level_data(level_data, sample_rect, screen_rect, display_scale)
             }
             LevelDataERef::I16(level_data) => {
-                Self::from_level_data(level_data, sample_rect, screen_rect)
+                Self::from_level_data(level_data, sample_rect, screen_rect, display_scale)
             }
         }
     }
@@ -223,6 +232,7 @@ impl View {
         level_data: &LevelData<T>,
         sample_rect: SampleRect,
         screen_rect: Rect,
+        display_scale: crate::model::ruler::ValueDisplayScale,
     ) -> Result<Self> {
         ensure!(screen_rect.width() > 0.0, "screen_rect emtpy");
         ensure!(sample_rect.width() > 0.0, "sample_rect empty");
@@ -267,12 +277,14 @@ impl View {
                 min_max_val.max.to_norm(level_data.bit_depth),
                 val_rng,
                 screen_rect,
+                display_scale,
             )
             .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             let pos_y_max = sample_value_to_screen_y(
                 min_max_val.min.to_norm(level_data.bit_depth),
                 val_rng,
                 screen_rect,
+                display_scale,
             )
             .ok_or(anyhow!("sample_value_to_screen_y failed"))?;
             Ok(MinMaxPos {

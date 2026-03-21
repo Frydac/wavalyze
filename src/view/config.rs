@@ -14,6 +14,17 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                     .prefix(""),
             );
         });
+        ui.horizontal(|ui| {
+            ui.label("Value Skew: ");
+            ui.add(
+                egui::Slider::new(
+                    &mut config.value_display_scale.skew_factor,
+                    0.0..=model::ruler::ValueDisplayScale::MAX_SKEW_FACTOR,
+                )
+                .step_by(0.01)
+                .show_value(true),
+            );
+        });
         ui.checkbox(&mut config.show_hover_info, "Show floating hover info");
         ui.group(|ui| {
             ui.label("Shortcuts");

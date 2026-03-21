@@ -1,6 +1,6 @@
 use crate::{
     audio::sample,
-    model::ruler::{TickType, floor_to_multiple, sample_value_to_screen_y},
+    model::ruler::{TickType, ValueDisplayScale, floor_to_multiple, sample_value_to_screen_y},
     rect,
 };
 
@@ -23,6 +23,7 @@ impl ValueLattice {
         val_range: sample::ValRange<f64>,
         screen_rect: rect::Rect,
         nr_pixels_per_tick: f32,
+        display_scale: ValueDisplayScale,
     ) -> anyhow::Result<()> {
         let max_nr_ticks = screen_rect.height() / nr_pixels_per_tick;
         let range_len = val_range.len();
@@ -56,7 +57,9 @@ impl ValueLattice {
             if value > val_range.max + minor_step * 0.5 {
                 break;
             }
-            let Some(screen_y) = sample_value_to_screen_y(value, val_range, screen_rect) else {
+            let Some(screen_y) =
+                sample_value_to_screen_y(value, val_range, screen_rect, display_scale)
+            else {
                 step_ix += 1;
                 continue;
             };
@@ -154,6 +157,7 @@ mod tests {
                 },
                 screen_rect,
                 50.0,
+                ValueDisplayScale::default(),
             )
             .unwrap();
 
@@ -186,6 +190,7 @@ mod tests {
                 },
                 screen_rect,
                 50.0,
+                ValueDisplayScale::default(),
             )
             .unwrap();
 
@@ -218,6 +223,7 @@ mod tests {
                 },
                 screen_rect,
                 50.0,
+                ValueDisplayScale::default(),
             )
             .unwrap();
 
@@ -230,5 +236,29 @@ mod tests {
         assert!(lattice.ticks.iter().all(
             |tick| tick.screen_y >= screen_rect.top() && tick.screen_y <= screen_rect.bottom()
         ));
+    }
+
+    #[test]
+    fn skewed_ticks_remain_monotonic() {
+        let mut lattice = ValueLattice::default();
+        let screen_rect = rect::Rect::new(0.0, 0.0, 60.0, 220.0);
+        lattice
+            .compute_ticks(
+                sample::ValRange {
+                    min: -1.0,
+                    max: 1.0,
+                },
+                screen_rect,
+                50.0,
+                ValueDisplayScale { skew_factor: 1.0 },
+            )
+            .unwrap();
+
+        assert!(
+            lattice
+                .ticks
+                .windows(2)
+                .all(|pair| pair[0].screen_y >= pair[1].screen_y)
+        );
     }
 }
