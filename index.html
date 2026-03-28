@@ -9,17 +9,48 @@
     <!-- change this to your project name -->
     <title>wavalyze</title>
 
+    <script type="module">
+        window.addEventListener("TrunkApplicationStarted", async (event) => {
+            const waitForDom = async () => {
+                if (document.readyState !== "loading") {
+                    return;
+                }
+                await new Promise((resolve) => {
+                    document.addEventListener("DOMContentLoaded", resolve, { once: true });
+                });
+            };
+
+            const setLoadingFailure = (message) => {
+                const loadingText = document.getElementById("loading_text");
+                if (loadingText) {
+                    loadingText.innerHTML = `<p>${message}</p>`;
+                }
+            };
+
+            try {
+                await waitForDom();
+                const bindings = window.wasmBindings;
+                if (!bindings?.initThreadPool || !bindings?.startWebApp) {
+                    throw new Error("threaded wasm bindings were not initialized");
+                }
+
+                const threadCount = Math.max(1, navigator.hardwareConcurrency || 1);
+                await bindings.initThreadPool(threadCount);
+                await bindings.startWebApp();
+            } catch (error) {
+                console.error("Failed to start threaded wasm app", error);
+                setLoadingFailure("Failed to start the web app. See the developer console for details.");
+            }
+        });
+    </script>
+
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
-    <link data-trunk rel="rust" data-wasm-opt="2" data-bin="wavalyze" />
+    <link data-trunk rel="rust" data-wasm-opt="2" data-target-name="wavalyze" />
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
     <base data-trunk-public-url />
 
     <link data-trunk rel="icon" href="assets/favicon.ico">
     <link data-trunk rel="copy-file" href="_headers" />
-    <link data-trunk rel="copy-file" href="assets/demo_job_worker.js"/>
-    <link data-trunk rel="copy-file" href="assets/load_wav_worker.js"/>
-
-
     <link data-trunk rel="copy-file" href="assets/sw.js"/>
     <link data-trunk rel="copy-file" href="assets/manifest.json"/>
     <link data-trunk rel="copy-file" href="assets/icon-1024.png" data-target-path="assets"/>

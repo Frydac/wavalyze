@@ -17,6 +17,8 @@ pub mod sample;
 pub mod util;
 pub mod view;
 pub mod wav;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 // Code used only for test builds/configs
 #[cfg(test)]
@@ -24,3 +26,7 @@ pub mod test_utils;
 
 pub use app::App;
 pub use pos::Pos;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_bindgen_rayon::init_thread_pool;
+#[cfg(target_arch = "wasm32")]
+pub use web::start_web_app;

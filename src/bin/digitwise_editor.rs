@@ -1,8 +1,16 @@
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 use eframe::egui;
+#[cfg(not(target_arch = "wasm32"))]
 use egui_custom_widgets::{
     DigitwiseNumberEditor, DigitwiseNumberEditorAction, DigitwiseNumberEditorOutput,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> anyhow::Result<()> {
     wavalyze::log::init_tracing(Some("info"))?;
 
@@ -24,6 +32,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug)]
 struct DemoApp {
     selection_start: u64,
@@ -33,6 +42,7 @@ struct DemoApp {
     last_action: String,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for DemoApp {
     fn default() -> Self {
         Self {
@@ -45,6 +55,7 @@ impl Default for DemoApp {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl eframe::App for DemoApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.clamp_demo_values();
@@ -124,6 +135,7 @@ impl eframe::App for DemoApp {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl DemoApp {
     fn clamp_demo_values(&mut self) {
         let digits = self.digits.clamp(1, 20);
@@ -134,6 +146,7 @@ impl DemoApp {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn show_editor_row(
     ui: &mut egui::Ui,
     label: &str,
@@ -160,6 +173,7 @@ fn show_editor_row(
     last_action
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn describe_action(label: &str, value: u64, output: &DigitwiseNumberEditorOutput) -> String {
     let action = match output.action {
         Some(DigitwiseNumberEditorAction::FocusDigit) => "focus",
@@ -178,6 +192,7 @@ fn describe_action(label: &str, value: u64, output: &DigitwiseNumberEditorOutput
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn display_max_for_digits(digits: usize) -> u64 {
     if digits >= 20 {
         u64::MAX

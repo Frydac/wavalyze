@@ -94,7 +94,7 @@ Web (WASM):
 ```
 rustup target add wasm32-unknown-unknown
 cargo install --locked trunk
-trunk serve
+./trunk-threaded.sh serve
 ```
 
 Open `http://127.0.0.1:8080/index.html#dev` to bypass the service worker cache during development.

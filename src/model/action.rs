@@ -77,7 +77,7 @@ impl Action {
                 model.tracks.remove_all_tracks();
             }
             Action::OpenFile(read_config) => {
-                // Native: load on a worker thread. Wasm: load synchronously (no threads).
+                // Path-based startup loading still uses the legacy loader path.
                 let progress = crate::wav::read::new_load_progress_handle();
                 let load_id = model
                     .load_mgr

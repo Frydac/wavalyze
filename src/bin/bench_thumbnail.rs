@@ -1,5 +1,12 @@
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 use wavalyze::audio::manager::AudioManager;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // let args2 = wavalyze::args::Args::parse();
     // let _ = init_tracing(Some("trace"));
