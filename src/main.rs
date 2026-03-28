@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(err) = eframe::run_native(
         "wavalyze",
         eframe_native_options,
-        Box::new(|cc| Ok(Box::new(wavalyze::App::new2(cc, args2, user_config)))),
+        Box::new(|cc| Ok(Box::new(wavalyze::App::new_native(cc, args2, user_config)))),
     ) {
         tracing::error!("Error: {}", err);
         std::process::exit(1);

@@ -1,15 +1,11 @@
 # Wavalyze
 
 [![CI](https://github.com/frydac/wavalyze/actions/workflows/rust.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/rust.yml)
-[![Pages](https://github.com/frydac/wavalyze/actions/workflows/pages.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/pages.yml)
+[![Cloudflare Deploy](https://github.com/frydac/wavalyze/actions/workflows/cloudflare-pages.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/cloudflare-pages.yml)
 
-<p align="center">
-  <img src="doc/images/wavalyze.svg" alt="Wavalyze header graphic" width="50%">
-</p>
+**Wavalyze** is a WAV file viewer with the goal of becoming a analysis and diff tool for (my) audio software development.
 
-**Wavalyze** is a WAV file viewer with a long-term goal of becoming a full analysis and diff tool for audio software development.
-
-It is a personal Rust learning project, focused on visual inspection of waveforms and low-level audio data, built on `egui`.
+It is a personal Rust learning project, and curious how well wasm works in a usecase like this.
 
 ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
 
@@ -18,60 +14,10 @@ It is a personal Rust learning project, focused on visual inspection of waveform
 
 Web demo: [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
 
-## Cloudflare Hosting
+## Docs
 
-Cloudflare-hosted static assets are a better fit than GitHub Pages if you want to move the WASM app toward web multithreading.
-
-The reason is not Cloudflare hosting by itself, but the response headers it lets you control. WebAssembly threads require the page to be cross-origin isolated, which in practice means sending:
-
-- `Cross-Origin-Opener-Policy: same-origin`
-- `Cross-Origin-Embedder-Policy: require-corp`
-
-This repo now includes a Cloudflare [`_headers`](_headers) file and copies it into the `trunk` output, so the deployed static assets can serve those headers.
-
-### Cloudflare setup
-
-This repository builds on GitHub Actions and deploys to Cloudflare Workers static assets. Cloudflare should host the built static files, not run the Rust build itself.
-
-The deploy is configured by [`wrangler.jsonc`](wrangler.jsonc), which points Wrangler at the built `dist/` directory and deploys the `wavalyze` Worker static-assets app.
-
-Add these GitHub repository secrets before enabling the workflow:
-
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-
-The API token should have:
-
-- `Account`
-- `Workers Scripts`
-- `Edit`
-
-The workflow in [`cloudflare-pages.yml`](.github/workflows/cloudflare-pages.yml) behaves as follows:
-
-- Push to `main`: build with `trunk` and deploy production to `wavalyze.emile-vrijdags-github.workers.dev`
-- Pull requests: build only, no deployment
-
-After the first deploy, verify in the browser console that:
-
-- `window.crossOriginIsolated === true`
-
-and confirm the deployed responses include the two headers above.
-
-During cutover, the existing GitHub Pages workflow can stay in place. Once Cloudflare is verified, disable [`pages.yml`](.github/workflows/pages.yml).
-
-For the full setup history and exact working configuration, see [`doc/cloudflare_deploy.md`](doc/cloudflare_deploy.md).
-
-### Important limitation
-
-This only solves the hosting prerequisite.
-
-The current WASM app is still coded as single-threaded in several places, for example [`src/model/action.rs`](src/model/action.rs) and [`src/wav/read.rs`](src/wav/read.rs), where the web build explicitly avoids worker-thread behavior today.
-
-So the migration path is:
-
-1. Deploy on Cloudflare with the new headers.
-2. Confirm cross-origin isolation works in production.
-3. Then change the Rust/WASM build and app code to actually use web workers / wasm threads.
+- [CLI arguments](doc/cli_args.md)
+- [Cloudflare deploy notes](doc/cloudflare_deploy.md)
 
 ## CLI
 
@@ -79,9 +25,10 @@ See [CLI arguments](doc/cli_args.md).
 
 ## Features (current)
 
-- Multi-track waveform display
-- Zoom and pan on the time axis
-- Hover inspection of sample data
+- Multi-file waveform viewing
+- Zoom, pan, and region inspection
+- Sample-level hover details
+- Native and browser builds
 
 ## Local dev
 
@@ -92,15 +39,22 @@ cargo run --release
 
 Web (WASM):
 ```
-rustup target add wasm32-unknown-unknown
-cargo install --locked trunk
+rustup toolchain install nightly-2026-01-15 --target wasm32-unknown-unknown --component rust-src
+cargo +1.93.0 install --locked trunk
 ./trunk-threaded.sh serve
 ```
 
 Open `http://127.0.0.1:8080/index.html#dev` to bypass the service worker cache during development.
 
-## Updating egui
+## CI
 
-As of 2023, egui is in active development with frequent releases with breaking changes. [eframe_template](https://github.com/emilk/eframe_template/) will be updated in lock-step to always use the latest version of egui.
+The main workflows are:
 
-When updating `egui` and `eframe` it is recommended you do so one version at the time, and read about the changes in [the egui changelog](https://github.com/emilk/egui/blob/master/CHANGELOG.md) and [eframe changelog](https://github.com/emilk/egui/blob/master/crates/eframe/CHANGELOG.md).
+- [`rust.yml`](.github/workflows/rust.yml): native checks, tests, linting, cross-target builds, and threaded wasm validation
+- [`cloudflare-pages.yml`](.github/workflows/cloudflare-pages.yml): production web build and deploy to Cloudflare Workers static assets
+
+For a local CI-like run, use:
+
+```bash
+./check.sh
+```

@@ -41,7 +41,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    pub fn new2(_cc: &eframe::CreationContext<'_>, args: Args, user_config: model::Config) -> Self {
+    pub fn new_native(_cc: &eframe::CreationContext<'_>, args: Args, user_config: model::Config) -> Self {
         let mut model = model::Model {
             user_config,
             ..Default::default()
