@@ -18,22 +18,22 @@ It is a personal Rust learning project, focused on visual inspection of waveform
 
 Web demo: [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
 
-## Cloudflare Pages
+## Cloudflare Hosting
 
-Cloudflare Pages is a better fit than GitHub Pages if you want to move the WASM app toward web multithreading.
+Cloudflare-hosted static assets are a better fit than GitHub Pages if you want to move the WASM app toward web multithreading.
 
-The reason is not Cloudflare Pages by itself, but the response headers it lets you control. WebAssembly threads require the page to be cross-origin isolated, which in practice means sending:
+The reason is not Cloudflare hosting by itself, but the response headers it lets you control. WebAssembly threads require the page to be cross-origin isolated, which in practice means sending:
 
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Cross-Origin-Embedder-Policy: require-corp`
 
-This repo now includes a Cloudflare Pages [`_headers`](_headers) file and copies it into the `trunk` output, so a Cloudflare Pages deploy can serve those headers.
+This repo now includes a Cloudflare [`_headers`](_headers) file and copies it into the `trunk` output, so the deployed static assets can serve those headers.
 
-### Cloudflare Pages setup
+### Cloudflare setup
 
-This repository deploys to Cloudflare Pages from GitHub Actions. Cloudflare should host the built static files, not run the Rust build itself.
+This repository builds on GitHub Actions and deploys to Cloudflare Workers static assets. Cloudflare should host the built static files, not run the Rust build itself.
 
-Create a Cloudflare Pages project named `wavalyze` using Direct Upload mode. The GitHub workflow will push the built `dist/` output with Wrangler.
+The deploy is configured by [`wrangler.jsonc`](wrangler.jsonc), which points Wrangler at the built `dist/` directory and deploys the `wavalyze` Worker static-assets app.
 
 Add these GitHub repository secrets before enabling the workflow:
 
@@ -43,14 +43,13 @@ Add these GitHub repository secrets before enabling the workflow:
 The API token should have:
 
 - `Account`
-- `Cloudflare Pages`
+- `Workers Scripts`
 - `Edit`
 
 The workflow in [`cloudflare-pages.yml`](.github/workflows/cloudflare-pages.yml) behaves as follows:
 
-- Push to `main`: build with `trunk` and deploy production to the configured Cloudflare Pages/Workers static-hosting URL
-- Pull request from a branch in this repository: build and deploy a Cloudflare preview
-- Pull request from a fork: build only, no deployment, because secrets are unavailable
+- Push to `main`: build with `trunk` and deploy production to `wavalyze.emile-vrijdags-github.workers.dev`
+- Pull requests: build only, no deployment
 
 After the first deploy, verify in the browser console that:
 
@@ -58,7 +57,7 @@ After the first deploy, verify in the browser console that:
 
 and confirm the deployed responses include the two headers above.
 
-During cutover, the existing GitHub Pages workflow can stay in place. Once Cloudflare is verified, disable [`pages.yml`](.github/workflows/pages.yml) and update the demo URL below.
+During cutover, the existing GitHub Pages workflow can stay in place. Once Cloudflare is verified, disable [`pages.yml`](.github/workflows/pages.yml).
 
 ### Important limitation
 
@@ -68,7 +67,7 @@ The current WASM app is still coded as single-threaded in several places, for ex
 
 So the migration path is:
 
-1. Deploy on Cloudflare Pages with the new headers.
+1. Deploy on Cloudflare with the new headers.
 2. Confirm cross-origin isolation works in production.
 3. Then change the Rust/WASM build and app code to actually use web workers / wasm threads.
 
