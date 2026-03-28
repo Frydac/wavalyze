@@ -16,7 +16,7 @@ It is a personal Rust learning project, focused on visual inspection of waveform
 
 ## Demo
 
-Web demo: [frydac.github.io/wavalyze](https://frydac.github.io/wavalyze/)
+Web demo: [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
 
 ## Cloudflare Pages
 
@@ -48,7 +48,7 @@ The API token should have:
 
 The workflow in [`cloudflare-pages.yml`](.github/workflows/cloudflare-pages.yml) behaves as follows:
 
-- Push to `main`: build with `trunk` and deploy production to `wavalyze.pages.dev`
+- Push to `main`: build with `trunk` and deploy production to the configured Cloudflare Pages/Workers static-hosting URL
 - Pull request from a branch in this repository: build and deploy a Cloudflare preview
 - Pull request from a fork: build only, no deployment, because secrets are unavailable
 
