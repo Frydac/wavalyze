@@ -59,6 +59,8 @@ and confirm the deployed responses include the two headers above.
 
 During cutover, the existing GitHub Pages workflow can stay in place. Once Cloudflare is verified, disable [`pages.yml`](.github/workflows/pages.yml).
 
+For the full setup history and exact working configuration, see [`doc/cloudflare_deploy.md`](doc/cloudflare_deploy.md).
+
 ### Important limitation
 
 This only solves the hosting prerequisite.

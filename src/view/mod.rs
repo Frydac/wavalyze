@@ -29,10 +29,6 @@ impl View {
 
     /// Draw ui, and measure frame time
     pub fn ui_measured(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if cfg!(target_arch = "wasm32") {
-            self.ui(ctx, frame);
-            return;
-        }
         self.fps.start_frame();
         self.ui(ctx, frame);
         self.fps.end_frame();

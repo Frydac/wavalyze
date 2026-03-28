@@ -5,9 +5,7 @@ use std::time::Duration;
 pub struct Fps {
     pub durations: VecDeque<Duration>,
     pub max_nr_durations: usize,
-
-    #[cfg(not(target_arch = "wasm32"))]
-    start_time: Option<std::time::Instant>,
+    start_time: Option<web_time::Instant>,
 }
 
 impl Fps {
@@ -15,34 +13,25 @@ impl Fps {
         Self {
             durations: VecDeque::with_capacity(max_nr_durations),
             max_nr_durations,
-            #[cfg(not(target_arch = "wasm32"))]
             start_time: None,
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn start_frame(&mut self) {
-        self.start_time = Some(std::time::Instant::now());
+        self.start_time = Some(web_time::Instant::now());
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub fn start_frame(&mut self) {}
-
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn end_frame(&mut self) {
         let Some(start_time) = self.start_time else {
             return;
         };
-        let duration = std::time::Instant::now() - start_time;
+        let duration = web_time::Instant::now() - start_time;
         self.durations.push_back(duration);
 
         if self.durations.len() > self.max_nr_durations {
             self.durations.pop_front();
         }
     }
-
-    #[cfg(target_arch = "wasm32")]
-    pub fn end_frame(&mut self) {}
 
     pub fn measure<F, R>(&mut self, func: F) -> R
     where
@@ -59,11 +48,7 @@ impl Fps {
             ui.heading("FPS");
             ui.separator();
             if self.durations.is_empty() {
-                if cfg!(target_arch = "wasm32") {
-                    ui.label("FPS metrics unavailable on wasm.");
-                } else {
-                    ui.label("Collecting FPS metrics...");
-                }
+                ui.label("Collecting FPS metrics...");
                 return;
             }
             let sum_duration = self.durations.iter().map(|d| d.as_secs_f64()).sum::<f64>();
