@@ -33,7 +33,7 @@ pub struct ReadConfig {
     pub sample_range: sample::OptIxRange,
 }
 
-/// In-memory read options for wasm drag-and-drop (no filesystem).
+/// In-memory read options for interactive file loads on all platforms.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReadConfigBytes {
     // Optional filename for UI labels; bytes hold the entire file content.

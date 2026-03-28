@@ -1,5 +1,6 @@
 pub mod config;
 pub mod file;
+mod file_loader;
 pub mod fps;
 pub mod grid;
 pub mod ruler;
@@ -12,18 +13,26 @@ use crate::model::{Action, hover_info::HoverInfoE, shortcuts};
 use crate::{model, wav};
 use anyhow::Result;
 use egui;
+use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
     fps: fps::Fps,
+    picker_tx: Sender<file_loader::PickerMessage>,
+    picker_rx: Receiver<file_loader::PickerMessage>,
+    picker_pending: usize,
 }
 
 impl View {
     pub fn new(model: model::Model) -> Self {
+        let (picker_tx, picker_rx) = std::sync::mpsc::channel();
         Self {
             model,
             fps: fps::Fps::new(100),
+            picker_tx,
+            picker_rx,
+            picker_pending: 0,
         }
     }
 
@@ -36,6 +45,11 @@ impl View {
 
     /// Draw ui and handle interactions
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.drain_picker_results(ctx);
+        if self.picker_pending > 0 {
+            ctx.request_repaint();
+        }
+
         if self.model.load_mgr.pending() > 0 {
             ctx.request_repaint();
         }
@@ -134,6 +148,9 @@ impl View {
     /// TODO: use actions
     fn handle_drag_and_drop_into_app(&mut self, ctx: &egui::Context) -> bool {
         let mut had_dropped_files = false;
+        let mut dropped_bytes = Vec::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut dropped_paths = Vec::new();
         ctx.input(|i| {
             for file in &i.raw.dropped_files {
                 had_dropped_files = true;
@@ -153,20 +170,28 @@ impl View {
                             && &bytes[8..12] == b"WAVE";
                         if is_wav_by_name || is_wav_by_header {
                             let label = name.clone().or_else(|| Some("dropped.wav".to_string()));
-                            self.model.actions.push(Action::OpenFileBytes(
-                                wav::ReadConfigBytes::new(label, bytes.to_vec()),
-                            ));
+                            dropped_bytes.push(wav::ReadConfigBytes::new(label, bytes.to_vec()));
                         }
                     }
                 } else if let Some(path) = &file.path
                     && path.extension() == Some(std::ffi::OsStr::new("wav"))
                 {
-                    self.model
-                        .actions
-                        .push(Action::OpenFile(wav::ReadConfig::new(path)));
+                    #[cfg(not(target_arch = "wasm32"))]
+                    dropped_paths.push(path.clone());
                 }
             }
         });
+        if !dropped_bytes.is_empty() {
+            for config in dropped_bytes {
+                self.model.actions.push(Action::OpenFileBytes(config));
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if !dropped_paths.is_empty() {
+            self.picker_pending = self.picker_pending.saturating_add(1);
+            file_loader::load_paths(dropped_paths, self.picker_tx.clone());
+            ctx.request_repaint();
+        }
         had_dropped_files
     }
 
@@ -193,6 +218,9 @@ impl View {
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
+            if ui.button("open wav files...").clicked() {
+                self.start_file_picker();
+            }
             if ui.button("reset x zoom").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
             }
@@ -336,6 +364,45 @@ impl View {
 
     pub fn model(&self) -> &model::Model {
         &self.model
+    }
+
+    fn drain_picker_results(&mut self, ctx: &egui::Context) {
+        let mut had_results = false;
+        loop {
+            match self.picker_rx.try_recv() {
+                Ok(file_loader::PickerMessage::Files(files)) => {
+                    had_results = true;
+                    self.picker_pending = self.picker_pending.saturating_sub(1);
+                    self.model
+                        .actions
+                        .extend(files.into_iter().map(Action::OpenFileBytes));
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                Ok(file_loader::PickerMessage::Error(err)) => {
+                    had_results = true;
+                    self.picker_pending = self.picker_pending.saturating_sub(1);
+                    tracing::error!("File picker load failed: {err}");
+                }
+                Ok(file_loader::PickerMessage::Cancelled) => {
+                    had_results = true;
+                    self.picker_pending = self.picker_pending.saturating_sub(1);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    tracing::error!("File picker channel disconnected");
+                    break;
+                }
+            }
+        }
+
+        if had_results {
+            ctx.request_repaint();
+        }
+    }
+
+    fn start_file_picker(&mut self) {
+        self.picker_pending = self.picker_pending.saturating_add(1);
+        file_loader::pick_wav_files(self.picker_tx.clone());
     }
 
     pub fn enqueue_actions<I>(&mut self, actions: I)
