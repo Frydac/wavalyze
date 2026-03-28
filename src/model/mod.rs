@@ -2,6 +2,7 @@ pub mod action;
 pub mod config;
 pub mod demo;
 pub mod hover_info;
+pub mod jobs;
 pub mod load_manager;
 pub mod ruler;
 pub mod sample_ix_zoom;
@@ -13,9 +14,11 @@ pub mod types;
 pub mod view_buffer;
 
 pub use self::config::Config;
+pub use self::jobs::JobManager;
 pub use self::sample_ix_zoom::SampleIxZoom;
 pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
+pub use jobs::FinishedJob;
 pub use load_manager::{LoadManager, LoadProgressEntry};
 // pub use self::hover_info::HoverInfo;
 use crate::audio;
@@ -37,6 +40,7 @@ pub struct Model {
     pub audio: audio::manager::AudioManager,
     pub tracks: tracks2::Tracks,
     pub actions: Vec<Action>,
+    pub job_mgr: JobManager,
     pub load_mgr: LoadManager,
 }
 
@@ -273,6 +277,41 @@ impl Model {
             }
         }
         had_results
+    }
+
+    pub fn drain_job_events(&mut self) -> bool {
+        let mut had_events = self.job_mgr.drain_events();
+        for completion in self.job_mgr.drain_completed() {
+            had_events = true;
+            match completion.result {
+                jobs::JobResultData::DemoTimed(_) => {}
+                jobs::JobResultData::LoadWav(loaded) => {
+                    if let Err(err) = self.add_loaded_file(loaded.into(), None) {
+                        tracing::error!("Failed to integrate loaded file job: {err}");
+                    } else {
+                        self.actions.push(Action::ZoomToFull);
+                        self.actions.push(Action::FillScreenHeight);
+                    }
+                }
+            }
+        }
+        had_events
+    }
+
+    pub fn start_demo_job(&mut self, config: jobs::DemoTimedConfig) -> jobs::JobId {
+        let label_ix = self.job_mgr.pending() + 1;
+        let job_id = self
+            .job_mgr
+            .start_job(jobs::JobKind::DemoTimed, format!("Demo job #{label_ix}"));
+        jobs::spawn_demo_timed_job(job_id, config, self.job_mgr.sender());
+        job_id
+    }
+
+    pub fn start_load_wav_job(&mut self, config: wav::ReadConfigBytes) -> jobs::JobId {
+        let label = config.name.clone().unwrap_or_else(|| "file".to_string());
+        let job_id = self.job_mgr.start_job(jobs::JobKind::LoadWav, label);
+        jobs::spawn_load_wav_job(job_id, config, self.job_mgr.sender());
+        job_id
     }
 }
 

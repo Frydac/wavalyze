@@ -1,5 +1,7 @@
 use crate::{
-    model::{PixelCoord, hover_info::HoverInfoE, selection_info::SelectionInfoE, track::TrackId},
+    model::{
+        PixelCoord, hover_info::HoverInfoE, jobs, selection_info::SelectionInfoE, track::TrackId,
+    },
     wav,
 };
 use anyhow::{Context, Result};
@@ -11,6 +13,7 @@ pub enum Action {
 
     OpenFile(wav::ReadConfig),
     OpenFileBytes(wav::ReadConfigBytes),
+    StartDemoJob(jobs::DemoTimedConfig),
     LoadDemo,
 
     /// Set x-zoom so the longest track is full width
@@ -109,43 +112,10 @@ impl Action {
                 }
             }
             Action::OpenFileBytes(read_config) => {
-                // Byte-based loads are used by wasm drag-and-drop (no filesystem access).
-                let progress = crate::wav::read::new_load_progress_handle();
-                let label = read_config
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| "file".to_string());
-                let load_id = model
-                    .load_mgr
-                    .start_load(std::path::PathBuf::from(label), progress.clone());
-                let tx = model.load_mgr.sender();
-                let read_config = read_config.clone();
-                #[cfg(not(target_arch = "wasm32"))]
-                std::thread::spawn(move || {
-                    let result = crate::wav::read::read_bytes_to_loaded_file_with_progress(
-                        &read_config,
-                        load_id,
-                        Some(progress.as_ref()),
-                    )
-                    .context("Action::OpenFileBytes failed");
-                    let _ = tx.send(match result {
-                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
-                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
-                    });
-                });
-                #[cfg(target_arch = "wasm32")]
-                {
-                    let result = crate::wav::read::read_bytes_to_loaded_file_with_progress(
-                        &read_config,
-                        load_id,
-                        Some(progress.as_ref()),
-                    )
-                    .context("Action::OpenFileBytes failed");
-                    let _ = tx.send(match result {
-                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
-                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
-                    });
-                }
+                model.start_load_wav_job(read_config.clone());
+            }
+            Action::StartDemoJob(config) => {
+                model.start_demo_job(config.clone());
             }
             Action::LoadDemo => {
                 model

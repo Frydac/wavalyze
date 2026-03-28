@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::ops::Range;
 
@@ -15,7 +16,7 @@ impl IxTrait for OptIx {}
 
 // Used for representing user-specified ranges where omission means from the start or to the end of
 // the buffer
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct OptIxRange {
     pub start: Option<Ix>,
     pub end: Option<Ix>,

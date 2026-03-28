@@ -7,11 +7,12 @@ pub mod view;
 pub use ix_range::IxRange;
 pub use ix_range::{FracIx, FracIxRange, Ix, OptIxRange};
 use num_traits::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 pub use val_range::{ValRange, ValRangeE};
 pub use view::View;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub enum SampleType {
     Float,

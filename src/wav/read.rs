@@ -6,6 +6,7 @@ use crate::audio::SampleType;
 use crate::wav::file2::{Channel, File};
 use anyhow::{Result, ensure};
 use hound;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -34,7 +35,7 @@ pub struct ReadConfig {
 }
 
 /// In-memory read options for interactive file loads on all platforms.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReadConfigBytes {
     // Optional filename for UI labels; bytes hold the entire file content.
     pub name: Option<String>,
@@ -76,7 +77,7 @@ pub enum LoadResult {
 }
 
 /// Stages used by the progress UI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LoadStage {
     Start,
     ReadingSamples,
@@ -108,6 +109,11 @@ pub struct LoadProgressAtomic {
 pub type LoadProgressHandle = Rc<LoadProgressAtomic>;
 #[cfg(not(target_arch = "wasm32"))]
 pub type LoadProgressHandle = Arc<LoadProgressAtomic>;
+
+pub trait LoadProgressSink {
+    fn set_stage(&self, stage: LoadStage, total: u64);
+    fn set_current(&self, current: u64);
+}
 
 /// Wasm doesn't support threads/atomics, so we use Rc/Cell there.
 pub fn new_load_progress_handle() -> LoadProgressHandle {
@@ -213,17 +219,29 @@ pub fn read_to_loaded_file_with_progress(
         reader,
         &options,
         load_id,
-        progress,
+        progress.map(|progress| progress as &dyn LoadProgressSink),
         filepath,
         Some(PathBuf::from(&config.filepath)),
     )
 }
 
-// Same pipeline as file-based reading, but from an in-memory cursor.
 pub fn read_bytes_to_loaded_file_with_progress(
     config: &ReadConfigBytes,
     load_id: LoadId,
     progress: Option<&LoadProgressAtomic>,
+) -> Result<LoadedFile> {
+    read_bytes_to_loaded_file_with_sink(
+        config,
+        load_id,
+        progress.map(|progress| progress as &dyn LoadProgressSink),
+    )
+}
+
+// Same pipeline as file-based reading, but from an in-memory cursor.
+pub fn read_bytes_to_loaded_file_with_sink(
+    config: &ReadConfigBytes,
+    load_id: LoadId,
+    progress: Option<&dyn LoadProgressSink>,
 ) -> Result<LoadedFile> {
     let options = ReadOptions::from(config);
     let label = config.name.as_deref().unwrap_or("bytes");
@@ -244,7 +262,7 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     mut reader: hound::WavReader<R>,
     options: &ReadOptions,
     load_id: LoadId,
-    progress: Option<&LoadProgressAtomic>,
+    progress: Option<&dyn LoadProgressSink>,
     source_label: &str,
     path: Option<PathBuf>,
 ) -> Result<LoadedFile> {
@@ -335,7 +353,7 @@ fn convert_samples<T>(
 fn read_to_buffers<S, R>(
     reader: &mut hound::WavReader<R>,
     options: &ReadOptions,
-    progress: Option<&LoadProgressAtomic>,
+    progress: Option<&dyn LoadProgressSink>,
 ) -> Result<BTreeMap<ChIx, Buffer<S>>>
 where
     R: std::io::Read + std::io::Seek,
@@ -423,7 +441,7 @@ fn deinterleave<S>(
     interleaved_samples: &[S],
     nr_channels: usize,
     channel_indices: &[ChIx],
-    progress: Option<&LoadProgressAtomic>,
+    progress: Option<&dyn LoadProgressSink>,
 ) -> Result<HashMap<ChIx, Vec<S>>>
 where
     S: Copy,
@@ -583,6 +601,16 @@ impl LoadProgressAtomic {
     }
 }
 
+impl LoadProgressSink for LoadProgressAtomic {
+    fn set_stage(&self, stage: LoadStage, total: u64) {
+        Self::set_stage(self, stage, total);
+    }
+
+    fn set_current(&self, current: u64) {
+        Self::set_current(self, current);
+    }
+}
+
 impl Default for LoadProgressAtomic {
     fn default() -> Self {
         Self::new()
@@ -590,6 +618,35 @@ impl Default for LoadProgressAtomic {
 }
 
 impl LoadStage {
+    pub fn label(self) -> &'static str {
+        match self {
+            LoadStage::Start => "starting",
+            LoadStage::ReadingSamples => "reading samples",
+            LoadStage::Deinterleaving => "deinterleaving",
+            LoadStage::Converting => "converting",
+            LoadStage::Thumbnail => "thumbnails",
+            LoadStage::Finalizing => "finalizing",
+            LoadStage::Done => "done",
+        }
+    }
+
+    pub fn overall_fraction(self, current: u64, total: u64) -> f32 {
+        let value = if total > 0 {
+            (current as f32 / total as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        match self {
+            LoadStage::Start => 0.0,
+            LoadStage::ReadingSamples => value * 0.55,
+            LoadStage::Deinterleaving => 0.55 + value * 0.15,
+            LoadStage::Converting => 0.70 + value * 0.05,
+            LoadStage::Thumbnail => 0.75 + value * 0.20,
+            LoadStage::Finalizing => 0.95 + value * 0.05,
+            LoadStage::Done => 1.0,
+        }
+    }
+
     pub fn from_u8(value: u8) -> Self {
         match value {
             1 => LoadStage::ReadingSamples,

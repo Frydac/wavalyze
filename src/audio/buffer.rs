@@ -1,17 +1,19 @@
 use std::ops::{Deref, DerefMut};
 
+use serde::{Deserialize, Serialize};
+
 use crate::audio::sample;
 use crate::audio::sample::Sample;
 
 /// One channel of audio samples.  
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Buffer<T: Sample> {
     pub sample_rate: u32,
     pub bit_depth: u16,
     pub data: Vec<T>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum BufferE {
     F32(Buffer<f32>),
     I32(Buffer<i32>),

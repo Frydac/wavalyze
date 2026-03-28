@@ -3,6 +3,7 @@ pub mod file;
 mod file_loader;
 pub mod fps;
 pub mod grid;
+pub mod jobs;
 pub mod ruler;
 pub mod selection_info;
 pub mod track;
@@ -50,6 +51,13 @@ impl View {
             ctx.request_repaint();
         }
 
+        if self.model.drain_job_events() {
+            ctx.request_repaint();
+        }
+        if self.model.job_mgr.pending() > 0 {
+            ctx.request_repaint();
+        }
+
         if self.model.load_mgr.pending() > 0 {
             ctx.request_repaint();
         }
@@ -92,6 +100,9 @@ impl View {
             tracing::error!("{:#?}", e);
             tracing::error!("{}", e.backtrace());
         }
+        if self.model.job_mgr.pending() > 0 || self.model.load_mgr.pending() > 0 {
+            ctx.request_repaint();
+        }
     }
 
     fn ui_bottom_panel(&mut self, ctx: &egui::Context) {
@@ -121,6 +132,8 @@ impl View {
                 config::show_config(ui, &mut self.model.user_config);
                 ui.add_space(5.0);
                 self.fps.ui(ui);
+                ui.add_space(5.0);
+                jobs::ui_panel(ui, &mut self.model);
                 ui.add_space(5.0);
                 ruler::ui_ruler_info_panel(ui, &self.model.tracks.ruler);
                 ui.add_space(5.0);
@@ -306,6 +319,36 @@ impl View {
 
     /// Show a modal with a progress bar when loading files.
     fn ui_loading_modal(&mut self, ctx: &egui::Context) {
+        if let Some(job) = self
+            .model
+            .job_mgr
+            .jobs()
+            .into_iter()
+            .find(|job| job.kind == model::jobs::JobKind::LoadWav)
+            && let Some(progress) = job.load_progress
+        {
+            let stage_value = if progress.total > 0 {
+                (progress.current as f32 / progress.total as f32).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let overall_value = progress
+                .stage
+                .overall_fraction(progress.current, progress.total)
+                .clamp(0.0, 1.0);
+            egui::Window::new("Loading")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(format!("Loading {}…", job.label));
+                    ui.label(format!("Stage: {}", progress.stage.label()));
+                    ui.add(egui::ProgressBar::new(stage_value).show_percentage());
+                    ui.add(egui::ProgressBar::new(overall_value).text("overall"));
+                });
+            return;
+        }
+
         if self.model.load_mgr.pending() == 0 {
             return;
         }
