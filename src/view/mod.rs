@@ -126,9 +126,9 @@ impl View {
     fn ui_left_side_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("left_panel")
             .resizable(true)
-            .default_width(150.0)
+            .default_width(250.0)
             // .width_range(80.0..=ctx.available_rect().width())
-            .width_range(80.0..=500.0)
+            .width_range(100.0..=500.0)
             .show(ctx, |ui| {
                 file::ui(ui, &mut self.model);
             });

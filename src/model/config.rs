@@ -91,10 +91,10 @@ impl Default for ThemeColors {
 impl ThemeColors {
     pub fn dark_default() -> Self {
         Self {
-            accent: Color32::LIGHT_BLUE,
+            accent: Color32::LIGHT_GRAY,
             waveform: Color32::LIGHT_RED,
             waveform_hovered_sample: Color32::WHITE,
-            waveform_selection_fill: Color32::from_rgba_unmultiplied(211, 211, 211, 13),
+            waveform_selection_fill: Color32::from_rgba_unmultiplied(211, 211, 211, 5),
         }
     }
 
@@ -113,7 +113,7 @@ impl Default for Config {
         Self {
             zoom_x_scroll_factor: 4.0,
             show_hover_info: true,
-            tracks_width_info: 150.0,
+            tracks_width_info: 250.0,
             value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),

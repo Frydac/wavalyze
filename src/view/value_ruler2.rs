@@ -304,7 +304,8 @@ fn draw_hover_value(
         return;
     }
 
-    let sample_ix = hover_info.sample_ix.round() as i64;
+    let global_sample_ix = hover_info.sample_ix.round() as i64;
+    let sample_ix = global_sample_ix - track.single.item.sample_ix_offset as i64;
     if sample_ix < 0 {
         return;
     }

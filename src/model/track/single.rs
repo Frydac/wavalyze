@@ -48,7 +48,7 @@ pub struct Item {
     pub buffer_id: BufferId,
 
     /// Rectangular view over the buffer's samples
-    pub sample_rect: Option<SampleRect>,
+    sample_rect: Option<SampleRect>,
     /// The data to display but still in 'sample' coordinates
     pub sample_view: Option<audio::sample::View>,
 
@@ -92,7 +92,10 @@ impl Item {
     }
 
     pub fn sample_rect(&self) -> Option<SampleRect> {
-        self.sample_rect
+        self.sample_rect.map(|mut sample_rect| {
+            sample_rect.shift_ix_rng(-self.sample_ix_offset);
+            sample_rect
+        })
     }
 
     pub fn set_sample_rect(&mut self, sample_rect: SampleRect) {

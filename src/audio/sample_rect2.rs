@@ -40,7 +40,7 @@ impl SampleRect {
     }
 
     pub fn shift_ix_rng(&mut self, shift: f64) {
-        self.ix_rng.start += shift;
+        self.ix_rng.shift(shift);
     }
 
     pub fn ix_rng(&self) -> sample::FracIxRange {

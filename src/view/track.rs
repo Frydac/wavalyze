@@ -7,11 +7,8 @@ use crate::{
 };
 use anyhow::Result;
 
-#[path = "track/hover.rs"]
 mod hover;
-#[path = "track/selection.rs"]
 mod selection;
-#[path = "track/waveform.rs"]
 mod waveform;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
@@ -43,43 +40,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
 
         // Draw track info left of waveform
         let info_size = [width_info.max(0.0), height.max(0.0)].into();
-        ui.allocate_ui(info_size, |ui| {
-            ui.set_max_size(info_size);
-            ui.set_min_size(info_size);
-            let info_rect = ui.min_rect();
-
-            // sample value ruler
-            let ruler_width = 100.0;
-            let ruler_height = (height - track::HEADER_HEIGHT).max(0.0);
-            let ruler_min = info_rect.max - egui::vec2(ruler_width, ruler_height);
-            let ruler_size = egui::vec2(ruler_width, ruler_height);
-            let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
-            let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-            ui.painter()
-                .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
-            if let Some(track) = model.tracks.get_track(track_id) {
-                let hover_info = model.tracks.hover_info;
-                let mut value_ruler_ctx = value_ruler2::ValueRulerContext {
-                    actions: &mut model.actions,
-                    hover_info: &hover_info,
-                    audio: &model.audio,
-                    zoom_y_factor: model.user_config.zoom_x_scroll_factor,
-                    display_scale: model.user_config.value_display_scale,
-                };
-                let value_ruler_config = value_ruler2::ValueRulerConfig {
-                    show_hover_tick: false,
-                };
-                value_ruler2::ui(
-                    ui,
-                    track,
-                    track_id,
-                    ruler_rect,
-                    value_ruler_config,
-                    &theme_colors,
-                    &mut value_ruler_ctx,
-                );
-            }
-        });
+        ui_side(ui, model, track_id, info_size, height);
 
         // Draw track waveform + header
         ui.vertical(|ui| {
@@ -144,6 +105,92 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     Ok(())
 }
 
+// UI part on the left side of each track
+// contains:
+// - track info
+// - sample value ruler
+pub fn ui_side(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    info_size: egui::Vec2,
+    height: f32,
+) {
+    ui.allocate_ui_with_layout(info_size, egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_max_size(info_size);
+        ui.set_min_size(info_size);
+
+        // paint a rect around the whole side area
+        {
+            let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
+            ui.painter()
+                .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
+        }
+
+        let info_rect = ui.min_rect();
+
+        ui.horizontal(|ui| {
+            let Some(track) = model.tracks.get_track_mut(track_id) else {
+                return;
+            };
+            let sample_ix_offset = &mut track.single.item.sample_ix_offset;
+            ui.label("offset:");
+            let response = ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
+            if response.changed() {
+                track.trigger_update_view_buffer();
+            }
+        });
+
+        // sample value ruler
+        let ruler_width = 80.0;
+        let ruler_height = (height - track::HEADER_HEIGHT).max(0.0);
+        let ruler_min = info_rect.max - egui::vec2(ruler_width, ruler_height);
+        let ruler_size = egui::vec2(ruler_width, ruler_height);
+        let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
+        {
+            let above_ruler_rect = egui::Rect::from_min_size(
+                egui::pos2(ruler_rect.left(), info_rect.top()),
+                egui::vec2(ruler_rect.width(), track::HEADER_HEIGHT),
+            );
+            let ui_builder = egui::UiBuilder::new()
+                .max_rect(above_ruler_rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Center));
+            ui.allocate_new_ui(ui_builder, |ui| {
+                if ui
+                    .button("r")
+                    .on_hover_text("Reset Y-axiz zoom and pan")
+                    .clicked()
+                {
+                    model.actions.push(Action::RecenterY { track_id });
+                }
+            });
+        }
+
+        if let Some(track) = model.tracks.get_track(track_id) {
+            let hover_info = model.tracks.hover_info;
+            let mut value_ruler_ctx = value_ruler2::ValueRulerContext {
+                actions: &mut model.actions,
+                hover_info: &hover_info,
+                audio: &model.audio,
+                zoom_y_factor: model.user_config.zoom_x_scroll_factor,
+                display_scale: model.user_config.value_display_scale,
+            };
+            let value_ruler_config = value_ruler2::ValueRulerConfig {
+                show_hover_tick: false,
+            };
+            value_ruler2::ui(
+                ui,
+                track,
+                track_id,
+                ruler_rect,
+                value_ruler_config,
+                model.user_config.active_theme_colors(ui.visuals()),
+                &mut value_ruler_ctx,
+            );
+        }
+    });
+}
+
 pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     let resp = egui::Frame::default()
         .stroke(ui.style().visuals.window_stroke())
@@ -180,7 +227,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 .text_styles
                 .get(&egui::TextStyle::Body)
                 .cloned()
-                .unwrap_or_else(|| egui::FontId::proportional(14.0));
+                .unwrap_or_else(|| egui::FontId::proportional(8.0));
             let color = ui.style().visuals.text_color();
             let padding = ui.spacing().button_padding;
             let item_spacing = ui.spacing().item_spacing.x.max(2.0);
@@ -199,31 +246,15 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
             let button_x_size = button_size("x");
             let button_x_rect = egui::Rect::from_min_size(
                 egui::pos2(
-                    right - button_x_size.x,
+                    right - button_x_size.x - 10.0,
                     rect.center().y - button_x_size.y / 2.0,
                 ),
                 button_x_size,
             );
             right = button_x_rect.left() - item_spacing;
 
-            let button_center_size = button_size("center y");
-            let button_center_rect = egui::Rect::from_min_size(
-                egui::pos2(
-                    right - button_center_size.x,
-                    rect.center().y - button_center_size.y / 2.0,
-                ),
-                button_center_size,
-            );
-            right = button_center_rect.left() - item_spacing;
-
             if ui.put(button_x_rect, egui::Button::new("x")).clicked() {
                 model.actions.push(Action::RemoveTrack(track_id));
-            }
-            if ui
-                .put(button_center_rect, egui::Button::new("center y"))
-                .clicked()
-            {
-                model.actions.push(Action::RecenterY { track_id });
             }
 
             let label_rect =

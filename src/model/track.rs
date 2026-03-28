@@ -103,6 +103,10 @@ impl Track {
         }
     }
 
+    pub fn trigger_update_view_buffer(&mut self) {
+        self.update_view_buffer_ = true;
+    }
+
     /// Create or update the sample rect to the given range
     /// TODO: we could do this by only knowing the sample_type/bit_depth, iso depending on AudioManager?
     pub fn set_ix_range(
