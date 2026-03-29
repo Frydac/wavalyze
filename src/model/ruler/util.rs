@@ -1,6 +1,6 @@
 use crate::{audio::sample, rect::Rect};
 
-use super::{ValueDisplayScale, display_range};
+use super::ValueDisplayScale;
 
 // assumes both ranges are valid
 // This one is visually less stable, adjacent sample ix bin grouping shifts depending on
@@ -58,20 +58,13 @@ pub fn sample_value_to_screen_y(
     screen_rect: Rect,
     display_scale: ValueDisplayScale,
 ) -> Option<f32> {
-    let display_range = display_range::sample_to_display_range(val_range, display_scale);
-    let min = display_range.min;
-    let max = display_range.max;
-    let value = display_scale.sample_to_display(sample_value);
-    let range_len = max - min;
-    if range_len == 0.0 {
+    if val_range.is_empty() {
         return None;
     }
 
-    // Normalize sample into [0, 1]
-    let frac = (value - min) / range_len;
-
-    // Invert Y axis: max value at top, min at bottom
-    Some(screen_rect.bottom() - frac as f32 * screen_rect.height())
+    let segment = build_value_segment_for_sample(sample_value, val_range, screen_rect);
+    let frac = segment.sample_to_frac(sample_value, display_scale)?;
+    Some(segment.frac_to_screen_y(frac))
 }
 
 pub fn screen_y_to_sample_value(
@@ -80,18 +73,154 @@ pub fn screen_y_to_sample_value(
     screen_rect: Rect,
     display_scale: ValueDisplayScale,
 ) -> Option<f64> {
-    let display_range = display_range::sample_to_display_range(val_range, display_scale);
-    let min = display_range.min;
-    let max = display_range.max;
-    let range_len = max - min;
-    if range_len == 0.0 {
+    if val_range.is_empty() {
         return None;
     }
 
-    // Normalize screen Y into [0, 1], inverted
-    let frac = (screen_rect.bottom() - screen_y) as f64 / screen_rect.height() as f64;
+    let segments = build_value_segments(val_range, screen_rect);
+    let segment = segments
+        .iter()
+        .find(|segment| segment.contains_screen_y(screen_y))
+        .or_else(|| segments.last())?;
+    let frac = segment.screen_y_to_frac(screen_y)?;
+    segment.frac_to_sample(frac, display_scale)
+}
 
-    Some(display_scale.display_to_sample(min + frac * range_len))
+fn raw_sample_value_to_screen_y(
+    sample_value: f64,
+    val_range: sample::ValRange<f64>,
+    screen_rect: Rect,
+) -> f32 {
+    let frac = (sample_value - val_range.min) / val_range.len();
+    screen_rect.bottom() - frac as f32 * screen_rect.height()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SegmentKind {
+    Linear,
+    SkewedPositive,
+    SkewedNegative,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ValueSegment {
+    sample_start: f64,
+    sample_end: f64,
+    screen_y_start: f32,
+    screen_y_end: f32,
+    kind: SegmentKind,
+}
+
+impl ValueSegment {
+    fn contains_screen_y(self, screen_y: f32) -> bool {
+        let min_y = self.screen_y_end.min(self.screen_y_start);
+        let max_y = self.screen_y_end.max(self.screen_y_start);
+        screen_y >= min_y && screen_y <= max_y
+    }
+
+    fn sample_to_frac(self, sample_value: f64, display_scale: ValueDisplayScale) -> Option<f64> {
+        let sample_len = self.sample_end - self.sample_start;
+        if sample_len == 0.0 {
+            return None;
+        }
+
+        match self.kind {
+            SegmentKind::Linear => Some((sample_value - self.sample_start) / sample_len),
+            SegmentKind::SkewedPositive => {
+                let offset = sample_value - self.sample_start;
+                Some(display_scale.sample_to_display(offset / sample_len))
+            }
+            SegmentKind::SkewedNegative => {
+                let offset = self.sample_end - sample_value;
+                Some(1.0 - display_scale.sample_to_display(offset / sample_len))
+            }
+        }
+    }
+
+    fn frac_to_sample(self, frac: f64, display_scale: ValueDisplayScale) -> Option<f64> {
+        let frac = frac.clamp(0.0, 1.0);
+        match self.kind {
+            SegmentKind::Linear => {
+                Some(self.sample_start + frac * (self.sample_end - self.sample_start))
+            }
+            SegmentKind::SkewedPositive => Some(
+                self.sample_start
+                    + display_scale.display_to_sample(frac) * (self.sample_end - self.sample_start),
+            ),
+            SegmentKind::SkewedNegative => Some(
+                self.sample_end
+                    - display_scale.display_to_sample(1.0 - frac)
+                        * (self.sample_end - self.sample_start),
+            ),
+        }
+    }
+
+    fn frac_to_screen_y(self, frac: f64) -> f32 {
+        let frac = frac.clamp(0.0, 1.0) as f32;
+        self.screen_y_start + frac * (self.screen_y_end - self.screen_y_start)
+    }
+
+    fn screen_y_to_frac(self, screen_y: f32) -> Option<f64> {
+        let screen_len = self.screen_y_end - self.screen_y_start;
+        if screen_len == 0.0 {
+            return None;
+        }
+        Some(((screen_y - self.screen_y_start) / screen_len) as f64)
+    }
+}
+
+fn build_value_segments(val_range: sample::ValRange<f64>, screen_rect: Rect) -> Vec<ValueSegment> {
+    let start_anchor = val_range.min.floor() as i64;
+    let end_anchor = val_range.max.ceil() as i64;
+
+    (start_anchor..end_anchor)
+        .map(|anchor| {
+            let sample_start = anchor as f64;
+            let sample_end = sample_start + 1.0;
+
+            let kind = if sample_end <= 0.0 {
+                SegmentKind::SkewedNegative
+            } else if sample_start >= 0.0 {
+                SegmentKind::SkewedPositive
+            } else {
+                SegmentKind::Linear
+            };
+
+            ValueSegment {
+                sample_start,
+                sample_end,
+                screen_y_start: raw_sample_value_to_screen_y(sample_start, val_range, screen_rect),
+                screen_y_end: raw_sample_value_to_screen_y(sample_end, val_range, screen_rect),
+                kind,
+            }
+        })
+        .collect()
+}
+
+fn build_value_segment_for_sample(
+    sample_value: f64,
+    val_range: sample::ValRange<f64>,
+    screen_rect: Rect,
+) -> ValueSegment {
+    let anchor = sample_value.floor() as i64;
+    let sample_start = anchor as f64;
+    let sample_end = sample_start + 1.0;
+
+    let kind = if sample_end <= 0.0 {
+        SegmentKind::SkewedNegative
+    } else if sample_start >= 0.0 {
+        SegmentKind::SkewedPositive
+    } else {
+        SegmentKind::Linear
+    };
+
+    ValueSegment {
+        sample_start,
+        sample_end,
+        screen_y_start: raw_sample_value_to_screen_y(sample_start, val_range, screen_rect),
+        screen_y_end: raw_sample_value_to_screen_y(sample_end, val_range, screen_rect),
+        kind,
+    }
 }
 
 // smallest multiple of m that is >= x
@@ -196,6 +325,90 @@ mod tests {
         let y_back = sample_value_to_screen_y(sample, range, rect, display_scale).unwrap();
 
         assert!((original_y - y_back).abs() < 0.5);
+    }
+
+    #[test]
+    fn skew_keeps_full_scale_anchors_fixed_when_range_is_panned() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
+        let range = sample::ValRange {
+            min: -0.5f64,
+            max: 1.5,
+        };
+
+        for anchor in [-1.0, 0.0, 1.0] {
+            let y_linear =
+                sample_value_to_screen_y(anchor, range, rect, ValueDisplayScale::default())
+                    .unwrap();
+            let y_skewed = sample_value_to_screen_y(
+                anchor,
+                range,
+                rect,
+                ValueDisplayScale { skew_factor: 1.0 },
+            )
+            .unwrap();
+
+            assert!((y_linear - y_skewed).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn skew_strength_does_not_drop_when_zero_leaves_view() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
+        let with_zero = sample::ValRange {
+            min: -0.2f64,
+            max: 1.8,
+        };
+        let without_zero = sample::ValRange {
+            min: 0.2f64,
+            max: 2.2,
+        };
+        let scale = ValueDisplayScale { skew_factor: 5.0 };
+        let probe = 0.5;
+
+        let linear_with_zero =
+            sample_value_to_screen_y(probe, with_zero, rect, ValueDisplayScale::default()).unwrap();
+        let skew_with_zero = sample_value_to_screen_y(probe, with_zero, rect, scale).unwrap();
+        let linear_without_zero =
+            sample_value_to_screen_y(probe, without_zero, rect, ValueDisplayScale::default())
+                .unwrap();
+        let skew_without_zero = sample_value_to_screen_y(probe, without_zero, rect, scale).unwrap();
+
+        let offset_with_zero = skew_with_zero - linear_with_zero;
+        let offset_without_zero = skew_without_zero - linear_without_zero;
+
+        assert!((offset_with_zero - offset_without_zero).abs() < 0.001);
+    }
+
+    #[test]
+    fn zero_maps_below_view_when_visible_range_is_above_zero() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
+        let range = sample::ValRange {
+            min: 0.2f64,
+            max: 2.2,
+        };
+        let scale = ValueDisplayScale { skew_factor: 5.0 };
+
+        let y_zero = sample_value_to_screen_y(0.0, range, rect, scale).unwrap();
+        let y_two = sample_value_to_screen_y(2.0, range, rect, scale).unwrap();
+
+        assert!(y_zero > rect.bottom());
+        assert!((y_zero - y_two).abs() > 0.001);
+    }
+
+    #[test]
+    fn zero_maps_above_view_when_visible_range_is_below_zero() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 200.0);
+        let range = sample::ValRange {
+            min: -2.2f64,
+            max: -0.2,
+        };
+        let scale = ValueDisplayScale { skew_factor: 5.0 };
+
+        let y_zero = sample_value_to_screen_y(0.0, range, rect, scale).unwrap();
+        let y_neg_two = sample_value_to_screen_y(-2.0, range, rect, scale).unwrap();
+
+        assert!(y_zero < rect.top());
+        assert!((y_zero - y_neg_two).abs() > 0.001);
     }
 
     #[allow(dead_code)]
