@@ -58,10 +58,9 @@ impl Default for DemoApp {
 #[cfg(not(target_arch = "wasm32"))]
 impl eframe::App for DemoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx();
         self.clamp_demo_values();
 
-        egui::TopBottomPanel::top("top").show(ctx, |ui| {
+        egui::Panel::top("top").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Digitwise number editor");
                 ui.separator();
@@ -69,7 +68,7 @@ impl eframe::App for DemoApp {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical(|ui| {
                 ui.group(|ui| {
                     ui.heading("Editor Demo");
