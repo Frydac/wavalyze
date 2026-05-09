@@ -42,6 +42,32 @@ impl eframe::App for App {
     }
 }
 
+fn handle_cli_arguments(model: &mut model::Model, args: &Args) {
+    let mut open_files = |files: &[ReadConfig]| {
+        for file_read_config in files {
+            model
+                .actions
+                .push(Action::OpenFile(file_read_config.clone()));
+        }
+    };
+    match args.command {
+        None => {
+            trace!("No command");
+            open_files(&args.files);
+        }
+        Some(ref command) => match command {
+            args::Commands::Open { files } => {
+                trace!("Open command");
+                open_files(files);
+            }
+            args::Commands::Diff { file1, file2 } => {
+                trace!("Diff command");
+                // todo!("diff files");
+            }
+        },
+    }
+}
+
 impl App {
     pub fn new_native(
         _cc: &eframe::CreationContext<'_>,
@@ -53,29 +79,8 @@ impl App {
             user_config,
             ..Default::default()
         };
-        let mut open_files = |files: &[ReadConfig]| {
-            for file_read_config in files {
-                model
-                    .actions
-                    .push(Action::OpenFile(file_read_config.clone()));
-            }
-        };
-        match args.command {
-            None => {
-                trace!("No command");
-                open_files(&args.files);
-            }
-            Some(ref command) => match command {
-                args::Commands::Open { files } => {
-                    trace!("Open command");
-                    open_files(files);
-                }
-                args::Commands::Diff { file1, file2 } => {
-                    trace!("Diff command");
-                    // todo!("diff files");
-                }
-            },
-        }
+
+        handle_cli_arguments(&mut model, &args);
 
         Self {
             view: view::View::new(model, tracing_collector),
