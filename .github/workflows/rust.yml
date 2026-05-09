@@ -5,6 +5,16 @@ name: CI
 env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  WASM_THREAD_RUSTFLAGS: >-
+    -D warnings
+    -C target-feature=+atomics,+bulk-memory
+    -C link-arg=--import-memory
+    -C link-arg=--shared-memory
+    -C link-arg=--max-memory=1073741824
+    -C link-arg=--export=__wasm_init_tls
+    -C link-arg=--export=__tls_size
+    -C link-arg=--export=__tls_align
+    -C link-arg=--export=__tls_base
 
 jobs:
   check:
@@ -28,6 +38,8 @@ jobs:
           targets: wasm32-unknown-unknown
           components: rust-src
       - run: RUSTUP_TOOLCHAIN=nightly-2026-01-15 cargo check --quiet --workspace --all-features --lib --target wasm32-unknown-unknown
+        env:
+          RUSTFLAGS: ${{ env.WASM_THREAD_RUSTFLAGS }}
 
   test:
     name: Test Suite
@@ -82,6 +94,8 @@ jobs:
         run: wget -qO- https://github.com/thedodd/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
       - name: Build
         run: env -u NO_COLOR ./trunk-threaded.sh build
+        env:
+          RUSTFLAGS: ${{ env.WASM_THREAD_RUSTFLAGS }}
 
   build:
     runs-on: ${{ matrix.os }}
