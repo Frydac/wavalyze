@@ -142,7 +142,7 @@ jobs:
         cargo +1.93.0 build --verbose --release --target=${{ matrix.TARGET }}
 
     - name: Rename
-      run: cp target/${{ matrix.TARGET }}/release/wavalyze${{ matrix.EXTENSION }} wavalyze-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+      run: cp target/${{ matrix.TARGET }}/release/wavalyze-app${{ matrix.EXTENSION }} wavalyze-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
 
     - uses: actions/upload-artifact@master
       with:
