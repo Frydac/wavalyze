@@ -1,5 +1,6 @@
 use crate::{
     args::{self, Args},
+    log::TracingCollector,
     model::{self, Action},
     view,
     wav::ReadConfig,
@@ -19,15 +20,16 @@ impl Default for App {
     fn default() -> Self {
         let model = model::Model::new();
         Self {
-            view: view::View::new(model),
+            view: view::View::new(model, TracingCollector::default()),
             args: None,
         }
     }
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.view.ui_measured(ctx, frame);
+    /// Called each time the UI needs repainting, which may be many times per second.
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.view.ui_measured(ui.ctx(), frame);
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
@@ -41,7 +43,12 @@ impl eframe::App for App {
 }
 
 impl App {
-    pub fn new_native(_cc: &eframe::CreationContext<'_>, args: Args, user_config: model::Config) -> Self {
+    pub fn new_native(
+        _cc: &eframe::CreationContext<'_>,
+        args: Args,
+        user_config: model::Config,
+        tracing_collector: TracingCollector,
+    ) -> Self {
         let mut model = model::Model {
             user_config,
             ..Default::default()
@@ -71,19 +78,19 @@ impl App {
         }
 
         Self {
-            view: view::View::new(model),
+            view: view::View::new(model, tracing_collector),
             args: Some(args),
         }
     }
 
-    pub fn new_web(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new_web(_cc: &eframe::CreationContext<'_>, tracing_collector: TracingCollector) -> Self {
         let mut model = model::Model::new();
         model.actions.push(Action::LoadDemo);
         model.actions.push(Action::ZoomToFull);
         model.actions.push(Action::FillScreenHeight);
 
         Self {
-            view: view::View::new(model),
+            view: view::View::new(model, tracing_collector),
             args: None,
         }
     }

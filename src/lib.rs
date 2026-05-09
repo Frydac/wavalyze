@@ -2,6 +2,7 @@
 // TODO: remove
 // #![allow(dead_code)]
 #![allow(unused_variables)]
+#![allow(deprecated)]
 
 // mod app;
 pub mod app;

@@ -17,9 +17,9 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
-egui = "0.30"
+egui = "0.34"
 egui_custom_widgets = { git = "https://github.com/Frydac/egui_custom_widgets" }
-eframe = { version = "0.30", default-features = false, features = [
+eframe = { version = "0.34", default-features = false, features = [
     "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
@@ -40,13 +40,14 @@ strum = "0.27.2"
 strum_macros = "0.27.2"
 bitflags = "2.9.3"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "tracing-log"] }
 confy = "0.5.1"
 thousands = "0.2.0"
 num-traits = "0.2.19"
 rayon = "1.11.0"
 web-time = "1.1.0"
 rfd = "0.17.2"
+egui_tracing = { git = "https://github.com/grievouz/egui_tracing", tag = "egui_tracing-v0.3.0" }
 
 
 # native:

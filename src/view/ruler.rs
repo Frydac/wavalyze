@@ -37,9 +37,13 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-    ui_ruler
-        .painter()
-        .rect(ruler_rect, 3.0, egui::Color32::TRANSPARENT, stroke);
+    ui_ruler.painter().rect(
+        ruler_rect,
+        3.0,
+        egui::Color32::TRANSPARENT,
+        stroke,
+        egui::epaint::StrokeKind::Inside,
+    );
     ui_ruler.set_min_size(ruler_rect.size());
 
     // Update the screen rect of the ruler
@@ -98,14 +102,14 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
     if let Some(pos) = pos_in_rect {
         ui.ctx().input(|i| {
             if i.modifiers.shift && !i.modifiers.ctrl {
-                let scroll = i.raw_scroll_delta;
+                let scroll = i.smooth_scroll_delta;
                 if scroll.x != 0.0 {
                     actions.push(model::action::Action::PanX {
                         nr_pixels: scroll.x,
                     });
                 }
             } else if i.modifiers.ctrl && !i.modifiers.shift {
-                let scroll = i.raw_scroll_delta;
+                let scroll = i.smooth_scroll_delta;
                 if scroll.y != 0.0 {
                     actions.push(model::action::Action::ZoomX {
                         nr_pixels: scroll.y * zoom_x_factor,

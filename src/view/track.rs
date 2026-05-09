@@ -123,8 +123,13 @@ pub fn ui_side(
         // paint a rect around the whole side area
         {
             let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-            ui.painter()
-                .rect(ui.min_rect(), 0.0, egui::Color32::TRANSPARENT, stroke);
+            ui.painter().rect(
+                ui.min_rect(),
+                0.0,
+                egui::Color32::TRANSPARENT,
+                stroke,
+                egui::epaint::StrokeKind::Inside,
+            );
         }
 
         let info_rect = ui.min_rect();
@@ -234,7 +239,8 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
 
             let button_size = |label: &str| {
                 let text_size = ui
-                    .fonts(|fonts| fonts.layout_no_wrap(label.to_string(), font_id.clone(), color))
+                    .painter()
+                    .layout_no_wrap(label.to_string(), font_id.clone(), color)
                     .size();
                 egui::vec2(
                     text_size.x + padding.x * 2.0,
@@ -265,7 +271,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
             } else {
                 text
             };
-            let galley = ui.fonts(|fonts| fonts.layout_no_wrap(display_text, font_id, color));
+            let galley = ui.painter().layout_no_wrap(display_text, font_id, color);
             let text_pos = egui::pos2(
                 label_rect.left() + 2.0,
                 rect.center().y - galley.size().y / 2.0,
@@ -298,12 +304,10 @@ fn truncate_path_keep_basename_to_width(
     let color = ui.style().visuals.text_color();
 
     let measure = |text: &str| -> f32 {
-        ui.fonts(|fonts| {
-            fonts
-                .layout_no_wrap(text.to_string(), font_id.clone(), color)
-                .size()
-                .x
-        })
+        ui.painter()
+            .layout_no_wrap(text.to_string(), font_id.clone(), color)
+            .size()
+            .x
     };
 
     let full = format!("{path}{suffix}");

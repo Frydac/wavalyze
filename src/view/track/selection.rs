@@ -241,6 +241,7 @@ pub fn ui_selection(
         0.0,
         theme_colors.waveform_selection_fill,
         egui::Stroke::NONE,
+        egui::epaint::StrokeKind::Inside,
     );
 }
 

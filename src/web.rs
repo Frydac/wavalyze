@@ -4,6 +4,13 @@ use eframe::wasm_bindgen::JsCast as _;
 pub fn start_web_app() {
     console_error_panic_hook::set_once();
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+    let tracing_collector = match crate::log::init_tracing(None) {
+        Ok(collector) => collector,
+        Err(error) => {
+            log::error!("Failed to initialize tracing: {error:#}");
+            return;
+        }
+    };
 
     log::info!("Starting wasm app");
 
@@ -30,7 +37,9 @@ pub fn start_web_app() {
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(crate::App::new_web(cc)))),
+                Box::new(move |cc| {
+                    Ok(Box::new(crate::App::new_web(cc, tracing_collector.clone())))
+                }),
             )
             .await;
 

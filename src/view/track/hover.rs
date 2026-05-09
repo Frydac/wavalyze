@@ -72,7 +72,7 @@ pub fn ui_hover(
                 sample_pos_x,
             })));
         ui.ctx().input(|i| {
-            let scroll = i.raw_scroll_delta;
+            let scroll = i.smooth_scroll_delta;
             let scroll_y = if scroll.y != 0.0 { scroll.y } else { scroll.x };
             if i.modifiers.alt {
                 if i.modifiers.shift && !i.modifiers.ctrl && scroll_y != 0.0 {

@@ -12,7 +12,7 @@ use egui_custom_widgets::{
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> anyhow::Result<()> {
-    wavalyze::log::init_tracing(Some("info"))?;
+    let _ = wavalyze::log::init_tracing(Some("info"))?;
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -57,7 +57,8 @@ impl Default for DemoApp {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl eframe::App for DemoApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx();
         self.clamp_demo_values();
 
         egui::TopBottomPanel::top("top").show(ctx, |ui| {

@@ -1,11 +1,17 @@
 use anyhow::{Context, Result};
+use egui_tracing::EventCollector;
 use tracing::trace;
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::EnvFilter;
+#[cfg(not(target_arch = "wasm32"))]
+use tracing_subscriber::fmt;
+use tracing_subscriber::prelude::*;
+
+pub type TracingCollector = EventCollector;
 
 /// Initializes the global tracing subscriber.
 ///
 /// This should only be called once in the application's lifetime, typically in `main`.
-pub fn init_tracing(log_level: Option<&str>) -> Result<()> {
+pub fn init_tracing(log_level: Option<&str>) -> Result<TracingCollector> {
     const DEFAULT_LEVEL: &str = "info";
     let wavalyze_level = log_level.unwrap_or(DEFAULT_LEVEL);
 
@@ -36,11 +42,28 @@ pub fn init_tracing(log_level: Option<&str>) -> Result<()> {
     filter = filter.add_directive("egui=warn".parse()?);
     filter = filter.add_directive("eframe=warn".parse()?);
 
-    let subscriber = fmt().with_env_filter(filter).finish();
+    // Parse the level for the collector (case-insensitive, fallback to INFO)
+    let collector_level = wavalyze_level
+        .to_uppercase()
+        .parse::<tracing::Level>()
+        .unwrap_or(tracing::Level::INFO);
+
+    let collector = EventCollector::default().with_max_level(collector_level);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let subscriber = tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer())
+        .with(collector.clone());
+
+    #[cfg(target_arch = "wasm32")]
+    let subscriber = tracing_subscriber::registry()
+        .with(filter)
+        .with(collector.clone());
 
     tracing::subscriber::set_global_default(subscriber)
         .context("failed to set global tracing subscriber")?;
 
     trace!("tracing initialized!");
-    Ok(())
+    Ok(collector)
 }

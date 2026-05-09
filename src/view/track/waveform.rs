@@ -31,7 +31,13 @@ pub fn ui_waveform_canvas(
 
     let bg_color = ui.visuals().extreme_bg_color;
     let stroke = ui.visuals().window_stroke();
-    ui.painter().rect(rect, 0.0, bg_color, stroke);
+    ui.painter().rect(
+        rect,
+        0.0,
+        bg_color,
+        stroke,
+        egui::epaint::StrokeKind::Inside,
+    );
     let waveform_response = ui.interact(
         rect,
         ui.id().with(("waveform_interaction", track_id)),

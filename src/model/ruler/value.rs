@@ -50,6 +50,7 @@ pub fn zoom_val_range(
     let delta_max = delta * (1.0 - center_frac);
     val_range.min -= delta_min;
     val_range.max += delta_max;
+    // numerical precision safeguard
     if val_range.min > val_range.max {
         val_range.min = val_range.max;
     }

@@ -11,7 +11,7 @@ pub mod util;
 pub mod value_ruler2;
 
 use crate::model::{Action, hover_info::HoverInfoE, shortcuts};
-use crate::{model, wav};
+use crate::{log::TracingCollector, model, wav};
 use anyhow::Result;
 use egui;
 use std::sync::mpsc::{Receiver, Sender};
@@ -23,10 +23,12 @@ pub struct View {
     picker_tx: Sender<file_loader::PickerMessage>,
     picker_rx: Receiver<file_loader::PickerMessage>,
     picker_pending: usize,
+    show_tracing_window: bool,
+    tracing_collector: TracingCollector,
 }
 
 impl View {
-    pub fn new(model: model::Model) -> Self {
+    pub fn new(model: model::Model, tracing_collector: TracingCollector) -> Self {
         let (picker_tx, picker_rx) = std::sync::mpsc::channel();
         Self {
             model,
@@ -34,6 +36,8 @@ impl View {
             picker_tx,
             picker_rx,
             picker_pending: 0,
+            show_tracing_window: false,
+            tracing_collector,
         }
     }
 
@@ -91,6 +95,7 @@ impl View {
         }
 
         self.ui_loading_modal(ctx);
+        self.ui_tracing_window(ctx);
 
         let had_dropped_files = self.handle_drag_and_drop_into_app(ctx);
 
@@ -224,9 +229,34 @@ impl View {
                     ui.add_space(16.0);
                 }
 
+                ui.menu_button("Debug", |ui| {
+                    if ui
+                        .checkbox(&mut self.show_tracing_window, "Tracing")
+                        .clicked()
+                    {
+                        ui.close_menu();
+                    }
+                });
+                ui.add_space(16.0);
+
                 egui::widgets::global_theme_preference_buttons(ui);
             });
         });
+    }
+
+    fn ui_tracing_window(&mut self, ctx: &egui::Context) {
+        if !self.show_tracing_window {
+            return;
+        }
+
+        ctx.request_repaint();
+
+        egui::Window::new("Tracing")
+            .default_size([880.0, 420.0])
+            .open(&mut self.show_tracing_window)
+            .show(ctx, |ui| {
+                ui.add(egui_tracing::Logs::new(self.tracing_collector.clone()));
+            });
     }
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -247,7 +277,7 @@ impl View {
                 self.model.actions.push(Action::LoadDemo);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.style_mut().spacing.window_margin = egui::Margin::same(4.0);
+                ui.style_mut().spacing.window_margin = egui::Margin::same(4);
                 if ui.button("close all x").clicked() {
                     // × ✖ ❌ 🗑️
                     // if ui.button("✖").clicked() {

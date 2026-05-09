@@ -299,7 +299,7 @@ fn layout_tick_label(ui: &egui::Ui, screen_x: f32, text: TickLabel) -> TickLabel
         TickLabel::SampleIx(sample_ix) => format_compact(sample_ix),
         TickLabel::Text(text) => text,
     };
-    let galley = ui.fonts(|fonts| fonts.layout_no_wrap(text, font_id, color));
+    let galley = ui.painter().layout_no_wrap(text, font_id, color);
     let text_size = galley.size();
     let mut text_pos: egui::Pos2 =
         [screen_x - (text_size.x / 2.0), ui.min_rect().top() + 3.0].into();
@@ -341,8 +341,12 @@ fn paint_tick_label(ui: &mut egui::Ui, layout: &TickLabelLayout, draw_rect: bool
     ui.painter()
         .galley(layout.text_pos, layout.galley.clone(), layout.color);
     if draw_rect {
-        ui.painter()
-            .rect_stroke(layout.text_rect, 3.0, egui::Stroke::new(1.0, layout.color));
+        ui.painter().rect_stroke(
+            layout.text_rect,
+            3.0,
+            egui::Stroke::new(1.0, layout.color),
+            egui::epaint::StrokeKind::Inside,
+        );
     }
 }
 

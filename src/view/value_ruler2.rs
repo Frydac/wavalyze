@@ -79,7 +79,13 @@ pub fn ui(
     let tick_stroke = Stroke::new(1.0, tick_color);
     let zero_stroke = Stroke::new(1.0, tick_color);
 
-    painter.rect(rect, 0.0, Color32::TRANSPARENT, border_stroke);
+    painter.rect(
+        rect,
+        0.0,
+        Color32::TRANSPARENT,
+        border_stroke,
+        egui::epaint::StrokeKind::Inside,
+    );
 
     const TICK_LEN_LONG: f32 = 10.0;
     const TICK_LEN_MID: f32 = 8.0;
@@ -162,7 +168,7 @@ fn handle_value_ruler_scroll(
     }
     let (scroll, modifiers, hover_pos) = ui
         .ctx()
-        .input(|i| (i.raw_scroll_delta, i.modifiers, i.pointer.hover_pos()));
+        .input(|i| (i.smooth_scroll_delta, i.modifiers, i.pointer.hover_pos()));
     // Some systems emit horizontal scroll for shift-wheel; use whichever axis is non-zero.
     let scroll_y = if scroll.y != 0.0 { scroll.y } else { scroll.x };
     if modifiers.shift && !modifiers.ctrl && scroll_y != 0.0 {
@@ -175,7 +181,9 @@ fn handle_value_ruler_scroll(
         ctx.actions.push(Action::ZoomY {
             track_id,
             nr_pixels: scroll_y * ctx.zoom_y_factor,
-            center_y: hover_pos.map(|p| p.y).unwrap_or(rect.center().y),
+            center_y: hover_pos
+                .map(|p: egui::Pos2| p.y)
+                .unwrap_or(rect.center().y),
         });
     }
 }
@@ -251,7 +259,10 @@ fn layout_value_label(
     let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
     let galleys: Vec<_> = lines
         .iter()
-        .map(|line| ui.fonts(|fonts| fonts.layout_no_wrap(line.clone(), font_id.clone(), color)))
+        .map(|line| {
+            ui.painter()
+                .layout_no_wrap(line.clone(), font_id.clone(), color)
+        })
         .collect();
     let total_height: f32 = galleys.iter().map(|g| g.size().y).sum();
     let max_width: f32 = galleys
@@ -280,7 +291,17 @@ fn draw_hover_value(
     let HoverInfoE::IsHovered(hover_info) = hover_info else {
         return;
     };
-
+    {
+        let sample_view = match track.single.item.sample_view.as_ref() {
+            Some(view) => view,
+            None => {
+                return;
+            }
+        };
+        if sample_view.samples_per_pixel >= 1.0 {
+            return;
+        }
+    }
     let screen_rect = match track.screen_rect {
         Some(rect) => rect,
         None => {
@@ -293,16 +314,6 @@ fn draw_hover_value(
             return;
         }
     };
-
-    let sample_view = match track.single.item.sample_view.as_ref() {
-        Some(view) => view,
-        None => {
-            return;
-        }
-    };
-    if sample_view.samples_per_pixel >= 0.5 {
-        return;
-    }
 
     let global_sample_ix = hover_info.sample_ix.round() as i64;
     let sample_ix = global_sample_ix - track.single.item.sample_ix_offset as i64;
