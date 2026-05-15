@@ -6,6 +6,8 @@ use crate::model::{
 use anyhow::Result;
 use thousands::Separable;
 
+use crate::view::util::zoom_delta_to_scroll_delta;
+
 mod hover;
 mod selection;
 mod ticks;
@@ -100,6 +102,7 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
         .pointer_hover_pos()
         .filter(|&pos| rect.contains(pos));
     if let Some(pos) = pos_in_rect {
+        let scroll_zoom_speed = ui.ctx().options(|o| o.input_options.scroll_zoom_speed);
         ui.ctx().input(|i| {
             if i.modifiers.shift && !i.modifiers.ctrl {
                 let scroll = i.smooth_scroll_delta;
@@ -109,10 +112,11 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
                     });
                 }
             } else if i.modifiers.ctrl && !i.modifiers.shift {
-                let scroll = i.smooth_scroll_delta;
-                if scroll.y != 0.0 {
+                let zoom_scroll_delta =
+                    zoom_delta_to_scroll_delta(i.zoom_delta(), scroll_zoom_speed);
+                if zoom_scroll_delta != 0.0 {
                     actions.push(model::action::Action::ZoomX {
-                        nr_pixels: scroll.y * zoom_x_factor,
+                        nr_pixels: zoom_scroll_delta * zoom_x_factor,
                         center_x: pos.x,
                     });
                 }

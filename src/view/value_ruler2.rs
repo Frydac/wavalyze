@@ -6,6 +6,7 @@ use crate::model::ruler::{
 };
 use crate::model::track::Track;
 use crate::model::{Action, track::TrackId};
+use crate::view::util::zoom_delta_to_scroll_delta;
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
 
 pub const NR_PIXELS_PER_VALUE_TICK: f32 = 50.0;
@@ -166,9 +167,15 @@ fn handle_value_ruler_scroll(
     if !hovered {
         return;
     }
-    let (scroll, modifiers, hover_pos) = ui
-        .ctx()
-        .input(|i| (i.smooth_scroll_delta, i.modifiers, i.pointer.hover_pos()));
+    let scroll_zoom_speed = ui.ctx().options(|o| o.input_options.scroll_zoom_speed);
+    let (scroll, zoom_scroll_delta, modifiers, hover_pos) = ui.ctx().input(|i| {
+        (
+            i.smooth_scroll_delta,
+            zoom_delta_to_scroll_delta(i.zoom_delta(), scroll_zoom_speed),
+            i.modifiers,
+            i.pointer.hover_pos(),
+        )
+    });
     // Some systems emit horizontal scroll for shift-wheel; use whichever axis is non-zero.
     let scroll_y = if scroll.y != 0.0 { scroll.y } else { scroll.x };
     if modifiers.shift && !modifiers.ctrl && scroll_y != 0.0 {
@@ -176,11 +183,11 @@ fn handle_value_ruler_scroll(
             track_id,
             nr_pixels: scroll_y,
         });
-    } else if modifiers.ctrl && scroll_y != 0.0 {
+    } else if modifiers.ctrl && zoom_scroll_delta != 0.0 {
         // Zoom around the mouse Y position for intuitive value scaling.
         ctx.actions.push(Action::ZoomY {
             track_id,
-            nr_pixels: scroll_y * ctx.zoom_y_factor,
+            nr_pixels: zoom_scroll_delta * ctx.zoom_y_factor,
             center_y: hover_pos
                 .map(|p: egui::Pos2| p.y)
                 .unwrap_or(rect.center().y),

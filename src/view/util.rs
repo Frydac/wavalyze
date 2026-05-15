@@ -38,3 +38,28 @@ pub fn rpc(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
 pub fn rp(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
     ui.painter().round_pos_to_pixels(pos)
 }
+
+/// Convert egui's multiplicative zoom factor back into the wheel-like delta used by the app.
+pub fn zoom_delta_to_scroll_delta(zoom_delta: f32, scroll_zoom_speed: f32) -> f32 {
+    if zoom_delta == 1.0 || scroll_zoom_speed == 0.0 {
+        0.0
+    } else {
+        zoom_delta.ln() / scroll_zoom_speed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::zoom_delta_to_scroll_delta;
+
+    #[test]
+    fn zoom_delta_round_trips_to_scroll_delta() {
+        let scroll_delta: f32 = 24.0;
+        let scroll_zoom_speed: f32 = 1.0 / 200.0;
+        let zoom_delta = (scroll_delta * scroll_zoom_speed).exp();
+
+        assert!(
+            (zoom_delta_to_scroll_delta(zoom_delta, scroll_zoom_speed) - scroll_delta).abs() < 1e-4
+        );
+    }
+}
