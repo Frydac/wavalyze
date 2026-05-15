@@ -16,6 +16,12 @@ pub enum JobKind {
     LoadWav,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum JobResultData {
+    DemoTimed(DemoTimedSummary),
+    LoadWav(TransferLoadedFile),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobStatus {
     Queued,
@@ -43,12 +49,6 @@ impl Default for DemoTimedConfig {
 pub struct DemoTimedSummary {
     pub stage_count: u32,
     pub checksum: u64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum JobResultData {
-    DemoTimed(DemoTimedSummary),
-    LoadWav(TransferLoadedFile),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
