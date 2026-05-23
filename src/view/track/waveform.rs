@@ -1,11 +1,15 @@
 use crate::{
     audio::{
         self,
-        sample::view::{SINGLE_SAMPLE_DRAW_MAX_SPP, ViewData},
+        sample::{
+            self,
+            view::{SINGLE_SAMPLE_DRAW_MAX_SPP, ViewData},
+        },
     },
     model::{
         Action, Model,
         config::ThemeColors,
+        hover_info::HoverInfoE,
         ruler::{ValueLattice, sample_value_to_screen_y},
         track::TrackId,
     },
@@ -114,8 +118,31 @@ fn ui_waveform(
         .item
         .sample_rect()
         .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+
+    draw_waveform(
+        ui,
+        sample_view,
+        sample_rect,
+        screen_rect,
+        display_scale,
+        &hover_info,
+        theme_colors,
+    );
+
     draw_value_grid(ui, sample_rect, screen_rect, display_scale);
 
+    Ok(())
+}
+
+fn draw_waveform(
+    ui: &mut egui::Ui,
+    sample_view: &sample::View,
+    sample_rect: audio::SampleRect,
+    screen_rect: Rect,
+    display_scale: crate::model::ruler::ValueDisplayScale,
+    hover_info: &HoverInfoE,
+    theme_colors: &ThemeColors,
+) {
     match sample_view.data {
         ViewData::Single(ref single_view) => {
             if sample_view.samples_per_pixel < SINGLE_SAMPLE_DRAW_MAX_SPP {
@@ -176,6 +203,8 @@ fn ui_waveform(
             } else {
                 single_view.line_segments.iter().for_each(|segment| {
                     let positions = segment.iter().map(|pos| rpc(ui, pos.into())).collect();
+                    let color = theme_colors.waveform;
+                    let line_color = color.linear_multiply(0.7);
                     ui.painter()
                         .line(positions, egui::Stroke::new(1.0, line_color));
                 });
@@ -194,8 +223,6 @@ fn ui_waveform(
             });
         }
     };
-
-    Ok(())
 }
 
 fn draw_value_grid(
@@ -220,17 +247,20 @@ fn draw_value_grid(
         return;
     }
 
-    let zero_stroke = egui::Stroke::new(1.0, ui.style().visuals.text_color().linear_multiply(0.55));
-    let grid_stroke = egui::Stroke::new(
-        1.0,
-        ui.style()
-            .visuals
-            .widgets
-            .noninteractive
-            .bg_stroke
-            .color
-            .linear_multiply(0.7),
-    );
+    // let zero_stroke = egui::Stroke::new(1.0, ui.style().visuals.text_color().linear_multiply(0.55));
+    // let zero_stroke = egui::Stroke::new(1.0, ui.style().visuals.text_color());
+    // let grid_stroke = egui::Stroke::new(
+    //     1.0,
+    //     ui.style()
+    //         .visuals
+    //         .widgets
+    //         .noninteractive
+    //         .bg_stroke
+    //         .color
+    //         .linear_multiply(0.7),
+    // );
+    let zero_stroke = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(128));
+    let grid_stroke = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(35));
 
     for tick in &lattice.ticks {
         if tick.sample_value != 0.0 && tick.tick_type != crate::model::ruler::TickType::Big {
