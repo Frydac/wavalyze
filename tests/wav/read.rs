@@ -74,7 +74,7 @@ fn test_read_options_i16() {
     assert_eq!(file.channels.len(), 2);
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let BufferE::I16(buf) = buffers.get(ch0.buffer_id).unwrap() {
+    if let BufferE::I16(buf) = buffers.get(ch0.buffer_id).unwrap().as_ref() {
         assert_eq!(buf.data, &[4, 7]);
         assert_eq!(buf.sample_rate, spec.sample_rate);
         assert_eq!(buf.bit_depth, spec.bits_per_sample);
@@ -83,7 +83,7 @@ fn test_read_options_i16() {
     }
 
     let ch2 = file.channels.get(&2).unwrap();
-    if let BufferE::I16(buf) = buffers.get(ch2.buffer_id).unwrap() {
+    if let BufferE::I16(buf) = buffers.get(ch2.buffer_id).unwrap().as_ref() {
         assert_eq!(buf.data, &[6, 9]);
         assert_eq!(buf.sample_rate, spec.sample_rate);
         assert_eq!(buf.bit_depth, spec.bits_per_sample);
@@ -122,7 +122,7 @@ fn test_read_options_i24() {
     let file = read_to_file(&config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap() {
+    if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap().as_ref() {
         assert_eq!(buf.data, &[4000, 7000]);
     } else {
         panic!("Incorrect buffer type");
@@ -155,7 +155,7 @@ fn test_read_options_i32() {
     let file = read_to_file(&config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap() {
+    if let BufferE::I32(buf) = buffers.get(ch0.buffer_id).unwrap().as_ref() {
         assert_eq!(buf.data, &[400000, 700000]);
     } else {
         panic!("Incorrect buffer type");
@@ -188,7 +188,7 @@ fn test_read_options_f32() {
     let file = read_to_file(&config, &mut buffers).unwrap();
 
     let ch0 = file.channels.get(&0).unwrap();
-    if let BufferE::F32(buf) = buffers.get(ch0.buffer_id).unwrap() {
+    if let BufferE::F32(buf) = buffers.get(ch0.buffer_id).unwrap().as_ref() {
         assert_eq!(buf.data, &[0.4, 0.7]);
     } else {
         panic!("Incorrect buffer type");

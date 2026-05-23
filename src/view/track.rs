@@ -138,11 +138,27 @@ pub fn ui_side(
             let Some(track) = model.tracks.get_track_mut(track_id) else {
                 return;
             };
+            let buffer_id = track.single.item.buffer_id;
             let sample_ix_offset = &mut track.single.item.sample_ix_offset;
             ui.label("offset:");
             let response = ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
             if response.changed() {
                 track.trigger_update_view_buffer();
+            }
+
+            match model.audio.rms_db.get(buffer_id) {
+                Some(&rms_db) => {
+                    ui.label(format!("RMS: {rms_db:.2} dB"));
+                }
+                None => {
+                    if ui
+                        .button("RMS")
+                        .on_hover_text("Compute dB-RMS of this buffer in the background")
+                        .clicked()
+                    {
+                        model.actions.push(Action::ComputeBufferRms(buffer_id));
+                    }
+                }
             }
         });
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     audio::{
         SampleRect,
@@ -17,14 +19,20 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 new_key_type! { pub struct BufferId; }
 
-pub type Buffers = SlotMap<BufferId, BufferE>;
+// Buffers are wrapped in Arc so background jobs (RMS, FFT, etc.) can take a cheap clone and
+// stream samples in parallel with the UI draw path. Buffers are write-once after load, so no
+// lock is needed — readers (including workers) share read-only access.
+pub type Buffers = SlotMap<BufferId, Arc<BufferE>>;
 pub type Thumbnails = SecondaryMap<BufferId, ThumbnailE>;
+pub type BufferRmsDb = SecondaryMap<BufferId, f32>;
 
 /// Manages audio buffers and their associated thumbnails
 #[derive(Debug, Clone, Default)]
 pub struct AudioManager {
     pub buffers: Buffers,
     pub thumbnails: Thumbnails,
+    /// Lazily populated by `Action::ComputeBufferRms` jobs. Missing entry means "not computed yet".
+    pub rms_db: BufferRmsDb,
 }
 
 impl AudioManager {
@@ -43,7 +51,7 @@ impl AudioManager {
                     .get(channel.buffer_id)
                     .ok_or_else(|| anyhow!("Buffer {:?} not found", channel.buffer_id))?;
 
-                let thumbnail = ThumbnailE::from_buffer_e(buffer, None);
+                let thumbnail = ThumbnailE::from_buffer_e(buffer.as_ref(), None);
                 Ok((channel.buffer_id, thumbnail))
             })
             .collect();
@@ -59,6 +67,7 @@ impl AudioManager {
     pub fn remove_buffer(&mut self, buffer_id: BufferId) {
         self.buffers.remove(buffer_id);
         self.thumbnails.remove(buffer_id);
+        self.rms_db.remove(buffer_id);
     }
 
     pub fn remove_buffers_from_file(&mut self, file: &File) {
@@ -70,6 +79,16 @@ impl AudioManager {
     pub fn get_buffer(&self, buffer_id: BufferId) -> Result<&BufferE> {
         self.buffers
             .get(buffer_id)
+            .map(Arc::as_ref)
+            .with_context(|| format!("Buffer {:?} not found", buffer_id))
+    }
+
+    /// Cheap (one atomic increment) clone of the shared buffer handle — used to hand off to
+    /// background jobs that need read access without copying the underlying samples.
+    pub fn buffer_arc(&self, buffer_id: BufferId) -> Result<Arc<BufferE>> {
+        self.buffers
+            .get(buffer_id)
+            .cloned()
             .with_context(|| format!("Buffer {:?} not found", buffer_id))
     }
 

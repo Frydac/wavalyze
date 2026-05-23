@@ -1,4 +1,5 @@
 use crate::{
+    audio::BufferId,
     model::{
         PixelCoord, hover_info::HoverInfoE, jobs, selection_info::SelectionInfoE, track::TrackId,
     },
@@ -68,6 +69,16 @@ pub enum Action {
 
     // SetSelection
     SetSelection(SelectionInfoE),
+
+    /// Start a background job to compute the RMS (in dB) of a single buffer. Result lands via
+    /// `Action::SetBufferRms` once the worker finishes.
+    ComputeBufferRms(BufferId),
+    /// Integrate a freshly computed RMS value. Pushed by the compute-rms worker via `actions_tx`.
+    /// Silently dropped if the buffer no longer exists (e.g., file closed mid-flight).
+    SetBufferRms {
+        buffer_id: BufferId,
+        rms_db: f32,
+    },
 }
 
 impl Action {
@@ -174,6 +185,16 @@ impl Action {
             }
             Action::SetSelection(selection_info) => {
                 model.tracks.selection_info = selection_info;
+            }
+            Action::ComputeBufferRms(buffer_id) => {
+                model
+                    .start_compute_rms_job(buffer_id)
+                    .context("Action::ComputeBufferRms failed")?;
+            }
+            Action::SetBufferRms { buffer_id, rms_db } => {
+                if model.audio.buffers.contains_key(buffer_id) {
+                    model.audio.rms_db.insert(buffer_id, rms_db);
+                }
             }
         }
 

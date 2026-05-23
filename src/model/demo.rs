@@ -56,10 +56,22 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
         ch4.data.push(s4);
     }
 
-    let ch1_id = model.audio.buffers.insert(BufferE::F32(ch1));
-    let ch2_id = model.audio.buffers.insert(BufferE::F32(ch2));
-    let ch3_id = model.audio.buffers.insert(BufferE::F32(ch3));
-    let ch4_id = model.audio.buffers.insert(BufferE::F32(ch4));
+    let ch1_id = model
+        .audio
+        .buffers
+        .insert(std::sync::Arc::new(BufferE::F32(ch1)));
+    let ch2_id = model
+        .audio
+        .buffers
+        .insert(std::sync::Arc::new(BufferE::F32(ch2)));
+    let ch3_id = model
+        .audio
+        .buffers
+        .insert(std::sync::Arc::new(BufferE::F32(ch3)));
+    let ch4_id = model
+        .audio
+        .buffers
+        .insert(std::sync::Arc::new(BufferE::F32(ch4)));
 
     for buffer_id in [ch1_id, ch2_id, ch3_id, ch4_id] {
         let buffer = model
@@ -67,7 +79,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
             .buffers
             .get(buffer_id)
             .ok_or_else(|| anyhow::anyhow!("Buffer {:?} not found", buffer_id))?;
-        let thumbnail = ThumbnailE::from_buffer_e(buffer, None);
+        let thumbnail = ThumbnailE::from_buffer_e(buffer.as_ref(), None);
         model.audio.thumbnails.insert(buffer_id, thumbnail);
     }
 

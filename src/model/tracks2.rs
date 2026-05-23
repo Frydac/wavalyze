@@ -397,7 +397,7 @@ mod tests {
     ) -> audio::BufferId {
         let buffer =
             audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, nr_samples));
-        audio.buffers.insert(buffer)
+        audio.buffers.insert(std::sync::Arc::new(buffer))
     }
 
     fn track_with_value_range(

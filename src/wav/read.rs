@@ -477,7 +477,7 @@ impl LoadedFile {
                         ch_ix,
                         Channel {
                             ch_ix,
-                            buffer_id: buffers.insert(buffer),
+                            buffer_id: buffers.insert(std::sync::Arc::new(buffer)),
                             channel_id: None,
                         },
                     )

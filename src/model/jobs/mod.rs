@@ -17,8 +17,10 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc::{Receiver, Sender};
 
+pub mod compute_rms;
 pub mod demo;
 pub mod load_wav;
+pub use compute_rms::spawn_compute_rms_job;
 pub use demo::{DemoTimedConfig, spawn_demo_timed_job};
 pub use load_wav::spawn_load_wav_job;
 #[cfg(not(target_arch = "wasm32"))]
@@ -36,6 +38,7 @@ const RECENT_FINISHED_CAP: usize = 12;
 pub enum JobKind {
     DemoTimed,
     LoadWav,
+    ComputeRms,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

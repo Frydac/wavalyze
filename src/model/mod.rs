@@ -229,7 +229,7 @@ impl Model {
             let thumbnail = thumbnails
                 .remove(&ch_ix)
                 .unwrap_or_else(|| ThumbnailE::from_buffer_e(&buffer, None));
-            let buffer_id = self.audio.buffers.insert(buffer);
+            let buffer_id = self.audio.buffers.insert(std::sync::Arc::new(buffer));
             self.audio.thumbnails.insert(buffer_id, thumbnail);
             channels.insert(
                 ch_ix,
@@ -316,6 +316,21 @@ impl Model {
         );
         job_id
     }
+
+    pub fn start_compute_rms_job(&mut self, buffer_id: audio::BufferId) -> Result<jobs::JobId> {
+        let buffer = self.audio.buffer_arc(buffer_id)?;
+        let job_id = self
+            .job_mgr
+            .start_job(jobs::JobKind::ComputeRms, format!("RMS {buffer_id:?}"));
+        jobs::spawn_compute_rms_job(
+            job_id,
+            buffer_id,
+            buffer,
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
+        Ok(job_id)
+    }
 }
 
 impl Model {
@@ -341,9 +356,12 @@ mod tests {
     };
 
     fn add_buffer(model: &mut Model) -> audio::BufferId {
-        model.audio.buffers.insert(audio::buffer::BufferE::F32(
-            audio::buffer::Buffer::with_size(48_000, 32, 16),
-        ))
+        model
+            .audio
+            .buffers
+            .insert(std::sync::Arc::new(audio::buffer::BufferE::F32(
+                audio::buffer::Buffer::with_size(48_000, 32, 16),
+            )))
     }
 
     fn make_file(buffers: &[audio::BufferId]) -> file2::File {

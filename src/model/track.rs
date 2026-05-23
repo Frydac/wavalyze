@@ -187,7 +187,7 @@ mod tests {
             .map(|i| i as f32 / nr_samples as f32)
             .collect();
         let buffere = BufferE::F32(buffer);
-        let buffer_id = audio.buffers.insert(buffere.clone());
+        let buffer_id = audio.buffers.insert(std::sync::Arc::new(buffere.clone()));
         audio.thumbnails.insert(
             buffer_id,
             audio::thumbnail::ThumbnailE::from_buffer_e(&buffere, None),
