@@ -65,13 +65,6 @@ impl View {
             ctx.request_repaint();
         }
 
-        if self.model.load_mgr.pending() > 0 {
-            ctx.request_repaint();
-        }
-        if self.model.drain_load_results() {
-            ctx.request_repaint();
-        }
-
         // Clear hover by default; hover interactions in this frame can override it.
         // TODO: move to ruler + tracks
         self.model
@@ -108,7 +101,7 @@ impl View {
             tracing::error!("{:#?}", e);
             tracing::error!("{}", e.backtrace());
         }
-        if self.model.job_mgr.pending() > 0 || self.model.load_mgr.pending() > 0 {
+        if self.model.job_mgr.pending() > 0 {
             ctx.request_repaint();
         }
     }
@@ -354,84 +347,29 @@ impl View {
     /// The data layer (`JobProgress`) is generic — if/when this UX is replaced (e.g., with a
     /// status-bar indicator), this whole function can be deleted without touching `jobs/`.
     fn ui_loading_modal(&mut self, ctx: &egui::Context) {
-        if let Some(job) = self
+        let Some(job) = self
             .model
             .job_mgr
             .jobs()
             .find(|job| job.kind == model::jobs::JobKind::LoadWav)
-        {
-            let p = &job.progress;
-            let stage_value = if p.stage_total > 0 {
-                (p.stage_current as f32 / p.stage_total as f32).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let overall_value = p.overall_fraction.clamp(0.0, 1.0);
-            egui::Window::new("Loading")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.label(format!("Loading {}…", job.label));
-                    ui.label(format!("Stage: {}", p.stage_name));
-                    ui.add(egui::ProgressBar::new(stage_value).show_percentage());
-                    ui.add(egui::ProgressBar::new(overall_value).text("overall"));
-                });
+        else {
             return;
-        }
-
-        if self.model.load_mgr.pending() == 0 {
-            return;
-        }
-
-        let (path_label, stage_label, progress_value, overall_value) =
-            match self.model.load_mgr.any_progress_entry() {
-                Some(entry) => {
-                    let (stage, current, total) = entry.handle.snapshot();
-                    let value = if total > 0 {
-                        (current as f32 / total as f32).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    let overall_value = match stage {
-                        crate::wav::read::LoadStage::Start => 0.0,
-                        crate::wav::read::LoadStage::ReadingSamples => 0.0 + value * 0.55,
-                        crate::wav::read::LoadStage::Deinterleaving => 0.55 + value * 0.15,
-                        crate::wav::read::LoadStage::Converting => 0.70 + value * 0.05,
-                        crate::wav::read::LoadStage::Thumbnail => 0.75 + value * 0.20,
-                        crate::wav::read::LoadStage::Finalizing => 0.95 + value * 0.05,
-                        crate::wav::read::LoadStage::Done => 1.0,
-                    };
-                    (
-                        entry
-                            .path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("file"),
-                        match stage {
-                            crate::wav::read::LoadStage::Start => "starting",
-                            crate::wav::read::LoadStage::ReadingSamples => "reading samples",
-                            crate::wav::read::LoadStage::Deinterleaving => "deinterleaving",
-                            crate::wav::read::LoadStage::Converting => "converting",
-                            crate::wav::read::LoadStage::Thumbnail => "thumbnails",
-                            crate::wav::read::LoadStage::Finalizing => "finalizing",
-                            crate::wav::read::LoadStage::Done => "done",
-                        },
-                        value,
-                        overall_value.clamp(0.0, 1.0),
-                    )
-                }
-                None => ("file", "loading", 0.0, 0.0),
-            };
-
+        };
+        let p = &job.progress;
+        let stage_value = if p.stage_total > 0 {
+            (p.stage_current as f32 / p.stage_total as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let overall_value = p.overall_fraction.clamp(0.0, 1.0);
         egui::Window::new("Loading")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.label(format!("Loading {path_label}…"));
-                ui.label(format!("Stage: {stage_label}"));
-                ui.add(egui::ProgressBar::new(progress_value).show_percentage());
+                ui.label(format!("Loading {}…", job.label));
+                ui.label(format!("Stage: {}", p.stage_name));
+                ui.add(egui::ProgressBar::new(stage_value).show_percentage());
                 ui.add(egui::ProgressBar::new(overall_value).text("overall"));
             });
     }

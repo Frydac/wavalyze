@@ -45,29 +45,54 @@ pub fn spawn_load_wav_job(
 ) {
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
-        match wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink)) {
-            Ok(loaded) => {
-                let summary = format!(
-                    "Loaded {} channels from {}",
-                    loaded.channels.len(),
-                    loaded
-                        .path
-                        .as_ref()
-                        .and_then(|path| path.file_name())
-                        .and_then(|name| name.to_str())
-                        .unwrap_or("file")
-                );
-                let _ = actions_tx.send(Action::IntegrateLoadedFile(loaded));
-                let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent { job_id, summary }));
-            }
-            Err(error) => {
-                let _ = events_tx.send(JobEvent::Failed(JobFailureEvent {
-                    job_id,
-                    error: format!("Failed to load wav bytes: {error:#}"),
-                }));
-            }
-        }
+        let result = wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink));
+        finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
     });
+}
+
+/// Load a WAV from a filesystem path on a worker thread. Native-only — wasm has no disk paths.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn spawn_load_wav_path_job(
+    job_id: JobId,
+    config: wav::ReadConfig,
+    events_tx: Sender<JobEvent>,
+    actions_tx: Sender<Action>,
+) {
+    spawn_worker(move || {
+        let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
+        let result = wav::read::read_path_to_loaded_file_with_sink(&config, job_id, Some(&sink));
+        finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
+    });
+}
+
+fn finish_load_wav_job(
+    job_id: JobId,
+    result: anyhow::Result<wav::read::LoadedFile>,
+    events_tx: &Sender<JobEvent>,
+    actions_tx: &Sender<Action>,
+) {
+    match result {
+        Ok(loaded) => {
+            let summary = format!(
+                "Loaded {} channels from {}",
+                loaded.channels.len(),
+                loaded
+                    .path
+                    .as_ref()
+                    .and_then(|path| path.file_name())
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("file")
+            );
+            let _ = actions_tx.send(Action::IntegrateLoadedFile(loaded));
+            let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent { job_id, summary }));
+        }
+        Err(error) => {
+            let _ = events_tx.send(JobEvent::Failed(JobFailureEvent {
+                job_id,
+                error: format!("Failed to load wav: {error:#}"),
+            }));
+        }
+    }
 }
 
 // The sink is constructed inside `spawn_load_wav_job`'s worker closure, used only on that worker

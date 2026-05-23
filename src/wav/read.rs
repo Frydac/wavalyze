@@ -10,12 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
-#[cfg(target_arch = "wasm32")]
-use std::{cell::Cell, rc::Rc};
 use thousands::Separable;
 
 pub type ChIx = usize; // Channel index
@@ -76,15 +70,6 @@ impl PartialEq for LoadedFile {
 
 pub type LoadId = u64;
 
-/// Message from loader to UI thread with the decoded file or an error.
-pub enum LoadResult {
-    Ok(LoadedFile),
-    Err {
-        load_id: LoadId,
-        error: anyhow::Error,
-    },
-}
-
 /// Stages used by the progress UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LoadStage {
@@ -97,43 +82,9 @@ pub enum LoadStage {
     Done,
 }
 
-/// Minimal progress tracking for loaders; atomics on native, Cells on wasm.
-#[derive(Debug)]
-pub struct LoadProgressAtomic {
-    #[cfg(target_arch = "wasm32")]
-    stage: Cell<u8>,
-    #[cfg(not(target_arch = "wasm32"))]
-    stage: AtomicU8,
-    #[cfg(target_arch = "wasm32")]
-    current: Cell<u64>,
-    #[cfg(not(target_arch = "wasm32"))]
-    current: AtomicU64,
-    #[cfg(target_arch = "wasm32")]
-    total: Cell<u64>,
-    #[cfg(not(target_arch = "wasm32"))]
-    total: AtomicU64,
-}
-
-#[cfg(target_arch = "wasm32")]
-pub type LoadProgressHandle = Rc<LoadProgressAtomic>;
-#[cfg(not(target_arch = "wasm32"))]
-pub type LoadProgressHandle = Arc<LoadProgressAtomic>;
-
 pub trait LoadProgressSink {
     fn set_stage(&self, stage: LoadStage, total: u64);
     fn set_current(&self, current: u64);
-}
-
-/// Wasm doesn't support threads/atomics, so we use Rc/Cell there.
-pub fn new_load_progress_handle() -> LoadProgressHandle {
-    #[cfg(target_arch = "wasm32")]
-    {
-        Rc::new(LoadProgressAtomic::new())
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        Arc::new(LoadProgressAtomic::new())
-    }
 }
 
 impl ReadConfig {
@@ -210,13 +161,13 @@ pub fn read_to_file(config: &ReadConfig, buffers: &mut Buffers) -> Result<File> 
 }
 
 pub fn read_to_loaded_file(config: &ReadConfig) -> Result<LoadedFile> {
-    read_to_loaded_file_with_progress(config, 0, None)
+    read_path_to_loaded_file_with_sink(config, 0, None)
 }
 
-pub fn read_to_loaded_file_with_progress(
+pub fn read_path_to_loaded_file_with_sink(
     config: &ReadConfig,
     load_id: LoadId,
-    progress: Option<&LoadProgressAtomic>,
+    progress: Option<&dyn LoadProgressSink>,
 ) -> Result<LoadedFile> {
     let Some(filepath) = config.filepath.to_str() else {
         return Err(anyhow::anyhow!("Invalid filepath"));
@@ -228,21 +179,9 @@ pub fn read_to_loaded_file_with_progress(
         reader,
         &options,
         load_id,
-        progress.map(|progress| progress as &dyn LoadProgressSink),
+        progress,
         filepath,
         Some(PathBuf::from(&config.filepath)),
-    )
-}
-
-pub fn read_bytes_to_loaded_file_with_progress(
-    config: &ReadConfigBytes,
-    load_id: LoadId,
-    progress: Option<&LoadProgressAtomic>,
-) -> Result<LoadedFile> {
-    read_bytes_to_loaded_file_with_sink(
-        config,
-        load_id,
-        progress.map(|progress| progress as &dyn LoadProgressSink),
     )
 }
 
@@ -549,83 +488,6 @@ impl LoadedFile {
     }
 }
 
-impl LoadProgressAtomic {
-    pub fn new() -> Self {
-        Self {
-            #[cfg(target_arch = "wasm32")]
-            stage: Cell::new(LoadStage::Start as u8),
-            #[cfg(not(target_arch = "wasm32"))]
-            stage: AtomicU8::new(LoadStage::Start as u8),
-            #[cfg(target_arch = "wasm32")]
-            current: Cell::new(0),
-            #[cfg(not(target_arch = "wasm32"))]
-            current: AtomicU64::new(0),
-            #[cfg(target_arch = "wasm32")]
-            total: Cell::new(0),
-            #[cfg(not(target_arch = "wasm32"))]
-            total: AtomicU64::new(0),
-        }
-    }
-
-    pub fn set_stage(&self, stage: LoadStage, total: u64) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.stage.set(stage as u8);
-            self.total.set(total);
-            self.current.set(0);
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.stage.store(stage as u8, Ordering::Release);
-            self.total.store(total, Ordering::Release);
-            self.current.store(0, Ordering::Release);
-        }
-    }
-
-    pub fn set_current(&self, current: u64) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.current.set(current);
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.current.store(current, Ordering::Release);
-        }
-    }
-
-    pub fn snapshot(&self) -> (LoadStage, u64, u64) {
-        #[cfg(target_arch = "wasm32")]
-        let stage = LoadStage::from_u8(self.stage.get());
-        #[cfg(not(target_arch = "wasm32"))]
-        let stage = LoadStage::from_u8(self.stage.load(Ordering::Acquire));
-        #[cfg(target_arch = "wasm32")]
-        let current = self.current.get();
-        #[cfg(not(target_arch = "wasm32"))]
-        let current = self.current.load(Ordering::Acquire);
-        #[cfg(target_arch = "wasm32")]
-        let total = self.total.get();
-        #[cfg(not(target_arch = "wasm32"))]
-        let total = self.total.load(Ordering::Acquire);
-        (stage, current, total)
-    }
-}
-
-impl LoadProgressSink for LoadProgressAtomic {
-    fn set_stage(&self, stage: LoadStage, total: u64) {
-        Self::set_stage(self, stage, total);
-    }
-
-    fn set_current(&self, current: u64) {
-        Self::set_current(self, current);
-    }
-}
-
-impl Default for LoadProgressAtomic {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl LoadStage {
     pub fn label(self) -> &'static str {
         match self {
@@ -653,18 +515,6 @@ impl LoadStage {
             LoadStage::Thumbnail => 0.75 + value * 0.20,
             LoadStage::Finalizing => 0.95 + value * 0.05,
             LoadStage::Done => 1.0,
-        }
-    }
-
-    pub fn from_u8(value: u8) -> Self {
-        match value {
-            1 => LoadStage::ReadingSamples,
-            2 => LoadStage::Deinterleaving,
-            3 => LoadStage::Converting,
-            4 => LoadStage::Thumbnail,
-            5 => LoadStage::Finalizing,
-            6 => LoadStage::Done,
-            _ => LoadStage::Start,
         }
     }
 }

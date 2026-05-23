@@ -21,6 +21,8 @@ pub mod demo;
 pub mod load_wav;
 pub use demo::{DemoTimedConfig, spawn_demo_timed_job};
 pub use load_wav::spawn_load_wav_job;
+#[cfg(not(target_arch = "wasm32"))]
+pub use load_wav::spawn_load_wav_path_job;
 
 pub type JobId = u64;
 const RECENT_FINISHED_CAP: usize = 12;

@@ -47,7 +47,7 @@ fn handle_cli_arguments(model: &mut model::Model, args: &Args) {
         for file_read_config in files {
             model
                 .actions
-                .push(Action::OpenFile(file_read_config.clone()));
+                .push(Action::OpenFilePath(file_read_config.clone()));
         }
     };
     match args.command {

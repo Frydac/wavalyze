@@ -11,7 +11,9 @@ pub enum Action {
     RemoveAllTracks,
     RemoveTrack(TrackId),
 
-    OpenFile(wav::ReadConfig),
+    /// Load a WAV from a filesystem path (native CLI startup, future native file-path flows).
+    OpenFilePath(wav::ReadConfig),
+    /// Load a WAV from in-memory bytes (file picker, drag-drop, wasm).
     OpenFileBytes(wav::ReadConfigBytes),
     StartDemoJob(jobs::DemoTimedConfig),
     LoadDemo,
@@ -81,38 +83,13 @@ impl Action {
             Action::RemoveAllTracks => {
                 model.tracks.remove_all_tracks();
             }
-            Action::OpenFile(read_config) => {
-                // Path-based startup loading still uses the legacy loader path.
-                let progress = crate::wav::read::new_load_progress_handle();
-                let load_id = model
-                    .load_mgr
-                    .start_load(read_config.filepath.clone(), progress.clone());
-                let tx = model.load_mgr.sender();
+            Action::OpenFilePath(read_config) => {
                 #[cfg(not(target_arch = "wasm32"))]
-                std::thread::spawn(move || {
-                    let result = crate::wav::read::read_to_loaded_file_with_progress(
-                        &read_config,
-                        load_id,
-                        Some(progress.as_ref()),
-                    )
-                    .context("Action::OpenFile failed");
-                    let _ = tx.send(match result {
-                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
-                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
-                    });
-                });
+                model.start_load_wav_path_job(read_config);
                 #[cfg(target_arch = "wasm32")]
                 {
-                    let result = crate::wav::read::read_to_loaded_file_with_progress(
-                        &read_config,
-                        load_id,
-                        Some(progress.as_ref()),
-                    )
-                    .context("Action::OpenFile failed");
-                    let _ = tx.send(match result {
-                        Ok(loaded) => crate::wav::read::LoadResult::Ok(loaded),
-                        Err(error) => crate::wav::read::LoadResult::Err { load_id, error },
-                    });
+                    let _ = read_config;
+                    tracing::warn!("Action::OpenFilePath ignored on wasm");
                 }
             }
             Action::OpenFileBytes(read_config) => {
@@ -130,7 +107,7 @@ impl Action {
             }
             Action::IntegrateLoadedFile(loaded) => {
                 model
-                    .add_loaded_file(loaded, None)
+                    .add_loaded_file(loaded)
                     .context("Action::IntegrateLoadedFile failed")?;
                 model.actions.push(Action::ZoomToFull);
                 model.actions.push(Action::FillScreenHeight);
