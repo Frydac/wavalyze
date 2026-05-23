@@ -350,32 +350,30 @@ impl View {
         Ok(())
     }
 
-    /// Show a modal with a progress bar when loading files.
+    /// Modal-as-policy: view-layer decision to surface active LoadWav jobs as a foreground modal.
+    /// The data layer (`JobProgress`) is generic — if/when this UX is replaced (e.g., with a
+    /// status-bar indicator), this whole function can be deleted without touching `jobs/`.
     fn ui_loading_modal(&mut self, ctx: &egui::Context) {
         if let Some(job) = self
             .model
             .job_mgr
             .jobs()
-            .into_iter()
             .find(|job| job.kind == model::jobs::JobKind::LoadWav)
-            && let Some(progress) = job.load_progress
         {
-            let stage_value = if progress.total > 0 {
-                (progress.current as f32 / progress.total as f32).clamp(0.0, 1.0)
+            let p = &job.progress;
+            let stage_value = if p.stage_total > 0 {
+                (p.stage_current as f32 / p.stage_total as f32).clamp(0.0, 1.0)
             } else {
                 0.0
             };
-            let overall_value = progress
-                .stage
-                .overall_fraction(progress.current, progress.total)
-                .clamp(0.0, 1.0);
+            let overall_value = p.overall_fraction.clamp(0.0, 1.0);
             egui::Window::new("Loading")
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.label(format!("Loading {}…", job.label));
-                    ui.label(format!("Stage: {}", progress.stage.label()));
+                    ui.label(format!("Stage: {}", p.stage_name));
                     ui.add(egui::ProgressBar::new(stage_value).show_percentage());
                     ui.add(egui::ProgressBar::new(overall_value).text("overall"));
                 });

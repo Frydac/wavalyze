@@ -17,12 +17,7 @@ pub fn ui_panel(ui: &mut egui::Ui, model: &mut model::Model) {
     ui.label("Phase 1 keeps this explicit: a fake job proves the shared progress/result flow.");
     ui.add_space(4.0);
 
-    let active_jobs = model
-        .job_mgr
-        .jobs()
-        .into_iter()
-        .cloned()
-        .collect::<Vec<_>>();
+    let active_jobs = model.job_mgr.jobs().cloned().collect::<Vec<_>>();
     if active_jobs.is_empty() {
         ui.label("No active jobs.");
     } else {
@@ -31,15 +26,11 @@ pub fn ui_panel(ui: &mut egui::Ui, model: &mut model::Model) {
                 ui.label(RichText::new(&job.label).strong());
                 ui.label(format!("kind: {:?}", job.kind));
                 ui.label(format!("status: {:?}", job.status));
-                ui.label(format!("stage: {}", job.stage_label));
+                ui.label(format!("stage: {}", job.progress.stage_name));
                 if let Some(message) = &job.message {
                     ui.label(message);
                 }
-                let progress = if job.total > 0 {
-                    (job.current as f32 / job.total as f32).clamp(0.0, 1.0)
-                } else {
-                    0.0
-                };
+                let progress = job.progress.overall_fraction.clamp(0.0, 1.0);
                 ui.add(
                     egui::ProgressBar::new(progress)
                         .show_percentage()
@@ -55,7 +46,6 @@ pub fn ui_panel(ui: &mut egui::Ui, model: &mut model::Model) {
     let finished_jobs = model
         .job_mgr
         .recent_finished()
-        .into_iter()
         .take(5)
         .cloned()
         .collect::<Vec<_>>();
