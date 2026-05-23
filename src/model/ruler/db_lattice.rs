@@ -1,6 +1,8 @@
 use crate::{
     audio::{db, sample},
-    model::ruler::{TickType, ValueDisplayScale, sample_value_to_screen_y},
+    model::ruler::{
+        TickType, ValueDisplayScale, sample_value_to_screen_y, screen_y_to_sample_value,
+    },
     rect,
 };
 
@@ -24,6 +26,10 @@ pub struct DbTick {
 pub struct DbLattice {
     pub ticks: Vec<DbTick>,
     pub label_step_db: f64,
+    /// Cadence of `TickType::Mid` ticks, when the ladder entry warrants one.
+    pub mid_step_db: Option<f64>,
+    /// Cadence of `TickType::Small` ticks.
+    pub minor_step_db: f64,
 }
 
 const FINE_STEP_DB: f64 = 1.0;
@@ -41,17 +47,26 @@ impl DbLattice {
     ) -> anyhow::Result<()> {
         self.ticks.clear();
         self.label_step_db = LADDER_DB[0];
+        self.mid_step_db = None;
+        self.minor_step_db = LADDER_DB[0];
 
         if screen_rect.height() <= 0.0 || val_range.is_empty() {
             anyhow::bail!("value range or screen rect invalid, cannot draw dB lattice");
         }
 
-        // Cap the deepest dB we'll consider at the per-pixel amplitude resolution. Without
-        // this, near the zero crossing the positive- and negative-side ticks for the same dB
-        // pile up sub-pixel and force `pick_step` to demote to the coarsest ladder entry.
-        let amp_per_pixel = (val_range.len() / screen_rect.height() as f64).abs();
-        let min_visible_amp = (amp_per_pixel * 0.5).max(MIN_VISIBLE_AMP);
-        let min_visible_db = (db::gain_to_db(min_visible_amp as f32) as f64).max(MIN_DB);
+        // Cap the deepest dB we'll consider at the per-pixel amplitude resolution. A linear
+        // estimate is too pessimistic under skew (low amplitudes get blown up near zero), so
+        // we probe the actual screen mapping one pixel above the zero-amplitude row and use
+        // *that* amplitude as the floor. Equivalent to the linear estimate when skew = 0.
+        let center_y = sample_value_to_screen_y(0.0, val_range, screen_rect, display_scale)
+            .unwrap_or(screen_rect.center().y)
+            .clamp(screen_rect.top(), screen_rect.bottom());
+        let probe_y = (center_y - 1.0).max(screen_rect.top());
+        let near_amp = screen_y_to_sample_value(probe_y, val_range, screen_rect, display_scale)
+            .map(|v| v.abs())
+            .unwrap_or(MIN_VISIBLE_AMP)
+            .max(MIN_VISIBLE_AMP);
+        let min_visible_db = (db::gain_to_db(near_amp as f32) as f64).max(MIN_DB);
 
         // Enumerate candidates at the finest cadence. For each dB value we test both +amp and
         // -amp because the ruler is symmetric around zero amplitude.
@@ -94,6 +109,8 @@ impl DbLattice {
         let mid_step_db = mid_step_for(label_step_db);
 
         self.label_step_db = label_step_db;
+        self.mid_step_db = mid_step_db;
+        self.minor_step_db = minor_step_db;
         for tick in &candidates {
             if !is_multiple_of_db(tick.db, minor_step_db) {
                 continue;
@@ -311,6 +328,44 @@ mod tests {
 
         assert!(!lattice.ticks.is_empty());
         assert!(lattice.ticks.iter().all(|t| t.sample_value > 0.0));
+    }
+
+    #[test]
+    fn skew_lets_deeper_db_ticks_through_than_linear() {
+        // At skew = 2.3 the central region is blown up, so far deeper dB values map to pixels
+        // still well clear of the zero crossing. The previous linear cap clipped at ~-60 dB
+        // for a 1000-px-tall rect; the skew-aware probe should let -60+ dB ticks through.
+        let mut linear = DbLattice::default();
+        let mut skewed = DbLattice::default();
+        let screen_rect = rect::Rect::new(0.0, 0.0, 80.0, 1000.0);
+        linear
+            .compute_ticks(
+                full_scale(),
+                screen_rect,
+                50.0,
+                ValueDisplayScale::default(),
+            )
+            .unwrap();
+        skewed
+            .compute_ticks(
+                full_scale(),
+                screen_rect,
+                50.0,
+                ValueDisplayScale { skew_factor: 2.3 },
+            )
+            .unwrap();
+
+        let deepest_linear = linear.ticks.iter().map(|t| t.db).fold(0.0_f64, f64::min);
+        let deepest_skewed = skewed.ticks.iter().map(|t| t.db).fold(0.0_f64, f64::min);
+
+        assert!(
+            deepest_skewed < deepest_linear,
+            "skew should reach deeper dB than linear: linear={deepest_linear} skewed={deepest_skewed}"
+        );
+        assert!(
+            deepest_skewed <= -60.0,
+            "expected skewed deepest dB <= -60, got {deepest_skewed}"
+        );
     }
 
     #[test]

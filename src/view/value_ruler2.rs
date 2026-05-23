@@ -497,29 +497,30 @@ fn draw_lattice_labels(
     lattice: &ValueLattice,
     occupied: &mut Vec<Rect>,
 ) {
-    // Labels follow the lattice's chosen label cadence, which may be denser than the big-tick
-    // cadence. For example, `0.05` can be labeled while still rendering as a mid tick.
-    for tick in lattice
-        .ticks
-        .iter()
-        .filter(|tick| is_multiple_of(tick.sample_value, lattice.label_step))
-    {
-        let text = format_tick_label(tick.sample_value, lattice.label_step);
-        let (label_rect, _galleys, _color) = layout_value_label(ui, rect, tick.screen_y, &text);
-        if occupied.iter().any(|r| r.intersects(label_rect)) {
-            continue;
-        }
-        draw_value_label(ui, rect, tick.screen_y, text);
-        occupied.push(label_rect);
-    }
-}
+    // Coarse-to-fine sweep over the tick-type hierarchy. Big ticks get first refusal on screen
+    // space, then Mid, then Small fill remaining gaps. In linear mode the major cadence usually
+    // saturates and the later passes silently collide; under skew, the blown-up central region
+    // accepts them, giving more labels exactly where there's room.
+    let passes: [(TickType, f64); 3] = [
+        (TickType::Big, lattice.label_step),
+        (
+            TickType::Mid,
+            lattice.mid_step.unwrap_or(lattice.label_step),
+        ),
+        (TickType::Small, lattice.minor_step),
+    ];
 
-fn is_multiple_of(value: f64, step: f64) -> bool {
-    if step <= 0.0 {
-        return false;
+    for (kind, step) in passes {
+        for tick in lattice.ticks.iter().filter(|t| t.tick_type == kind) {
+            let text = format_tick_label(tick.sample_value, step);
+            let (label_rect, _galleys, _color) = layout_value_label(ui, rect, tick.screen_y, &text);
+            if occupied.iter().any(|r| r.intersects(label_rect)) {
+                continue;
+            }
+            draw_value_label(ui, rect, tick.screen_y, text);
+            occupied.push(label_rect);
+        }
     }
-    let quotient = value / step;
-    (quotient - quotient.round()).abs() < 1e-6
 }
 
 #[cfg(test)]

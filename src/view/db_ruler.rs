@@ -428,27 +428,29 @@ fn draw_hover_db_from_y(
 }
 
 fn draw_lattice_labels(ui: &egui::Ui, rect: Rect, lattice: &DbLattice, occupied: &mut Vec<Rect>) {
-    for tick in lattice
-        .ticks
-        .iter()
-        .filter(|tick| is_multiple_of_db(tick.db, lattice.label_step_db))
-    {
-        let text = format_db_label(tick.db, lattice.label_step_db);
-        let (label_rect, _galleys, _color) = layout_db_label(ui, rect, tick.screen_y, &text);
-        if occupied.iter().any(|r| r.intersects(label_rect)) {
-            continue;
-        }
-        draw_db_label(ui, rect, tick.screen_y, text);
-        occupied.push(label_rect);
-    }
-}
+    // Coarse-to-fine sweep: Big ticks get first refusal on screen real estate, then Mid, then
+    // Small fill remaining gaps. In linear mode the Big cadence usually saturates and the
+    // later passes silently collide; under skew, the blown-up central region accepts them.
+    let passes: [(TickType, f64); 3] = [
+        (TickType::Big, lattice.label_step_db),
+        (
+            TickType::Mid,
+            lattice.mid_step_db.unwrap_or(lattice.label_step_db),
+        ),
+        (TickType::Small, lattice.minor_step_db),
+    ];
 
-fn is_multiple_of_db(value: f64, step: f64) -> bool {
-    if step <= 0.0 {
-        return false;
+    for (kind, step) in passes {
+        for tick in lattice.ticks.iter().filter(|t| t.tick_type == kind) {
+            let text = format_db_label(tick.db, step);
+            let (label_rect, _galleys, _color) = layout_db_label(ui, rect, tick.screen_y, &text);
+            if occupied.iter().any(|r| r.intersects(label_rect)) {
+                continue;
+            }
+            draw_db_label(ui, rect, tick.screen_y, text);
+            occupied.push(label_rect);
+        }
     }
-    let quotient = value / step;
-    (quotient - quotient.round()).abs() < 1e-4
 }
 
 #[cfg(test)]
