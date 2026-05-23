@@ -135,6 +135,7 @@ pub fn ui_side(
         let info_rect = ui.min_rect();
 
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 3.0);
             let Some(track) = model.tracks.get_track_mut(track_id) else {
                 return;
             };
