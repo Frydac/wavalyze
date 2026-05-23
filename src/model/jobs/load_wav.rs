@@ -45,7 +45,11 @@ pub fn spawn_load_wav_job(
 ) {
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
-        let result = wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink));
+        let result = wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink))
+            .map(|mut loaded| {
+                build_thumbnails_in_worker(&mut loaded, &sink);
+                loaded
+            });
         finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
     });
 }
@@ -60,9 +64,28 @@ pub fn spawn_load_wav_path_job(
 ) {
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
-        let result = wav::read::read_path_to_loaded_file_with_sink(&config, job_id, Some(&sink));
+        let result = wav::read::read_path_to_loaded_file_with_sink(&config, job_id, Some(&sink))
+            .map(|mut loaded| {
+                build_thumbnails_in_worker(&mut loaded, &sink);
+                loaded
+            });
         finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
     });
+}
+
+/// Build per-channel thumbnails on the worker thread, emitting `LoadStage::Thumbnail` progress
+/// (one tick per channel completed). Moves the cost off the UI thread that integrates the loaded
+/// file via `Action::IntegrateLoadedFile`.
+fn build_thumbnails_in_worker(loaded: &mut wav::read::LoadedFile, sink: &dyn LoadProgressSink) {
+    let total = loaded.channels.len() as u64;
+    sink.set_stage(wav::read::LoadStage::Thumbnail, total);
+    let mut built = 0u64;
+    for (&ch_ix, buffer) in &loaded.channels {
+        let thumbnail = crate::audio::thumbnail::ThumbnailE::from_buffer_e(buffer, None);
+        loaded.thumbnails.insert(ch_ix, thumbnail);
+        built += 1;
+        sink.set_current(built);
+    }
 }
 
 fn finish_load_wav_job(

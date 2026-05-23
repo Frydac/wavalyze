@@ -224,8 +224,11 @@ impl Model {
 
     pub fn add_loaded_file(&mut self, loaded: wav::read::LoadedFile) -> Result<()> {
         let mut channels = std::collections::BTreeMap::new();
+        let mut thumbnails = loaded.thumbnails;
         for (ch_ix, buffer) in loaded.channels {
-            let thumbnail = ThumbnailE::from_buffer_e(&buffer, None);
+            let thumbnail = thumbnails
+                .remove(&ch_ix)
+                .unwrap_or_else(|| ThumbnailE::from_buffer_e(&buffer, None));
             let buffer_id = self.audio.buffers.insert(buffer);
             self.audio.thumbnails.insert(buffer_id, thumbnail);
             channels.insert(

@@ -1,6 +1,7 @@
 use crate::audio::buffer::{Buffer, BufferE};
 use crate::audio::manager::Buffers;
 use crate::audio::sample;
+use crate::audio::thumbnail::ThumbnailE;
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::audio::SampleType;
 use crate::wav::file2::{Channel, File};
@@ -50,6 +51,9 @@ struct ReadOptions {
 pub struct LoadedFile {
     pub load_id: LoadId,
     pub channels: BTreeMap<ChIx, BufferE>,
+    /// Per-channel thumbnails built by the loader's worker. May be empty if a caller skips the
+    /// worker path; `Model::add_loaded_file` falls back to on-thread building per missing channel.
+    pub thumbnails: BTreeMap<ChIx, ThumbnailE>,
     pub sample_type: SampleType,
     pub bit_depth: u16,
     pub sample_rate: u32,
@@ -270,6 +274,7 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     let file = LoadedFile {
         load_id,
         channels: chix_buffers,
+        thumbnails: BTreeMap::new(),
         layout: None, // TODO: first need to extend hound to 'publish' the wavextended channel mask?
         sample_rate: spec.sample_rate,
         bit_depth: spec.bits_per_sample,
