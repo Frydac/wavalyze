@@ -1,4 +1,5 @@
 pub mod config;
+pub mod db_ruler;
 pub mod file;
 mod file_loader;
 pub mod fps;

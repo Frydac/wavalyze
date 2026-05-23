@@ -65,6 +65,8 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                             .prefix(""),
                     );
                 });
+                ui.checkbox(&mut config.show_amplitude_ruler, "Show amplitude ruler");
+                ui.checkbox(&mut config.show_db_ruler, "Show dB ruler");
             });
         }
         ui.separator();

@@ -18,7 +18,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     let container_rect = ui.min_rect();
     let info_width = model
         .user_config
-        .tracks_width_info
+        .effective_tracks_width_info()
         .min(container_rect.width());
     let mut info_rect = container_rect;
     info_rect.set_width(info_width);

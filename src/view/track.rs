@@ -1,9 +1,10 @@
 use crate::{
     model::{
         Action, Model,
+        config::RULER_SLOT_WIDTH,
         track::{self, TrackId},
     },
-    view::value_ruler2,
+    view::{db_ruler, value_ruler2},
 };
 use anyhow::Result;
 
@@ -15,7 +16,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     let theme_colors = model.user_config.active_theme_colors(ui.visuals()).clone();
     let min_height = track::min_total_height(&model.user_config.track);
     let width = ui.available_width().max(0.0);
-    let width_info = model.user_config.tracks_width_info.min(width);
+    let width_info = model.user_config.effective_tracks_width_info().min(width);
     let height = model
         .tracks
         .get_track_height(track_id)
@@ -163,19 +164,32 @@ pub fn ui_side(
             }
         });
 
-        // sample value ruler
-        let ruler_width = 80.0;
+        // Compute ruler slots from right edge leftward. Amplitude sits on the right (next to the
+        // waveform) and the dB ruler, when enabled, sits just to its left. Both rulers map the
+        // same axis, so this places the shared 0-line tick on the right edge of each.
         let ruler_height = (height - track::HEADER_HEIGHT).max(0.0);
-        let ruler_min = info_rect.max - egui::vec2(ruler_width, ruler_height);
-        let ruler_size = egui::vec2(ruler_width, ruler_height);
-        let ruler_rect = egui::Rect::from_min_size(ruler_min, ruler_size);
-        {
-            let above_ruler_rect = egui::Rect::from_min_size(
-                egui::pos2(ruler_rect.left(), info_rect.top()),
-                egui::vec2(ruler_rect.width(), track::HEADER_HEIGHT),
+        let amp_rect = model.user_config.show_amplitude_ruler.then(|| {
+            let min = info_rect.max - egui::vec2(RULER_SLOT_WIDTH, ruler_height);
+            egui::Rect::from_min_size(min, egui::vec2(RULER_SLOT_WIDTH, ruler_height))
+        });
+        let db_rect = model.user_config.show_db_ruler.then(|| {
+            let right_offset = if model.user_config.show_amplitude_ruler {
+                RULER_SLOT_WIDTH * 2.0
+            } else {
+                RULER_SLOT_WIDTH
+            };
+            let min = info_rect.max - egui::vec2(right_offset, ruler_height);
+            egui::Rect::from_min_size(min, egui::vec2(RULER_SLOT_WIDTH, ruler_height))
+        });
+
+        // Reset-Y button sits above the right-most enabled ruler. If neither is enabled, skip.
+        if let Some(rightmost) = amp_rect.or(db_rect) {
+            let above_rect = egui::Rect::from_min_size(
+                egui::pos2(rightmost.left(), info_rect.top()),
+                egui::vec2(rightmost.width(), track::HEADER_HEIGHT),
             );
             let ui_builder = egui::UiBuilder::new()
-                .max_rect(above_ruler_rect)
+                .max_rect(above_rect)
                 .layout(egui::Layout::left_to_right(egui::Align::Center));
             ui.allocate_new_ui(ui_builder, |ui| {
                 if ui
@@ -190,25 +204,51 @@ pub fn ui_side(
 
         if let Some(track) = model.tracks.get_track(track_id) {
             let hover_info = model.tracks.hover_info;
-            let mut value_ruler_ctx = value_ruler2::ValueRulerContext {
-                actions: &mut model.actions,
-                hover_info: &hover_info,
-                audio: &model.audio,
-                zoom_y_factor: model.user_config.zoom_x_scroll_factor,
-                display_scale: model.user_config.value_display_scale,
-            };
-            let value_ruler_config = value_ruler2::ValueRulerConfig {
-                show_hover_tick: false,
-            };
-            value_ruler2::ui(
-                ui,
-                track,
-                track_id,
-                ruler_rect,
-                value_ruler_config,
-                model.user_config.active_theme_colors(ui.visuals()),
-                &mut value_ruler_ctx,
-            );
+            let theme_colors = model.user_config.active_theme_colors(ui.visuals());
+            let zoom_y_factor = model.user_config.zoom_x_scroll_factor;
+            let display_scale = model.user_config.value_display_scale;
+
+            if let Some(rect) = db_rect {
+                let mut ctx = db_ruler::DbRulerContext {
+                    actions: &mut model.actions,
+                    hover_info: &hover_info,
+                    audio: &model.audio,
+                    zoom_y_factor,
+                    display_scale,
+                };
+                db_ruler::ui(
+                    ui,
+                    track,
+                    track_id,
+                    rect,
+                    db_ruler::DbRulerConfig {
+                        show_hover_tick: false,
+                    },
+                    theme_colors,
+                    &mut ctx,
+                );
+            }
+
+            if let Some(rect) = amp_rect {
+                let mut ctx = value_ruler2::ValueRulerContext {
+                    actions: &mut model.actions,
+                    hover_info: &hover_info,
+                    audio: &model.audio,
+                    zoom_y_factor,
+                    display_scale,
+                };
+                value_ruler2::ui(
+                    ui,
+                    track,
+                    track_id,
+                    rect,
+                    value_ruler2::ValueRulerConfig {
+                        show_hover_tick: false,
+                    },
+                    theme_colors,
+                    &mut ctx,
+                );
+            }
         }
     });
 }

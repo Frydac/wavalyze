@@ -17,12 +17,26 @@ pub struct Config {
     pub show_hover_info: bool,
 
     pub tracks_width_info: f32,
+    /// Show the per-track amplitude ruler (right-most slot in the track side panel).
+    #[serde(default = "default_true")]
+    pub show_amplitude_ruler: bool,
+    /// Show the per-track decibel ruler. When also showing the amplitude ruler, the side panel
+    /// widens by one ruler slot.
+    #[serde(default)]
+    pub show_db_ruler: bool,
     pub value_display_scale: ValueDisplayScale,
     pub shortcuts: ShortcutConfig,
     pub selection: SelectionConfig,
     pub track: TrackConfig,
     pub colors: ColorPaletteSet,
 }
+
+fn default_true() -> bool {
+    true
+}
+
+/// Width of a single value/dB ruler column inside a track's side panel.
+pub const RULER_SLOT_WIDTH: f32 = 80.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
 pub enum StartEditMode {
@@ -114,6 +128,8 @@ impl Default for Config {
             zoom_x_scroll_factor: 4.0,
             show_hover_info: true,
             tracks_width_info: 250.0,
+            show_amplitude_ruler: true,
+            show_db_ruler: false,
             value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
@@ -138,6 +154,19 @@ impl Config {
         } else {
             &self.colors.light
         }
+    }
+
+    /// Extra horizontal pixels the side panel needs to fit the enabled rulers. The base
+    /// `tracks_width_info` already reserves space for one ruler, so each *additional* enabled
+    /// ruler past the first costs another slot.
+    pub fn ruler_stack_extra_width(&self) -> f32 {
+        let count = self.show_amplitude_ruler as u32 + self.show_db_ruler as u32;
+        RULER_SLOT_WIDTH * count.saturating_sub(1) as f32
+    }
+
+    /// Total width the per-track side panel should claim, given the enabled rulers.
+    pub fn effective_tracks_width_info(&self) -> f32 {
+        self.tracks_width_info + self.ruler_stack_extra_width()
     }
 
     /// Load config from file or use default
@@ -283,5 +312,28 @@ selection_fill = [1, 2, 3, 4]
         let config = Config::default();
 
         assert_ne!(config.colors.dark, config.colors.light);
+    }
+
+    #[test]
+    fn old_config_without_ruler_flags_defaults_amplitude_on_and_db_off() {
+        let config: Config = toml::from_str(
+            "zoom_x_scroll_factor = 2.0\nshow_hover_info = true\ntracks_width_info = 120.0\n",
+        )
+        .unwrap();
+
+        assert!(config.show_amplitude_ruler);
+        assert!(!config.show_db_ruler);
+    }
+
+    #[test]
+    fn ruler_stack_extra_width_only_adds_for_second_ruler() {
+        let mut config = Config::default();
+        assert_eq!(config.ruler_stack_extra_width(), 0.0);
+        config.show_db_ruler = true;
+        assert_eq!(config.ruler_stack_extra_width(), super::RULER_SLOT_WIDTH);
+        config.show_amplitude_ruler = false;
+        assert_eq!(config.ruler_stack_extra_width(), 0.0);
+        config.show_db_ruler = false;
+        assert_eq!(config.ruler_stack_extra_width(), 0.0);
     }
 }
