@@ -31,17 +31,38 @@ use tracing::{info, trace};
 
 use crate::wav;
 use anyhow::Result;
-// use std::collections::VecDeque;
+use std::sync::mpsc::{Receiver, Sender};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Model {
     pub user_config: Config,
     pub files2: Vec<wav::file2::File>,
     pub audio: audio::manager::AudioManager,
     pub tracks: tracks2::Tracks,
     pub actions: Vec<Action>,
+    /// Sender cloned to background workers so they can push follow-up actions back into the
+    /// model's action queue. Drained into `actions` each frame via `drain_action_messages`.
+    pub actions_tx: Sender<Action>,
+    actions_rx: Receiver<Action>,
     pub job_mgr: JobManager,
     pub load_mgr: LoadManager,
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        let (actions_tx, actions_rx) = std::sync::mpsc::channel();
+        Self {
+            user_config: Config::default(),
+            files2: Vec::new(),
+            audio: audio::manager::AudioManager::default(),
+            tracks: tracks2::Tracks::default(),
+            actions: Vec::new(),
+            actions_tx,
+            actions_rx,
+            job_mgr: JobManager::default(),
+            load_mgr: LoadManager::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -280,22 +301,18 @@ impl Model {
     }
 
     pub fn drain_job_events(&mut self) -> bool {
-        let mut had_events = self.job_mgr.drain_events();
-        for completion in self.job_mgr.drain_completed() {
-            had_events = true;
-            match completion.result {
-                jobs::JobResultData::DemoTimed(_) => {}
-                jobs::JobResultData::LoadWav(loaded) => {
-                    if let Err(err) = self.add_loaded_file(loaded.into(), None) {
-                        tracing::error!("Failed to integrate loaded file job: {err}");
-                    } else {
-                        self.actions.push(Action::ZoomToFull);
-                        self.actions.push(Action::FillScreenHeight);
-                    }
-                }
-            }
+        self.job_mgr.drain_events()
+    }
+
+    /// Drain actions queued by background workers into the synchronous action queue. Run each
+    /// frame before `process_actions` so worker side-effects land on the next dispatch pass.
+    pub fn drain_action_messages(&mut self) -> bool {
+        let mut had_messages = false;
+        while let Ok(action) = self.actions_rx.try_recv() {
+            had_messages = true;
+            self.actions.push(action);
         }
-        had_events
+        had_messages
     }
 
     pub fn start_demo_job(&mut self, config: jobs::DemoTimedConfig) -> jobs::JobId {
@@ -303,14 +320,24 @@ impl Model {
         let job_id = self
             .job_mgr
             .start_job(jobs::JobKind::DemoTimed, format!("Demo job #{label_ix}"));
-        jobs::spawn_demo_timed_job(job_id, config, self.job_mgr.sender());
+        jobs::spawn_demo_timed_job(
+            job_id,
+            config,
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
         job_id
     }
 
     pub fn start_load_wav_job(&mut self, config: wav::ReadConfigBytes) -> jobs::JobId {
         let label = config.name.clone().unwrap_or_else(|| "file".to_string());
         let job_id = self.job_mgr.start_job(jobs::JobKind::LoadWav, label);
-        jobs::spawn_load_wav_job(job_id, config, self.job_mgr.sender());
+        jobs::spawn_load_wav_job(
+            job_id,
+            config,
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
         job_id
     }
 }

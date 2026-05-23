@@ -65,6 +65,15 @@ pub struct LoadedFile {
     pub nr_samples: u64,
 }
 
+// Equality by load_id only: each LoadedFile is tagged with a unique LoadId at construction, so the
+// id uniquely identifies the instance. Deep-comparing the channel buffers would be expensive and
+// is not the semantics callers want.
+impl PartialEq for LoadedFile {
+    fn eq(&self, other: &Self) -> bool {
+        self.load_id == other.load_id
+    }
+}
+
 pub type LoadId = u64;
 
 /// Message from loader to UI thread with the decoded file or an error.

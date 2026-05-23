@@ -58,6 +58,9 @@ impl View {
         if self.model.drain_job_events() {
             ctx.request_repaint();
         }
+        if self.model.drain_action_messages() {
+            ctx.request_repaint();
+        }
         if self.model.job_mgr.pending() > 0 {
             ctx.request_repaint();
         }

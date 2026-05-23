@@ -1,5 +1,3 @@
-use tracing::trace;
-
 use crate::{
     model::{
         Action, Model,

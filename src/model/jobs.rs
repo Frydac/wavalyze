@@ -1,30 +1,24 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::path::PathBuf;
+use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc::{Receiver, Sender};
 
 use serde::{Deserialize, Serialize};
 
-use crate::audio::{SampleType, buffer::BufferE, channel::Layout};
+use crate::model::Action;
 use crate::wav::{self, read::LoadProgressSink};
 
 pub type JobId = u64;
 const JOB_PROGRESS_TOTAL: u64 = 1_000;
+const RECENT_FINISHED_CAP: usize = 12;
 
+/// UI tag for categorizing in-flight jobs. Purely descriptive — `JobManager` does not branch on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobKind {
     DemoTimed,
     LoadWav,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum JobResultData {
-    DemoTimed(DemoTimedSummary),
-    LoadWav(TransferLoadedFile),
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobStatus {
-    Queued,
     Running,
     Completed,
     Failed,
@@ -43,12 +37,6 @@ impl Default for DemoTimedConfig {
             work_units: 5_000_000,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DemoTimedSummary {
-    pub stage_count: u32,
-    pub checksum: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,10 +89,12 @@ pub struct JobProgressEvent {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Completion notification. The worker is responsible for any side effects (e.g., pushing an
+/// `Action`) before sending this; the summary is shown to the user in the "recent jobs" list.
+#[derive(Debug, Clone)]
 pub struct JobCompletionEvent {
     pub job_id: JobId,
-    pub result: JobResultData,
+    pub summary: String,
 }
 
 #[derive(Debug)]
@@ -120,7 +110,6 @@ pub struct JobManager {
     next_id: JobId,
     jobs: HashMap<JobId, JobSnapshot>,
     finished: VecDeque<FinishedJob>,
-    completed: VecDeque<JobCompletionEvent>,
 }
 
 impl JobManager {
@@ -132,7 +121,6 @@ impl JobManager {
             next_id: 1,
             jobs: HashMap::new(),
             finished: VecDeque::new(),
-            completed: VecDeque::new(),
         }
     }
 
@@ -150,8 +138,11 @@ impl JobManager {
                 job_id,
                 kind,
                 label,
-                status: JobStatus::Queued,
-                stage_label: "queued".to_string(),
+                // No queue exists — work starts immediately after start_job. Reflect that here so
+                // the UI doesn't show a stale "queued" state while the worker hasn't yet emitted a
+                // first progress tick.
+                status: JobStatus::Running,
+                stage_label: "starting".to_string(),
                 current: 0,
                 total: 0,
                 message: None,
@@ -175,14 +166,12 @@ impl JobManager {
         self.finished.iter().collect()
     }
 
-    pub fn drain_completed(&mut self) -> Vec<JobCompletionEvent> {
-        self.completed.drain(..).collect()
-    }
-
     pub fn primary_job(&self) -> Option<&JobSnapshot> {
         self.jobs().into_iter().next()
     }
 
+    /// Drain queued events from workers. Updates active snapshots and moves terminated jobs into
+    /// the recency ring. Returns true if any events were processed.
     pub fn drain_events(&mut self) -> bool {
         let mut had_events = false;
         loop {
@@ -214,21 +203,24 @@ impl JobManager {
                 Ok(JobEvent::Completed(completion)) => {
                     had_events = true;
                     let Some(job) = self.jobs.remove(&completion.job_id) else {
+                        tracing::warn!(
+                            "JobEvent::Completed for unknown job_id {}",
+                            completion.job_id
+                        );
                         continue;
                     };
-                    let summary = format_result(&job.label, &completion.result);
                     self.push_finished(FinishedJob {
                         job_id: job.job_id,
                         kind: job.kind,
                         label: job.label,
                         status: JobStatus::Completed,
-                        summary,
+                        summary: completion.summary,
                     });
-                    self.completed.push_back(completion);
                 }
                 Ok(JobEvent::Failed(failure)) => {
                     had_events = true;
                     let Some(job) = self.jobs.remove(&failure.job_id) else {
+                        tracing::warn!("JobEvent::Failed for unknown job_id {}", failure.job_id);
                         continue;
                     };
                     self.push_finished(FinishedJob {
@@ -240,10 +232,9 @@ impl JobManager {
                     });
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    tracing::error!("Job event channel disconnected");
-                    break;
-                }
+                // Disconnect is unreachable: JobManager owns `tx`, so the channel cannot close
+                // while the manager is alive. `try_recv` only returns Empty in practice.
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
             }
         }
         had_events
@@ -251,7 +242,7 @@ impl JobManager {
 
     fn push_finished(&mut self, finished: FinishedJob) {
         self.finished.push_front(finished);
-        while self.finished.len() > 12 {
+        while self.finished.len() > RECENT_FINISHED_CAP {
             self.finished.pop_back();
         }
     }
@@ -263,85 +254,65 @@ impl Default for JobManager {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TransferLoadedFile {
-    pub load_id: wav::read::LoadId,
-    pub channels: BTreeMap<wav::read::ChIx, BufferE>,
-    pub sample_type: SampleType,
-    pub bit_depth: u16,
-    pub sample_rate: u32,
-    pub layout_bits: Option<u64>,
-    pub path: Option<PathBuf>,
-    pub nr_samples: u64,
-}
+// ---------------------------------------------------------------------------
+// Spawners
+//
+// These functions know about `Action` because they push completion side-effects through the
+// model's action channel. `JobManager` itself does not — it remains a pure bookkeeper.
+// ---------------------------------------------------------------------------
 
-impl From<wav::read::LoadedFile> for TransferLoadedFile {
-    fn from(value: wav::read::LoadedFile) -> Self {
-        Self {
-            load_id: value.load_id,
-            channels: value.channels,
-            sample_type: value.sample_type,
-            bit_depth: value.bit_depth,
-            sample_rate: value.sample_rate,
-            layout_bits: value.layout.map(|layout| layout.bits()),
-            path: value.path,
-            nr_samples: value.nr_samples,
-        }
-    }
-}
-
-impl From<TransferLoadedFile> for wav::read::LoadedFile {
-    fn from(value: TransferLoadedFile) -> Self {
-        Self {
-            load_id: value.load_id,
-            channels: value.channels,
-            sample_type: value.sample_type,
-            bit_depth: value.bit_depth,
-            sample_rate: value.sample_rate,
-            layout: value.layout_bits.map(Layout::from_bits_retain),
-            path: value.path,
-            nr_samples: value.nr_samples,
-        }
-    }
-}
-
-fn format_result(label: &str, result: &JobResultData) -> String {
-    match result {
-        JobResultData::DemoTimed(summary) => {
-            format!(
-                "{} stages complete, checksum {}",
-                summary.stage_count, summary.checksum
-            )
-        }
-        JobResultData::LoadWav(loaded) => {
-            format!(
-                "Loaded {} channels from {}",
-                loaded.channels.len(),
-                loaded
-                    .path
-                    .as_ref()
-                    .and_then(|path| path.file_name())
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(label)
-            )
-        }
-    }
-}
-
-pub fn spawn_demo_timed_job(job_id: JobId, config: DemoTimedConfig, tx: Sender<JobEvent>) {
+/// Run `f` on a background worker, choosing the platform-appropriate spawn primitive.
+fn spawn_worker(f: impl FnOnce() + Send + 'static) {
     #[cfg(not(target_arch = "wasm32"))]
-    spawn_demo_timed_job_native(job_id, config, tx);
-
+    {
+        std::thread::spawn(f);
+    }
     #[cfg(target_arch = "wasm32")]
-    spawn_demo_timed_job_wasm(job_id, config, tx);
+    {
+        rayon::spawn(f);
+    }
 }
 
-pub fn spawn_load_wav_job(job_id: JobId, config: wav::ReadConfigBytes, tx: Sender<JobEvent>) {
-    #[cfg(not(target_arch = "wasm32"))]
-    spawn_load_wav_job_native(job_id, config, tx);
+pub fn spawn_demo_timed_job(
+    job_id: JobId,
+    config: DemoTimedConfig,
+    events_tx: Sender<JobEvent>,
+    _actions_tx: Sender<Action>,
+) {
+    spawn_worker(move || run_demo_timed_job(job_id, config, events_tx));
+}
 
-    #[cfg(target_arch = "wasm32")]
-    spawn_load_wav_job_wasm(job_id, config, tx);
+pub fn spawn_load_wav_job(
+    job_id: JobId,
+    config: wav::ReadConfigBytes,
+    events_tx: Sender<JobEvent>,
+    actions_tx: Sender<Action>,
+) {
+    spawn_worker(move || {
+        let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
+        match wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink)) {
+            Ok(loaded) => {
+                let summary = format!(
+                    "Loaded {} channels from {}",
+                    loaded.channels.len(),
+                    loaded
+                        .path
+                        .as_ref()
+                        .and_then(|path| path.file_name())
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("file")
+                );
+                let _ = actions_tx.send(Action::IntegrateLoadedFile(loaded));
+                let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent { job_id, summary }));
+            }
+            Err(error) => {
+                let _ = events_tx.send(JobEvent::Failed(JobFailureEvent {
+                    job_id,
+                    error: format!("Failed to load wav bytes: {error:#}"),
+                }));
+            }
+        }
+    });
 }
 
 fn demo_stage_name(stage_ix: u32, total: u32) -> String {
@@ -400,21 +371,11 @@ fn run_demo_timed_job(job_id: JobId, config: DemoTimedConfig, tx: Sender<JobEven
 
     let _ = tx.send(JobEvent::Completed(JobCompletionEvent {
         job_id,
-        result: JobResultData::DemoTimed(DemoTimedSummary {
-            stage_count: config.stage_count,
-            checksum,
-        }),
+        summary: format!(
+            "{} stages complete, checksum {}",
+            config.stage_count, checksum
+        ),
     }));
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn spawn_demo_timed_job_native(job_id: JobId, config: DemoTimedConfig, tx: Sender<JobEvent>) {
-    std::thread::spawn(move || run_demo_timed_job(job_id, config, tx));
-}
-
-#[cfg(target_arch = "wasm32")]
-fn spawn_demo_timed_job_wasm(job_id: JobId, config: DemoTimedConfig, tx: Sender<JobEvent>) {
-    rayon::spawn(move || run_demo_timed_job(job_id, config, tx));
 }
 
 struct ThreadedLoadJobProgressSink {
@@ -467,52 +428,6 @@ impl LoadProgressSink for ThreadedLoadJobProgressSink {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn spawn_load_wav_job_native(job_id: JobId, config: wav::ReadConfigBytes, tx: Sender<JobEvent>) {
-    std::thread::spawn(move || {
-        let sink = ThreadedLoadJobProgressSink::new(job_id, tx.clone());
-        match wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink))
-            .map(TransferLoadedFile::from)
-        {
-            Ok(loaded) => {
-                let _ = tx.send(JobEvent::Completed(JobCompletionEvent {
-                    job_id,
-                    result: JobResultData::LoadWav(loaded),
-                }));
-            }
-            Err(error) => {
-                let _ = tx.send(JobEvent::Failed(JobFailureEvent {
-                    job_id,
-                    error: format!("Failed to load wav bytes: {error:#}"),
-                }));
-            }
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-fn spawn_load_wav_job_wasm(job_id: JobId, config: wav::ReadConfigBytes, tx: Sender<JobEvent>) {
-    rayon::spawn(move || {
-        let sink = ThreadedLoadJobProgressSink::new(job_id, tx.clone());
-        match wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink))
-            .map(TransferLoadedFile::from)
-        {
-            Ok(loaded) => {
-                let _ = tx.send(JobEvent::Completed(JobCompletionEvent {
-                    job_id,
-                    result: JobResultData::LoadWav(loaded),
-                }));
-            }
-            Err(error) => {
-                let _ = tx.send(JobEvent::Failed(JobFailureEvent {
-                    job_id,
-                    error: format!("Failed to load wav bytes: {error:#}"),
-                }));
-            }
-        }
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -539,14 +454,14 @@ mod tests {
 
         tx.send(JobEvent::Completed(JobCompletionEvent {
             job_id,
-            result: JobResultData::DemoTimed(DemoTimedSummary {
-                stage_count: 3,
-                checksum: 42,
-            }),
+            summary: "demo done".to_string(),
         }))
         .unwrap();
         assert!(manager.drain_events());
         assert_eq!(manager.pending(), 0);
-        assert_eq!(manager.recent_finished().len(), 1);
+        let finished = manager.recent_finished();
+        assert_eq!(finished.len(), 1);
+        assert_eq!(finished[0].status, JobStatus::Completed);
+        assert_eq!(finished[0].summary, "demo done");
     }
 }

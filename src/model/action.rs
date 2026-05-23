@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub enum Action {
     RemoveAllTracks,
     RemoveTrack(TrackId),
@@ -15,6 +15,8 @@ pub enum Action {
     OpenFileBytes(wav::ReadConfigBytes),
     StartDemoJob(jobs::DemoTimedConfig),
     LoadDemo,
+    /// Integrate a fully-loaded WAV file into the model. Pushed by background load jobs on success.
+    IntegrateLoadedFile(wav::read::LoadedFile),
 
     /// Set x-zoom so the longest track is full width
     /// Set y-zoom to fill the screen, with a minimum height per track
@@ -67,17 +69,14 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn process(&self, model: &mut crate::model::Model) -> Result<()> {
-        match self {
-            Action::SetHoverInfo(_) => {}
-            _ => {
-                tracing::trace!("Action::process: {:?}", self);
-            }
+    pub fn process(self, model: &mut crate::model::Model) -> Result<()> {
+        if !matches!(self, Action::SetHoverInfo(_)) {
+            tracing::trace!("Action::process: {:?}", self);
         }
 
         match self {
             Action::RemoveTrack(track_id) => {
-                model.tracks.remove_track(*track_id);
+                model.tracks.remove_track(track_id);
             }
             Action::RemoveAllTracks => {
                 model.tracks.remove_all_tracks();
@@ -89,7 +88,6 @@ impl Action {
                     .load_mgr
                     .start_load(read_config.filepath.clone(), progress.clone());
                 let tx = model.load_mgr.sender();
-                let read_config = read_config.clone();
                 #[cfg(not(target_arch = "wasm32"))]
                 std::thread::spawn(move || {
                     let result = crate::wav::read::read_to_loaded_file_with_progress(
@@ -118,10 +116,10 @@ impl Action {
                 }
             }
             Action::OpenFileBytes(read_config) => {
-                model.start_load_wav_job(read_config.clone());
+                model.start_load_wav_job(read_config);
             }
             Action::StartDemoJob(config) => {
-                model.start_demo_job(config.clone());
+                model.start_demo_job(config);
             }
             Action::LoadDemo => {
                 model
@@ -130,10 +128,15 @@ impl Action {
                 model.actions.push(Action::ZoomToFull);
                 model.actions.push(Action::FillScreenHeight);
             }
+            Action::IntegrateLoadedFile(loaded) => {
+                model
+                    .add_loaded_file(loaded, None)
+                    .context("Action::IntegrateLoadedFile failed")?;
+                model.actions.push(Action::ZoomToFull);
+                model.actions.push(Action::FillScreenHeight);
+            }
             Action::ZoomToFull => {
                 model.tracks.zoom_to_full(&model.audio)?;
-                // model.tracks.zoom_to_full();
-                // todo!();
             }
             Action::ZoomToSelection => {
                 model.tracks.zoom_to_selection(&model.audio)?;
@@ -153,26 +156,26 @@ impl Action {
                 model.tracks.fill_screen_height(min_height)?;
             }
             Action::PanX { nr_pixels } => {
-                model.tracks.ruler.pan_x(*nr_pixels);
+                model.tracks.ruler.pan_x(nr_pixels);
             }
             Action::ZoomX {
                 nr_pixels,
                 center_x,
             } => {
-                model.tracks.ruler.zoom_x(*nr_pixels, *center_x);
+                model.tracks.ruler.zoom_x(nr_pixels, center_x);
             }
             Action::PanY {
                 track_id,
                 nr_pixels,
             } => {
                 model.tracks.pan_track_value_range(
-                    *track_id,
-                    *nr_pixels,
+                    track_id,
+                    nr_pixels,
                     model.user_config.value_display_scale,
                 )?;
             }
             Action::RecenterY { track_id } => {
-                model.tracks.recenter_track_value_range(*track_id)?;
+                model.tracks.recenter_track_value_range(track_id)?;
             }
             Action::RecenterYAll => {
                 model.tracks.recenter_all_value_ranges()?;
@@ -183,17 +186,17 @@ impl Action {
                 center_y,
             } => {
                 model.tracks.zoom_track_value_range(
-                    *track_id,
-                    *nr_pixels,
-                    *center_y,
+                    track_id,
+                    nr_pixels,
+                    center_y,
                     model.user_config.value_display_scale,
                 )?;
             }
             Action::SetHoverInfo(hover_info) => {
-                model.tracks.hover_info = *hover_info;
+                model.tracks.hover_info = hover_info;
             }
             Action::SetSelection(selection_info) => {
-                model.tracks.selection_info = *selection_info;
+                model.tracks.selection_info = selection_info;
             }
         }
 

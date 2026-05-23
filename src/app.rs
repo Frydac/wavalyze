@@ -75,10 +75,8 @@ impl App {
         user_config: model::Config,
         tracing_collector: TracingCollector,
     ) -> Self {
-        let mut model = model::Model {
-            user_config,
-            ..Default::default()
-        };
+        let mut model = model::Model::default();
+        model.user_config = user_config;
 
         handle_cli_arguments(&mut model, &args);
 
