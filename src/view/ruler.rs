@@ -1,8 +1,4 @@
-use crate::model::{
-    self, Action,
-    hover_info::HoverInfoE,
-    ruler::{self},
-};
+use crate::model::{self, Action, hover_info::HoverInfoE};
 use anyhow::Result;
 use thousands::Separable;
 
@@ -73,11 +69,14 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     )?;
     existing_tick_label_rects.extend(selection_tick_label_rects);
     //
-    ticks::ui_ix_lattice(
-        &mut ui_ruler,
-        &mut model.tracks.ruler,
-        &mut existing_tick_label_rects,
-    );
+    if let Some(ix_range) = model.tracks.ix_range() {
+        ticks::ui_ix_lattice(
+            &mut ui_ruler,
+            &mut model.tracks.ruler,
+            ix_range,
+            &mut existing_tick_label_rects,
+        );
+    }
 
     Ok(())
 }
@@ -129,7 +128,8 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
 // InfoPanel
 ////////////////////////////////////////////////////////////////////////////////
 
-pub fn ui_ruler_info_panel(ui: &mut egui::Ui, ruler: &ruler::Time) {
+pub fn ui_ruler_info_panel(ui: &mut egui::Ui, tracks: &model::tracks2::Tracks) {
+    let ruler = &tracks.ruler;
     ui.group(|ui| {
         ui.vertical(|ui| {
             ui.heading("Ruler Info");
@@ -146,12 +146,14 @@ pub fn ui_ruler_info_panel(ui: &mut egui::Ui, ruler: &ruler::Time) {
                     ),
                 );
             }
-            if let Some(time_line) = ruler.time_line.as_ref() {
-                grid.row(
-                    "samples per pixel:",
-                    format!("{:.3}", time_line.samples_per_pixel()),
-                );
-                let ix_range = time_line.get_ix_range(ruler.screen_rect().width() as f64);
+            grid.row(
+                "seconds per pixel:",
+                format!("{:.6}", tracks.time_camera.seconds_per_pixel()),
+            );
+            if let Some(spp) = tracks.samples_per_pixel() {
+                grid.row("samples per pixel:", format!("{spp:.3}"));
+            }
+            if let Some(ix_range) = tracks.ix_range() {
                 let ix_range_start = format!("{:.1}", ix_range.start).separate_with_commas();
                 let ix_range_end = format!("{:.1}", ix_range.end).separate_with_commas();
                 grid.row("ix range:", format!("[{ix_range_start}, {ix_range_end}]"));

@@ -62,14 +62,9 @@ pub fn ui_hover(
     if let Some(pos) = ui.ctx().pointer_hover_pos()
         && rect.contains(pos)
     {
-        let sample_ix = model
-            .tracks
-            .ruler
-            .screen_x_to_sample_ix(pos.x)
-            .unwrap_or(0.0);
+        let sample_ix = model.tracks.screen_x_to_sample_ix(pos.x).unwrap_or(0.0);
         let sample_pos_x = model
             .tracks
-            .ruler
             .sample_ix_to_screen_x(sample_ix.round())
             .map(|x| x.floor() as f64);
         model

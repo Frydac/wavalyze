@@ -91,17 +91,19 @@ fn ui_waveform(
     rect: egui::Rect,
     theme_colors: &ThemeColors,
 ) -> Result<()> {
-    let sample_ix_range = model
-        .tracks
-        .ruler
-        .ix_range()
-        .ok_or(anyhow::anyhow!("No time line"))?;
+    let screen_width = model.tracks.ruler.screen_rect().width() as f64;
+    anyhow::ensure!(screen_width > 0.0, "Ruler screen rect width is zero");
+    let time_range = model.tracks.time_camera.time_range(screen_width);
     let hover_info = model.tracks.hover_info;
     let display_scale = model.user_config.value_display_scale;
     let track = model
         .tracks
         .get_track_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+    let sample_ix_range = audio::sample::FracIxRange {
+        start: crate::model::time_camera::time_to_sample_ix(time_range.start, track.sample_rate),
+        end: crate::model::time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
+    };
 
     track.set_ix_range(sample_ix_range, &model.audio)?;
     track.set_screen_rect(rect.into());

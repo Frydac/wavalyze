@@ -171,10 +171,10 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
         return;
     };
 
-    let Some(current_sample_ix) = model.tracks.ruler.screen_x_to_sample_ix(current_pos.x) else {
+    let Some(current_sample_ix) = model.tracks.screen_x_to_sample_ix(current_pos.x) else {
         return;
     };
-    let Some(start_sample_ix) = model.tracks.ruler.screen_x_to_sample_ix(press_origin.x) else {
+    let Some(start_sample_ix) = model.tracks.screen_x_to_sample_ix(press_origin.x) else {
         return;
     };
 
@@ -195,7 +195,6 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
 
         let start_x = model
             .tracks
-            .ruler
             .sample_ix_to_screen_x((resize_state.anchor_sample_ix as f64) - 0.1)
             .unwrap_or(press_origin.x);
         set_selection_from_drag(

@@ -25,19 +25,6 @@ impl Single {
         })
     }
 
-    pub fn update_sample_view(
-        &mut self,
-        samples_per_pixel: f32,
-        audio: &mut AudioManager,
-        sample_rect: Option<SampleRect>,
-    ) -> Result<()> {
-        if let (Some(sample_rect), Some(screen_rect)) = (sample_rect, self.screen_rect) {
-            self.item
-                .update_sample_view(samples_per_pixel, audio, &sample_rect, &screen_rect)?;
-        }
-        Ok(())
-    }
-
     // probably better to have like Track set_screen_rect and set_sample_rect. both updating the
     // view buffer if needed, or maybe have a separate commit function for that
     // we generally first handle interactions which adjusts the sample_rect (zoom, pan)

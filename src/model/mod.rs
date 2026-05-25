@@ -4,9 +4,9 @@ pub mod demo;
 pub mod hover_info;
 pub mod jobs;
 pub mod ruler;
-pub mod sample_ix_zoom;
 pub mod selection_info;
 pub mod shortcuts;
+pub mod time_camera;
 pub mod track;
 pub mod tracks2;
 pub mod types;
@@ -14,7 +14,7 @@ pub mod view_buffer;
 
 pub use self::config::Config;
 pub use self::jobs::JobManager;
-pub use self::sample_ix_zoom::SampleIxZoom;
+pub use self::time_camera::TimeCamera;
 pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
 pub use jobs::FinishedJob;
@@ -193,9 +193,10 @@ impl Model {
         let Some(insert_ix) = self.track_insert_index_for_buffer(buffer_id) else {
             return Ok(false);
         };
-        let track_id = self
-            .tracks
-            .insert_track(buffer_id, insert_ix, &self.user_config.track)?;
+        let sample_rate = self.audio.get_buffer(buffer_id)?.sample_rate();
+        let track_id =
+            self.tracks
+                .insert_track(buffer_id, sample_rate, insert_ix, &self.user_config.track)?;
         self.tracks.set_track_height(
             track_id,
             crate::model::track::min_total_height(&self.user_config.track),

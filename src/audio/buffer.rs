@@ -20,6 +20,24 @@ pub enum BufferE {
     I16(Buffer<i16>),
 }
 
+impl BufferE {
+    pub fn sample_rate(&self) -> u32 {
+        match self {
+            BufferE::F32(b) => b.sample_rate,
+            BufferE::I32(b) => b.sample_rate,
+            BufferE::I16(b) => b.sample_rate,
+        }
+    }
+
+    pub fn nr_samples(&self) -> usize {
+        match self {
+            BufferE::F32(b) => b.nr_samples(),
+            BufferE::I32(b) => b.nr_samples(),
+            BufferE::I16(b) => b.nr_samples(),
+        }
+    }
+}
+
 /// Constructors
 impl<T: Sample> Buffer<T> {
     pub fn new(sample_rate: u32, bit_depth: u16) -> Self {

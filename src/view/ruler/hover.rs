@@ -19,12 +19,10 @@ pub(crate) fn ui_hover_interaction_and_tick(
     {
         let sample_ix = model
             .tracks
-            .ruler
             .screen_x_to_sample_ix(pos_in_rect.x)
             .unwrap_or(0.0);
         let sample_pos_x = model
             .tracks
-            .ruler
             .sample_ix_to_screen_x(sample_ix.round())
             .map(|x| x.floor() as f64);
         let hover_info = HoverInfoE::IsHovered(HoverInfo {

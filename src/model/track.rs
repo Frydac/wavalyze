@@ -11,7 +11,6 @@ pub mod single;
 
 use crate::{
     audio::manager::{AudioManager, BufferId},
-    model::{self},
     rect::Rect,
 };
 use single::Single;
@@ -31,27 +30,20 @@ pub enum TrackMetaData {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Track {
-    // pub id: Option<TrackId>,
-    /// Id of this track in storage, mabye better Optional, lets try without option for now
-    // pub track_id: TrackId,
-
     /// The pixel rectangle in absolute screen coordinates for the track
     /// Is updated by/for the view when displayed
     pub screen_rect: Option<Rect>,
-    pub sample_rect: Option<audio::SampleRect>,
 
-    // x range is pixel width starting at 0.0
-    // y range is sample_rect sample range coordinates I think
-    // NOTE: not really needed, we can just use screen_rect and 'normalize' it, they should be very similar
-    // pub view_rect: Rect,
-    // Contains all the samples as pixel positions relative to top_left (0,0), currently to be
-    // rendered by the track::View
-    // The final transformation to absolute screen coordinates is done in the view::Track
-    view_buffer: Option<model::ViewBufferE>,
+    /// Rectangal view over the buffer's samples, this should be mapped to the screen_rect
+    pub sample_rect: Option<audio::SampleRect>,
 
     /// One item for now
     // track_item: TrackItem,
     pub single: Single,
+
+    /// Sample rate of the underlying buffer. Needed to convert between the shared
+    /// time-axis camera (seconds) and this track's sample indices.
+    pub sample_rate: u32,
 
     /// Dirty flag for the inputs of the view buffer
     update_view_buffer_: bool,
@@ -59,23 +51,21 @@ pub struct Track {
 
     track_md: TrackMetaData,
 
+    // track height in gui
     pub height: f32,
+    // track visibility in gui
     pub visible: bool,
 }
 
 impl Track {
-    // pub fn new2(track_id: TrackId, buffer_id: BufferId, audio: &mut AudioManager) -> Result<Self> {
-    // TODO: probably not pass audio here, we want to initialize possibly with certain existing
-    // samples_per_pixel.
-    pub fn new2(buffer_id: BufferId, track_config: &TrackConfig) -> Result<Self> {
+    pub fn new2(buffer_id: BufferId, sample_rate: u32, track_config: &TrackConfig) -> Result<Self> {
         let single = Single::new(buffer_id)?;
 
         Ok(Self {
             screen_rect: None,
             sample_rect: None,
-            // samples_per_pixel: None,
-            view_buffer: None,
             single,
+            sample_rate,
             update_view_buffer_: false,
             sample_view_scale: ValueDisplayScale::default(),
             track_md: TrackMetaData::None,
@@ -199,7 +189,7 @@ mod tests {
     fn update_sample_view_replaces_stale_waveform_with_empty_view() {
         let mut audio = AudioManager::default();
         let buffer_id = insert_buffer(&mut audio, 32);
-        let mut track = Track::new2(buffer_id, &TrackConfig::default()).unwrap();
+        let mut track = Track::new2(buffer_id, 48_000, &TrackConfig::default()).unwrap();
         track.set_screen_rect(Rect::new(0.0, 0.0, 16.0, 40.0));
 
         track.set_ix_range((0.0..16.0).into(), &audio).unwrap();

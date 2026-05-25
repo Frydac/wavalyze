@@ -3,11 +3,11 @@ use crate::audio;
 /// Repesents a time domain view of 2 audio buffers and their difference
 #[derive(Debug, PartialEq, Clone)]
 pub struct Diff {
+    /// this buffer should be (buffer_a - buffer_b)
+    pub buffer_id_diff: audio::BufferId,
+
     pub buffer_id_a: audio::BufferId,
     pub buffer_id_b: audio::BufferId,
-
-    /// Rectangal view over the buffer's samples
-    pub sample_rect: audio::SampleRect,
 
     /// For positioning wrt the 'absolute' sample range of the track
     /// allow for separate offset for each buffer

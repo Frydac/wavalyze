@@ -248,9 +248,10 @@ pub(crate) fn ui_start_end(ui: &mut egui::Ui, ix_range: sample::FracIxRange) {
 pub(crate) fn ui_ix_lattice(
     ui: &mut egui::Ui,
     ruler: &mut model::ruler::Time,
+    ix_range: sample::FracIxRange,
     existing_rects: &mut Vec<egui::Rect>,
 ) {
-    let Some(ix_lattice) = ruler.ix_lattice() else {
+    let Some(ix_lattice) = ruler.ix_lattice_for(ix_range) else {
         return;
     };
 

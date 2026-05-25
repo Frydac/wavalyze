@@ -1,170 +1,109 @@
-use tracing_test::traced_test;
+//! Integration coverage for the time-axis camera, now owned by `Tracks::time_camera`. The
+//! previous suite drove `ruler::Time` directly; with the camera lifted out of the ruler the
+//! interesting behavior lives one level up. Sample-ix assertions assume a single
+//! `TEST_SAMPLE_RATE` track is present.
+
 use wavalyze::audio;
-use wavalyze::model::ruler::time::Time;
+use wavalyze::model::tracks2::Tracks;
 use wavalyze::rect::Rect;
 
-fn setup_time(screen_rect: Rect, samples_per_pixel: f64) -> Time {
-    let mut time = Time::default();
-    time.set_screen_rect(screen_rect);
-    time.set_samples_per_pixel(samples_per_pixel);
-    time
+const TEST_SAMPLE_RATE: u32 = 48_000;
+
+fn insert_buffer(audio: &mut audio::manager::AudioManager, nr_samples: usize) -> audio::BufferId {
+    let buffer = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(
+        TEST_SAMPLE_RATE,
+        32,
+        nr_samples,
+    ));
+    audio.buffers.insert(std::sync::Arc::new(buffer))
+}
+
+fn setup_tracks(
+    screen_rect: Rect,
+    samples_per_pixel: f64,
+    nr_samples: usize,
+) -> (Tracks, audio::manager::AudioManager) {
+    let mut audio = audio::manager::AudioManager::default();
+    let buffer_id = insert_buffer(&mut audio, nr_samples);
+    let mut tracks = Tracks::default();
+    tracks
+        .add_track_to_end(
+            buffer_id,
+            TEST_SAMPLE_RATE,
+            &wavalyze::model::config::TrackConfig::default(),
+        )
+        .unwrap();
+    tracks.ruler.set_screen_rect(screen_rect);
+    tracks
+        .time_camera
+        .set_seconds_per_pixel(samples_per_pixel / TEST_SAMPLE_RATE as f64);
+    (tracks, audio)
 }
 
 #[test]
-fn test_zoom_to_ix_range_clamped_centers_target_range() {
+fn zoom_to_time_range_clamped_centers_target_range() {
     let screen_rect = Rect::new(0.0, 0.0, 1000.0, 100.0);
-    let mut time = Time::default();
-    time.set_screen_rect(screen_rect);
+    let (mut tracks, _audio) = setup_tracks(screen_rect, 0.0, 1_000);
 
-    time.zoom_to_ix_range_clamped(audio::sample::FracIxRange {
-        start: 100.0,
-        end: 101.0,
-    });
+    let start_t = wavalyze::model::time_camera::sample_ix_to_time(100.0, TEST_SAMPLE_RATE);
+    let end_t = wavalyze::model::time_camera::sample_ix_to_time(101.0, TEST_SAMPLE_RATE);
+    tracks.zoom_to_time_range_clamped(start_t..end_t);
 
-    let ix_range = time.ix_range().unwrap();
-    assert_eq!(time.samples_per_pixel(), Some(0.002));
-    assert_eq!((ix_range.start + ix_range.end) / 2.0, 100.5);
-}
-
-fn setup_time_with_ix_range(screen_rect: Rect, sample_range: audio::sample::FracIxRange) -> Time {
-    let mut time = Time::default();
-    time.set_screen_rect(screen_rect);
-    time.zoom_to_ix_range(sample_range);
-    time
+    let ix_range = tracks.ix_range().unwrap();
+    assert_eq!(tracks.samples_per_pixel(), Some(0.002));
+    assert!(((ix_range.start + ix_range.end) / 2.0 - 100.5).abs() < 1e-9);
 }
 
 #[test]
-#[traced_test]
-fn test_sample_ix_to_screen_x_001() {
+fn sample_ix_to_screen_x_maps_through_camera_at_reference_rate() {
     let screen_rect = Rect::new(100.0, 100.0, 1100.0, 140.0);
-    let mut time = setup_time(screen_rect, 10.0);
-    assert_eq!(time.sample_ix_to_screen_x(5000.0), Some(600.0));
+    let (mut tracks, _audio) = setup_tracks(screen_rect, 10.0, 100_000);
+    assert_eq!(tracks.sample_ix_to_screen_x(5000.0), Some(600.0));
 
-    let ix_range_ref = audio::sample::FracIxRange {
-        start: 0.0,
-        end: 10000.0,
-    };
-    time.zoom_to_ix_range(ix_range_ref);
-    let ix_range = time.ix_range();
+    // Pin the camera to the same window via `zoom_to_time_range` and confirm round-trip
+    // behavior is preserved.
+    let end_t = wavalyze::model::time_camera::sample_ix_to_time(10_000.0, TEST_SAMPLE_RATE);
+    tracks.zoom_to_time_range(0.0..end_t);
 
-    assert_eq!(ix_range, Some(ix_range_ref));
-    dbg!(ix_range);
-    assert_eq!(time.sample_ix_to_screen_x(5000.0), Some(600.0));
-
-    assert_eq!(time.screen_x_to_sample_ix(600.0), Some(5000.0));
+    assert_eq!(tracks.sample_ix_to_screen_x(5000.0), Some(600.0));
+    assert_eq!(tracks.screen_x_to_sample_ix(600.0), Some(5000.0));
 }
 
 #[test]
-#[traced_test]
-fn test_sample_ix_to_screen_x_002() {
-    let screen_rect = Rect::new(0.0, 0.0, 10.0, 10.0);
-    let ix_range = audio::sample::FracIxRange {
-        start: 0.0,
-        end: 3.0,
-    };
-    let time = setup_time_with_ix_range(screen_rect, ix_range);
-    for screen_x in screen_rect.x_range_inc_floor() {
-        let sample_ix = time.screen_x_to_sample_ix(screen_x as f32).unwrap();
-        let screen_x_2 = time.sample_ix_to_screen_x(sample_ix).unwrap();
-        println!(
-            "pix_ix {:2} -> sample_ix {:6.3} -> pix_ix2 {2:}",
-            screen_x, sample_ix, screen_x_2
-        );
-    }
-
-    let ix_range = time.ix_range().unwrap();
-    dbg!(ix_range);
-    for sample_ix in ix_range.start.floor() as i32..ix_range.end.floor() as i32 {
-        let screen_x = time.sample_ix_to_screen_x(sample_ix as f64).unwrap();
-        let sample_ix_2 = time.screen_x_to_sample_ix(screen_x).unwrap();
-        println!(
-            "sample_ix {:2} -> pix_ix {:5} -> sample_ix2 {:6.3}",
-            sample_ix, screen_x, sample_ix_2
-        );
-    }
+fn screen_x_to_sample_ix_is_none_when_no_tracks_present() {
+    let mut tracks = Tracks::default();
+    tracks
+        .ruler
+        .set_screen_rect(Rect::new(100.0, 0.0, 1100.0, 100.0));
+    assert_eq!(tracks.sample_ix_to_screen_x(100.0), None);
 }
 
 #[test]
-fn test_sample_ix_to_screen_x_no_timeline() {
-    let mut time = Time::default();
-    time.set_screen_rect(Rect::new(100.0, 0.0, 1100.0, 100.0));
-    assert_eq!(time.sample_ix_to_screen_x(100.0), None);
-}
-
-#[test]
-fn test_sample_ix_to_screen_x_basic() {
+fn sample_ix_to_screen_x_basic() {
     let screen_rect = Rect::new(100.0, 0.0, 1100.0, 100.0);
-    let time = setup_time(screen_rect, 10.0);
-    // screen width = 1000px. ix_range is [0.0, 10000.0) with ix_start = 0.0
+    let (tracks, _audio) = setup_tracks(screen_rect, 10.0, 100_000);
+    // screen width = 1000px. ix_range is [0.0, 10000.0) with time_start = 0.0
     // middle sample is 5000.0
     // middle of screen is 100.0 + 1000.0 * 0.5 = 600.0
-    assert_eq!(time.sample_ix_to_screen_x(5000.0), Some(600.0));
+    assert_eq!(tracks.sample_ix_to_screen_x(5000.0), Some(600.0));
 }
 
 #[test]
-fn test_sample_ix_to_screen_x_start_edge() {
+fn sample_ix_to_screen_x_start_edge() {
     let screen_rect = Rect::new(100.0, 0.0, 1100.0, 100.0);
-    let time = setup_time(screen_rect, 10.0);
-    // screen width = 1000px. ix_range is [0.0, 10000.0)
-    // start sample is 0.0
-    // start of screen is 100.0
-    assert_eq!(time.sample_ix_to_screen_x(0.0), Some(100.0));
+    let (tracks, _audio) = setup_tracks(screen_rect, 10.0, 100_000);
+    assert_eq!(tracks.sample_ix_to_screen_x(0.0), Some(100.0));
 }
 
-// #[test]
-// fn test_sample_ix_to_screen_x_end_edge() {
-//     let screen_rect = Rect::new(100.0, 0.0, 1100.0, 100.0);
-//     let time = setup_time(screen_rect, 10.0);
-//     // screen width = 1000px. ix_range is [0.0, 10000.0)
-//     // end of range is exclusive, but floating point inaccuracies can be tricky
-//     assert_eq!(time.sample_ix_to_screen_x(10000.0 + 0.000001), Some(1100.0));
-
-//     // a value at what should be the exclusive end might be included due to floating point representation
-//     assert!(time.sample_ix_to_screen_x(10000.0).is_some());
-
-//     // a value just before the end
-//     let just_before_end = 10000.0 - 0.000001;
-//     let expected_x = 100.0 + (just_before_end / 10000.0) as f32 * 1000.0;
-//     let actual_x = time.sample_ix_to_screen_x(just_before_end).unwrap();
-//     assert!((actual_x - expected_x).abs() < 1e-5);
-//     assert!(actual_x <= 1100.0);
-// }
-
-// #[test]
-// fn test_sample_ix_to_screen_x_out_of_bounds() {
-//     let screen_rect = Rect::new(100.0, 0.0, 1100.0, 100.0);
-//     let time = setup_time(screen_rect, 10.0);
-//     // screen width = 1000px. ix_range is [0.0, 10000.0)
-//     assert_eq!(time.sample_ix_to_screen_x(-1.0), Some(99.9));
-//     assert_eq!(time.sample_ix_to_screen_x(10000.1), Some(1100.01));
-// }
-
 #[test]
-#[traced_test]
-fn test_zoom_x_001() {
-    let screen_rect = Rect::new(0.0, 0.0, 1000.0, 100.0); // A 1000px wide screen
-    let mut time = setup_time(screen_rect, 10.0); // 10 samples per pixel
-    dbg!(&time);
-    let sample_ix_range = time.ix_range().unwrap();
-    dbg!(sample_ix_range);
+fn zoom_x_changes_camera_state() {
+    let screen_rect = Rect::new(0.0, 0.0, 1000.0, 100.0);
+    let (mut tracks, _audio) = setup_tracks(screen_rect, 10.0, 100_000);
+    let initial_spp = tracks.time_camera.seconds_per_pixel();
 
-    // let initial_ix_start = time.time_line.as_ref().unwrap().ix_start;
-    // let initial_samples_per_pixel = time.time_line.as_ref().unwrap().samples_per_pixel;
+    // Zoom around the screen center — both time_start and seconds_per_pixel should move.
+    tracks.zoom_x(10.0, 500.0);
 
-    // Simulate zooming in by 100 pixels around the center of the screen
-    time.zoom_x(10.0, 0.0);
-
-    // Verify that the timeline still exists
-    assert!(time.time_line.is_some());
-    dbg!(&time);
-    let sample_ix_range = time.ix_range().unwrap();
-    dbg!(sample_ix_range);
-
-    // let new_ix_start = time.time_line.as_ref().unwrap().ix_start;
-    // let new_samples_per_pixel = time.time_line.as_ref().unwrap().samples_per_pixel;
-
-    // // The ix_start and samples_per_pixel should have changed as a result of the zoom
-    // // (even if the current implementation of zoom_x is incorrect, it should attempt to modify these values)
-    // assert_ne!(new_ix_start, initial_ix_start);
-    // assert_ne!(new_samples_per_pixel, initial_samples_per_pixel);
+    assert_ne!(tracks.time_camera.time_start, 0.0);
+    assert_ne!(tracks.time_camera.seconds_per_pixel(), initial_spp);
 }

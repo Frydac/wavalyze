@@ -137,7 +137,7 @@ impl View {
                 ui.add_space(5.0);
                 jobs::ui_panel(ui, &mut self.model);
                 ui.add_space(5.0);
-                ruler::ui_ruler_info_panel(ui, &self.model.tracks.ruler);
+                ruler::ui_ruler_info_panel(ui, &self.model.tracks);
                 ui.add_space(5.0);
                 // ruler::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
                 ruler::ui_hover_info_panel2(ui, &self.model.tracks.hover_info);

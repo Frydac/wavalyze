@@ -144,13 +144,15 @@ impl Action {
                 model.tracks.fill_screen_height(min_height)?;
             }
             Action::PanX { nr_pixels } => {
-                model.tracks.ruler.pan_x(nr_pixels);
+                model.tracks.pan_x(nr_pixels);
+                let _ = model.tracks.update_tracks_to_camera(&model.audio);
             }
             Action::ZoomX {
                 nr_pixels,
                 center_x,
             } => {
-                model.tracks.ruler.zoom_x(nr_pixels, center_x);
+                model.tracks.zoom_x(nr_pixels, center_x);
+                let _ = model.tracks.update_tracks_to_camera(&model.audio);
             }
             Action::PanY {
                 track_id,

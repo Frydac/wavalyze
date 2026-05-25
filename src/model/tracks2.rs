@@ -1,8 +1,8 @@
 use crate::{
     audio::{self, BufferId},
     model::{
-        action::SelectionEdge, config::TrackConfig, hover_info::HoverInfoE, ruler,
-        selection_info::SelectionInfoE, track,
+        PixelCoord, TimeCamera, action::SelectionEdge, config::TrackConfig, hover_info::HoverInfoE,
+        ruler, selection_info::SelectionInfoE, time_camera, track,
     },
 };
 use anyhow::Result;
@@ -16,6 +16,9 @@ use crate::{
 #[derive(Default, Debug, Clone)]
 pub struct Tracks {
     pub ruler: ruler::Time,
+    /// Shared X-axis camera (seconds → pixels). Drives both the ruler ticks and each
+    /// track's visible sample window. Pan/zoom mutate this; the ruler only reads.
+    pub time_camera: TimeCamera,
     pub tracks: SlotMap<TrackId, Track>,
     pub tracks_order: Vec<TrackId>,
     // hover
@@ -37,14 +40,21 @@ impl Tracks {
     pub fn add_track_to_end(
         &mut self,
         buffer_id: BufferId,
+        sample_rate: u32,
         track_config: &TrackConfig,
     ) -> Result<TrackId> {
-        self.insert_track(buffer_id, self.tracks_order.len(), track_config)
+        self.insert_track(
+            buffer_id,
+            sample_rate,
+            self.tracks_order.len(),
+            track_config,
+        )
     }
 
     pub fn insert_track(
         &mut self,
         buffer_id: BufferId,
+        sample_rate: u32,
         insert_ix: usize,
         track_config: &TrackConfig,
     ) -> Result<TrackId> {
@@ -53,7 +63,7 @@ impl Tracks {
             "Track for buffer {:?} already exists",
             buffer_id
         );
-        let track = Track::new2(buffer_id, track_config)?;
+        let track = Track::new2(buffer_id, sample_rate, track_config)?;
         let track_id = self.tracks.insert(track);
         let insert_ix = insert_ix.min(self.tracks_order.len());
         self.tracks_order.insert(insert_ix, track_id);
@@ -66,8 +76,8 @@ impl Tracks {
     }
 
     pub fn add_tracks_from_file(&mut self, file: &File, track_config: &TrackConfig) -> Result<()> {
-        for (ch_ix, channel) in file.channels.iter() {
-            let _ = self.add_track_to_end(channel.buffer_id, track_config)?;
+        for (_ch_ix, channel) in file.channels.iter() {
+            let _ = self.add_track_to_end(channel.buffer_id, file.sample_rate, track_config)?;
         }
         Ok(())
     }
@@ -218,68 +228,98 @@ impl Tracks {
         Ok(())
     }
 
-    /// Update the sample ranges of all tracks to match the ruler zoom level
-    /// Should be called after each change to the ruler zoom level/position
-    /// TODO: enforce this somehow?
-    pub fn update_tracks_sample_ix_ranges_to_ruler(
-        &mut self,
-        audio: &audio::manager::AudioManager,
-    ) -> Result<()> {
-        anyhow::ensure!(
-            self.ruler.screen_rect().width() > 0.0,
-            "Ruler screen rect width is zero"
-        );
+    /// Push the camera's current time window down into each track's sample_rect, converting
+    /// seconds → sample-ix per-track using each buffer's own sample_rate. Call this whenever
+    /// the camera changes (pan, zoom, zoom-to-*).
+    pub fn update_tracks_to_camera(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
+        let screen_width = self.ruler.screen_rect().width() as f64;
+        anyhow::ensure!(screen_width > 0.0, "Ruler screen rect width is zero");
+        let time_range = self.time_camera.time_range(screen_width);
 
-        // Get current global sample index range
-        let ruler_ix_range = self
-            .ruler
-            .ix_range()
-            .ok_or(anyhow::anyhow!("Ruler has no time line"))?;
-
-        // Update tracks to global sample index range
         for track in self.tracks.values_mut() {
-            track.set_ix_range(ruler_ix_range, audio)?;
+            let ix_range = audio::sample::FracIxRange {
+                start: time_camera::time_to_sample_ix(time_range.start, track.sample_rate),
+                end: time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
+            };
+            track.set_ix_range(ix_range, audio)?;
         }
 
         Ok(())
     }
 
-    fn get_sample_rect_longest_track(
+    /// Reference sample_rate for converting between sample-ix and seconds at the *whole-view*
+    /// level (ruler ticks, global selection ix). Returns the longest visible track's rate, or
+    /// any visible track's rate as a fallback.
+    /// TODO: once multi-rate display is real, the ruler should pick its display unit (seconds)
+    /// independently rather than projecting through a single reference rate.
+    pub fn reference_sample_rate(&self) -> Option<u32> {
+        let mut best: Option<(u32, u64)> = None;
+        for track in self.tracks.values() {
+            if !track.visible {
+                continue;
+            }
+            let width = track
+                .sample_rect
+                .map(|r| r.width() as u64)
+                .unwrap_or_default();
+            if best.is_none_or(|(_, w)| w < width) {
+                best = Some((track.sample_rate, width));
+            }
+        }
+        best.map(|(rate, _)| rate)
+            .or_else(|| self.tracks.values().next().map(|t| t.sample_rate))
+    }
+
+    /// Visible sample-ix range projected through [`Self::reference_sample_rate`] — for ruler
+    /// ticks and other "global" sample-ix display surfaces.
+    pub fn ix_range(&self) -> Option<audio::sample::FracIxRange> {
+        let sample_rate = self.reference_sample_rate()?;
+        let screen_width = self.ruler.screen_rect().width() as f64;
+        if screen_width <= 0.0 {
+            return None;
+        }
+        let time_range = self.time_camera.time_range(screen_width);
+        Some(audio::sample::FracIxRange {
+            start: time_camera::time_to_sample_ix(time_range.start, sample_rate),
+            end: time_camera::time_to_sample_ix(time_range.end, sample_rate),
+        })
+    }
+
+    fn get_widest_visible_track_nr_samples(
         &self,
         audio: &audio::manager::AudioManager,
-    ) -> Option<audio::SampleRect> {
-        // {
-        // let max_sample_rect = self.tracks.values().map(|track| {
-        //     let buffer_id = track.single.item.buffer_id;
-        //     let buffer = audio.get_buffer(buffer_id).ok()?;
-        //     let sample_rect = audio::SampleRect::from_buffere(buffer);
-        //     Some(sample_rect)
-        // }).max_by_key(|sample_rect| sample_rect.width() as u64)?;
-        // }
-        let mut max_sample_rect: Option<audio::SampleRect> = None;
+    ) -> Option<(u32, u64)> {
+        let mut widest: Option<(u32, u64)> = None;
         for track in self.tracks.values() {
             if !track.visible {
                 continue;
             }
             let buffer_id = track.single.item.buffer_id;
             let buffer = audio.get_buffer(buffer_id).ok()?;
-            let sample_rect = audio::SampleRect::from_buffere(buffer);
-            if max_sample_rect
-                .as_ref()
-                .is_none_or(|max_rect| max_rect.width() < sample_rect.width())
-            {
-                max_sample_rect = Some(sample_rect);
+            let nr_samples = buffer.nr_samples() as u64;
+            if widest.is_none_or(|(_, n)| n < nr_samples) {
+                widest = Some((track.sample_rate, nr_samples));
             }
         }
-        max_sample_rect
+        widest
     }
 
-    /// Zoom to the longest track
+    /// Zoom to fit the longest visible track (in *seconds*, sample-rate-aware).
     pub fn zoom_to_full(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
-        let max_sample_rect = self
-            .get_sample_rect_longest_track(audio)
-            .ok_or(anyhow::anyhow!("No tracks"))?;
-        self.zoom_to_sample_rect(max_sample_rect, audio)
+        anyhow::ensure!(
+            self.ruler.screen_rect().width() > 0.0,
+            "Ruler screen rect width is zero"
+        );
+        let (sample_rate, nr_samples) = self
+            .get_widest_visible_track_nr_samples(audio)
+            .ok_or_else(|| anyhow::anyhow!("No tracks"))?;
+        let duration_s = nr_samples as f64 / sample_rate as f64;
+        let screen_width = self.ruler.screen_rect().width() as f64;
+        self.time_camera.time_start = 0.0;
+        self.time_camera
+            .set_seconds_per_pixel(duration_s / screen_width);
+        self.update_tracks_to_camera(audio)?;
+        Ok(())
     }
 
     pub fn zoom_to_selection(&mut self, audio: &audio::manager::AudioManager) -> Result<()> {
@@ -293,12 +333,14 @@ impl Tracks {
             self.ruler.screen_rect().width() > 0.0,
             "Ruler screen rect width is zero"
         );
-        self.ruler
-            .zoom_to_ix_range_clamped(audio::sample::FracIxRange {
-                start: selection_info.ix_rng.start as f64,
-                end: selection_info.ix_rng.end as f64,
-            });
-        self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
+        let sample_rate = self
+            .reference_sample_rate()
+            .ok_or_else(|| anyhow::anyhow!("No tracks"))?;
+        self.zoom_to_time_range_clamped(std::ops::Range {
+            start: time_camera::sample_ix_to_time(selection_info.ix_rng.start as f64, sample_rate),
+            end: time_camera::sample_ix_to_time(selection_info.ix_rng.end as f64, sample_rate),
+        });
+        self.update_tracks_to_camera(audio)?;
         Ok(())
     }
 
@@ -317,19 +359,23 @@ impl Tracks {
             self.ruler.screen_rect().width() > 0.0,
             "Ruler screen rect width is zero"
         );
+        let sample_rate = self
+            .reference_sample_rate()
+            .ok_or_else(|| anyhow::anyhow!("No tracks"))?;
 
         let edge_ix = match edge {
             SelectionEdge::Left => selection_info.ix_rng.start as f64,
             SelectionEdge::Right => selection_info.ix_rng.end as f64,
         };
-        let visible_len =
-            self.ruler.screen_rect().width() as f64 * Self::SELECTION_EDGE_ZOOM_SAMPLES_PER_PIXEL;
-        let half_visible_len = visible_len / 2.0;
-        self.ruler.zoom_to_ix_range(audio::sample::FracIxRange {
-            start: edge_ix - half_visible_len,
-            end: edge_ix + half_visible_len,
-        });
-        self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
+        let edge_time = time_camera::sample_ix_to_time(edge_ix, sample_rate);
+        let screen_width = self.ruler.screen_rect().width() as f64;
+        let visible_len_samples = screen_width * Self::SELECTION_EDGE_ZOOM_SAMPLES_PER_PIXEL;
+        let visible_len_s = time_camera::sample_ix_to_time(visible_len_samples, sample_rate);
+        let half = visible_len_s / 2.0;
+        self.time_camera
+            .set_seconds_per_pixel(visible_len_s / screen_width);
+        self.time_camera.time_start = edge_time - half;
+        self.update_tracks_to_camera(audio)?;
         Ok(())
     }
 
@@ -349,35 +395,128 @@ impl Tracks {
         Ok(())
     }
 
-    fn zoom_to_sample_rect(
-        &mut self,
-        sample_rect: audio::SampleRect,
-        audio: &audio::manager::AudioManager,
-    ) -> Result<()> {
-        anyhow::ensure!(
-            self.ruler.screen_rect().width() > 0.0,
-            "Ruler screen rect width is zero"
-        );
-        let nr_samples = sample_rect.width() as f64;
-        let nr_pixels = self.ruler.screen_rect().width() as f64;
-        let samples_per_pixel = nr_samples / nr_pixels;
-        self.ruler.set_samples_per_pixel(samples_per_pixel);
-        self.ruler.time_line.as_mut().unwrap().ix_start = sample_rect.ix_rng().start;
-        self.update_tracks_sample_ix_ranges_to_ruler(audio)?;
-        Ok(())
-    }
-
+    /// `samples_per_pixel` at the reference sample rate. None until a track is present so
+    /// callers can no-op cleanly during the empty-model window after startup.
     pub fn samples_per_pixel(&self) -> Option<f64> {
-        self.ruler.samples_per_pixel()
+        let sample_rate = self.reference_sample_rate()?;
+        Some(self.time_camera.seconds_per_pixel() * sample_rate as f64)
     }
 }
 
 impl Tracks {
+    /// Global sample-ix → screen-x using the reference sample rate. None when no tracks
+    /// exist or the screen rect hasn't been claimed yet. Uses the stable bin-based mapping
+    /// from `ruler::util::sample_ix_to_screen_x` so adjacent sample-level renders match what
+    /// the ruler ticks do.
     pub fn sample_ix_to_screen_x(&self, sample_ix: f64) -> Option<f32> {
-        self.ruler.sample_ix_to_screen_x(sample_ix)
+        let ix_range = self.ix_range()?;
+        Some(crate::model::ruler::sample_ix_to_screen_x(
+            sample_ix,
+            ix_range,
+            *self.ruler.screen_rect(),
+        ))
     }
+
     pub fn screen_x_to_sample_ix(&self, screen_x: f32) -> Option<f64> {
-        self.ruler.screen_x_to_sample_ix(screen_x)
+        let ix_range = self.ix_range()?;
+        Some(crate::model::ruler::screen_x_to_sample_ix(
+            screen_x,
+            ix_range,
+            *self.ruler.screen_rect(),
+        ))
+    }
+}
+
+// X-axis camera mutation: pan / zoom. Mirror of what `ruler::Time` used to do, now anchored
+// on the `time_camera` field. Callers must follow up with `update_tracks_to_camera` so each
+// track's sample-ix window stays in sync with the camera.
+const MIN_SECONDS_PER_PIXEL_MULT: f64 = 0.002;
+
+impl Tracks {
+    pub fn pan_x(&mut self, delta_pixels: PixelCoord) {
+        let delta_s = delta_pixels as f64 * self.time_camera.seconds_per_pixel();
+        self.time_camera.time_start += delta_s;
+        // Keep the cursor-anchored sample-ix in sync after panning so the displayed value
+        // stays under the cursor.
+        let screen_x = match self.hover_info {
+            crate::model::hover_info::HoverInfoE::IsHovered(ref hi) => Some(hi.screen_pos.x),
+            crate::model::hover_info::HoverInfoE::NotHovered => None,
+        };
+        if let Some(screen_x) = screen_x
+            && let Some(sample_ix) = self.sample_ix_for_screen_x_unchecked(screen_x)
+            && let crate::model::hover_info::HoverInfoE::IsHovered(ref mut hi) = self.hover_info
+        {
+            hi.sample_ix = sample_ix;
+        }
+    }
+
+    pub fn zoom_x(&mut self, nr_pixels: f32, center_x: f32) {
+        let screen_rect = *self.ruler.screen_rect();
+        if !screen_rect.contains_x(center_x) || screen_rect.width() <= 0.0 {
+            return;
+        }
+        let Some(sample_rate) = self.reference_sample_rate() else {
+            return;
+        };
+
+        let center_x_norm = center_x - screen_rect.left();
+        let frac_min = center_x_norm / screen_rect.width();
+        let new_min_x = screen_rect.left() - frac_min * nr_pixels;
+        let new_max_x = screen_rect.right() + (1.0 - frac_min) * nr_pixels;
+
+        let new_min_t = self.time_camera.screen_x_to_time(new_min_x, screen_rect);
+        let new_max_t = self.time_camera.screen_x_to_time(new_max_x, screen_rect);
+
+        let new_seconds_per_pixel = (new_max_t - new_min_t) / screen_rect.width() as f64;
+        let min_spp = MIN_SECONDS_PER_PIXEL_MULT / sample_rate as f64;
+        if new_seconds_per_pixel > min_spp {
+            self.time_camera.time_start = new_min_t;
+            self.time_camera
+                .set_seconds_per_pixel(new_seconds_per_pixel);
+        }
+    }
+
+    pub fn zoom_to_time_range(&mut self, time_range: std::ops::Range<f64>) {
+        let screen_width = self.ruler.screen_rect().width() as f64;
+        if screen_width <= 0.0 {
+            return;
+        }
+        self.time_camera
+            .set_seconds_per_pixel((time_range.end - time_range.start) / screen_width);
+        self.time_camera.time_start = time_range.start;
+    }
+
+    pub fn zoom_to_time_range_clamped(&mut self, time_range: std::ops::Range<f64>) {
+        let screen_width = self.ruler.screen_rect().width() as f64;
+        if screen_width <= 0.0 {
+            return;
+        }
+        let Some(sample_rate) = self.reference_sample_rate() else {
+            self.zoom_to_time_range(time_range);
+            return;
+        };
+        let requested_spp = (time_range.end - time_range.start) / screen_width;
+        let min_spp = MIN_SECONDS_PER_PIXEL_MULT / sample_rate as f64;
+        let seconds_per_pixel = requested_spp.max(min_spp);
+        self.time_camera.set_seconds_per_pixel(seconds_per_pixel);
+
+        let time_start = if seconds_per_pixel > requested_spp {
+            let visible_len_s = screen_width * seconds_per_pixel;
+            (time_range.start + time_range.end) / 2.0 - visible_len_s / 2.0
+        } else {
+            time_range.start
+        };
+        self.time_camera.time_start = time_start;
+    }
+
+    /// `screen_x → sample_ix` without bounds checks. Used to refresh a stored hover sample_ix
+    /// after panning so the displayed value stays under the cursor.
+    fn sample_ix_for_screen_x_unchecked(&self, screen_x: f32) -> Option<f64> {
+        let sample_rate = self.reference_sample_rate()?;
+        let time = self
+            .time_camera
+            .screen_x_to_time(screen_x, *self.ruler.screen_rect());
+        Some(time_camera::time_to_sample_ix(time, sample_rate))
     }
 }
 
@@ -391,13 +530,31 @@ mod tests {
         rect::Rect,
     };
 
+    const TEST_SAMPLE_RATE: u32 = 48_000;
+
     fn insert_buffer(
         audio: &mut audio::manager::AudioManager,
         nr_samples: usize,
     ) -> audio::BufferId {
-        let buffer =
-            audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, nr_samples));
+        let buffer = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(
+            TEST_SAMPLE_RATE,
+            32,
+            nr_samples,
+        ));
         audio.buffers.insert(std::sync::Arc::new(buffer))
+    }
+
+    /// Most tests need at least one track so `reference_sample_rate()` resolves and
+    /// `zoom_to_*` / `samples_per_pixel()` produce results.
+    fn seed_track(
+        tracks: &mut Tracks,
+        audio: &mut audio::manager::AudioManager,
+        nr_samples: usize,
+    ) {
+        let buffer_id = insert_buffer(audio, nr_samples);
+        tracks
+            .add_track_to_end(buffer_id, TEST_SAMPLE_RATE, &TrackConfig::default())
+            .unwrap();
     }
 
     fn track_with_value_range(
@@ -406,7 +563,11 @@ mod tests {
         val_rng: audio::sample::ValRange<f64>,
     ) -> crate::model::track::TrackId {
         let track_id = tracks
-            .add_track_to_end(insert_buffer(audio, 64), &TrackConfig::default())
+            .add_track_to_end(
+                insert_buffer(audio, 64),
+                TEST_SAMPLE_RATE,
+                &TrackConfig::default(),
+            )
             .unwrap();
         let track = tracks.get_track_mut(track_id).unwrap();
         track.set_screen_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
@@ -420,6 +581,8 @@ mod tests {
     #[test]
     fn zoom_to_selection_fits_selected_range() {
         let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        seed_track(&mut tracks, &mut audio, 1_000);
         tracks
             .ruler
             .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
@@ -429,18 +592,19 @@ mod tests {
             screen_x_end: 30.0,
         });
 
-        tracks
-            .zoom_to_selection(&audio::manager::AudioManager::default())
-            .unwrap();
+        tracks.zoom_to_selection(&audio).unwrap();
 
-        assert_eq!(tracks.ruler.ix_range().unwrap().start, 100.0);
-        assert_eq!(tracks.ruler.ix_range().unwrap().end, 300.0);
-        assert_eq!(tracks.samples_per_pixel(), Some(0.2));
+        let ix_range = tracks.ix_range().unwrap();
+        assert!((ix_range.start - 100.0).abs() < 1e-9);
+        assert!((ix_range.end - 300.0).abs() < 1e-9);
+        assert!((tracks.samples_per_pixel().unwrap() - 0.2).abs() < 1e-9);
     }
 
     #[test]
     fn zoom_to_selection_clamps_to_max_zoom_and_centers_selection() {
         let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        seed_track(&mut tracks, &mut audio, 1_000);
         tracks
             .ruler
             .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
@@ -450,15 +614,13 @@ mod tests {
             screen_x_end: 11.0,
         });
 
-        tracks
-            .zoom_to_selection(&audio::manager::AudioManager::default())
-            .unwrap();
+        tracks.zoom_to_selection(&audio).unwrap();
 
-        let ix_range = tracks.ruler.ix_range().unwrap();
+        let ix_range = tracks.ix_range().unwrap();
         let selection_center = 100.5;
         let view_center = (ix_range.start + ix_range.end) / 2.0;
         assert_eq!(tracks.samples_per_pixel(), Some(0.002));
-        assert!((view_center - selection_center).abs() < f64::EPSILON);
+        assert!((view_center - selection_center).abs() < 1e-9);
     }
 
     #[test]
@@ -472,7 +634,7 @@ mod tests {
             .zoom_to_selection(&audio::manager::AudioManager::default())
             .unwrap();
 
-        assert_eq!(tracks.ruler.ix_range(), None);
+        assert_eq!(tracks.ix_range(), None);
     }
 
     #[test]
@@ -491,12 +653,14 @@ mod tests {
             .zoom_to_selection(&audio::manager::AudioManager::default())
             .unwrap();
 
-        assert_eq!(tracks.ruler.ix_range(), None);
+        assert_eq!(tracks.ix_range(), None);
     }
 
     #[test]
     fn zoom_to_selection_left_edge_centers_edge_and_uses_sample_level_zoom() {
         let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        seed_track(&mut tracks, &mut audio, 1_000);
         tracks
             .ruler
             .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
@@ -507,22 +671,21 @@ mod tests {
         });
 
         tracks
-            .zoom_to_selection_edge(
-                &audio::manager::AudioManager::default(),
-                SelectionEdge::Left,
-            )
+            .zoom_to_selection_edge(&audio, SelectionEdge::Left)
             .unwrap();
 
-        let ix_range = tracks.ruler.ix_range().unwrap();
+        let ix_range = tracks.ix_range().unwrap();
         assert_eq!(tracks.samples_per_pixel(), Some(0.1));
-        assert_eq!(ix_range.start, 50.0);
-        assert_eq!(ix_range.end, 150.0);
-        assert_eq!(tracks.sample_ix_to_screen_x(100.0), Some(500.0));
+        assert!((ix_range.start - 50.0).abs() < 1e-9);
+        assert!((ix_range.end - 150.0).abs() < 1e-9);
+        assert!((tracks.sample_ix_to_screen_x(100.0).unwrap() - 500.0).abs() < 1e-3);
     }
 
     #[test]
     fn zoom_to_selection_right_edge_centers_edge_and_uses_sample_level_zoom() {
         let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        seed_track(&mut tracks, &mut audio, 1_000);
         tracks
             .ruler
             .set_screen_rect(Rect::new(0.0, 0.0, 1000.0, 100.0));
@@ -533,17 +696,14 @@ mod tests {
         });
 
         tracks
-            .zoom_to_selection_edge(
-                &audio::manager::AudioManager::default(),
-                SelectionEdge::Right,
-            )
+            .zoom_to_selection_edge(&audio, SelectionEdge::Right)
             .unwrap();
 
-        let ix_range = tracks.ruler.ix_range().unwrap();
+        let ix_range = tracks.ix_range().unwrap();
         assert_eq!(tracks.samples_per_pixel(), Some(0.1));
-        assert_eq!(ix_range.start, 250.0);
-        assert_eq!(ix_range.end, 350.0);
-        assert_eq!(tracks.sample_ix_to_screen_x(300.0), Some(500.0));
+        assert!((ix_range.start - 250.0).abs() < 1e-9);
+        assert!((ix_range.end - 350.0).abs() < 1e-9);
+        assert!((tracks.sample_ix_to_screen_x(300.0).unwrap() - 500.0).abs() < 1e-3);
     }
 
     #[test]
@@ -560,7 +720,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(tracks.ruler.ix_range(), None);
+        assert_eq!(tracks.ix_range(), None);
     }
 
     #[test]
@@ -582,7 +742,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(tracks.ruler.ix_range(), None);
+        assert_eq!(tracks.ix_range(), None);
     }
 
     #[test]
@@ -597,9 +757,15 @@ mod tests {
         let visible_b = insert_buffer(&mut audio, 64);
         let hidden = insert_buffer(&mut audio, 64);
 
-        let visible_a = tracks.add_track_to_end(visible_a, &config).unwrap();
-        let visible_b = tracks.add_track_to_end(visible_b, &config).unwrap();
-        let hidden = tracks.add_track_to_end(hidden, &config).unwrap();
+        let visible_a = tracks
+            .add_track_to_end(visible_a, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+        let visible_b = tracks
+            .add_track_to_end(visible_b, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+        let hidden = tracks
+            .add_track_to_end(hidden, TEST_SAMPLE_RATE, &config)
+            .unwrap();
 
         tracks.set_track_height(visible_a, 10.0);
         tracks.set_track_height(visible_b, 15.0);
@@ -621,8 +787,12 @@ mod tests {
         let short = insert_buffer(&mut audio, 64);
         let long_hidden = insert_buffer(&mut audio, 640);
 
-        let short = tracks.add_track_to_end(short, &config).unwrap();
-        let long_hidden = tracks.add_track_to_end(long_hidden, &config).unwrap();
+        let short = tracks
+            .add_track_to_end(short, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+        let long_hidden = tracks
+            .add_track_to_end(long_hidden, TEST_SAMPLE_RATE, &config)
+            .unwrap();
         tracks.set_track_visibility(long_hidden, false);
         tracks
             .ruler
@@ -632,7 +802,7 @@ mod tests {
 
         let visible_track = tracks.get_track(short).unwrap();
         let hidden_track = tracks.get_track(long_hidden).unwrap();
-        assert_eq!(tracks.ruler.ix_range().unwrap().end, 64.0);
+        assert_eq!(tracks.ix_range().unwrap().end, 64.0);
         assert_eq!(visible_track.sample_rect.unwrap().ix_rng().end, 64.0);
         assert_eq!(hidden_track.sample_rect.unwrap().ix_rng().end, 64.0);
     }
