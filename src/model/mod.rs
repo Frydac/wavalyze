@@ -522,14 +522,7 @@ mod tests {
             .tracks
             .tracks_order
             .iter()
-            .map(|track_id| {
-                model
-                    .tracks
-                    .get_track(*track_id)
-                    .unwrap()
-                    .single
-                    .buffer_id
-            })
+            .map(|track_id| model.tracks.get_track(*track_id).unwrap().single.buffer_id)
             .collect();
         assert_eq!(
             ordered_buffers,

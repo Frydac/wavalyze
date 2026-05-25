@@ -55,7 +55,7 @@ pub fn ui(
         return;
     }
 
-    let Some(sample_rect) = track.sample_rect else {
+    let Some(sample_rect) = track.single.sample_rect_raw() else {
         return;
     };
 

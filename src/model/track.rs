@@ -1,5 +1,5 @@
 use crate::{
-    audio::{self, sample},
+    audio::sample,
     model::{config::TrackConfig, ruler::ValueDisplayScale},
     wav,
 };
@@ -34,9 +34,6 @@ pub struct Track {
     /// Is updated by/for the view when displayed
     pub screen_rect: Option<Rect>,
 
-    /// Rectangal view over the buffer's samples, this should be mapped to the screen_rect
-    pub sample_rect: Option<audio::SampleRect>,
-
     /// One item for now
     // track_item: TrackItem,
     pub single: Single,
@@ -63,7 +60,6 @@ impl Track {
 
         Ok(Self {
             screen_rect: None,
-            sample_rect: None,
             single,
             sample_rate,
             update_view_buffer_: false,
@@ -85,36 +81,8 @@ impl Track {
         }
     }
 
-    pub fn set_sample_rect(&mut self, sample_rect: audio::SampleRect) {
-        if self.sample_rect != Some(sample_rect) {
-            self.update_view_buffer_ = true;
-            self.sample_rect = Some(sample_rect);
-            self.single.set_sample_rect(sample_rect);
-        }
-    }
-
     pub fn trigger_update_view_buffer(&mut self) {
         self.update_view_buffer_ = true;
-    }
-
-    /// Create or update the sample rect to the given range
-    /// TODO: we could do this by only knowing the sample_type/bit_depth, iso depending on AudioManager?
-    pub fn set_ix_range(
-        &mut self,
-        ix_range: audio::sample::FracIxRange,
-        audio: &AudioManager,
-    ) -> Result<()> {
-        if let Some(sample_rect) = self.sample_rect {
-            let mut new_sample_rect = sample_rect;
-            new_sample_rect.set_ix_rng(ix_range);
-            self.set_sample_rect(new_sample_rect);
-        } else {
-            let buffer = audio.get_buffer(self.single.buffer_id)?;
-            let mut sample_rect = audio::SampleRect::from_buffere(buffer);
-            sample_rect.set_ix_rng(ix_range);
-            self.set_sample_rect(sample_rect);
-        }
-        Ok(())
     }
 
     pub fn update_sample_view(
@@ -162,6 +130,7 @@ impl Track {
 mod tests {
     use super::*;
     use crate::audio::{
+        self,
         buffer::{Buffer, BufferE},
         sample::view::ViewData,
     };
@@ -188,7 +157,13 @@ mod tests {
         let mut track = Track::new2(buffer_id, 48_000, &TrackConfig::default()).unwrap();
         track.set_screen_rect(Rect::new(0.0, 0.0, 16.0, 40.0));
 
-        track.set_ix_range((0.0..16.0).into(), &audio).unwrap();
+        if track
+            .single
+            .set_ix_range((0.0..16.0).into(), &audio)
+            .unwrap()
+        {
+            track.trigger_update_view_buffer();
+        }
         track
             .update_sample_view(&mut audio, ValueDisplayScale::default())
             .unwrap();
@@ -198,7 +173,13 @@ mod tests {
             matches!(initial_view.data, ViewData::Single(ref data) if !data.samples.is_empty())
         );
 
-        track.set_ix_range((64.0..96.0).into(), &audio).unwrap();
+        if track
+            .single
+            .set_ix_range((64.0..96.0).into(), &audio)
+            .unwrap()
+        {
+            track.trigger_update_view_buffer();
+        }
         track
             .update_sample_view(&mut audio, ValueDisplayScale::default())
             .unwrap();

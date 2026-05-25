@@ -127,6 +127,7 @@ impl Tracks {
         }
     }
 
+    // Updates sample_rect.val_rng
     pub fn pan_track_value_range(
         &mut self,
         track_id: TrackId,
@@ -141,7 +142,8 @@ impl Tracks {
             .screen_rect
             .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
         let sample_rect = track
-            .sample_rect
+            .single
+            .sample_rect_raw()
             .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
         let Some(val_rng) = sample_rect.val_rng() else {
             return Ok(());
@@ -155,7 +157,9 @@ impl Tracks {
         );
         let mut sample_rect = sample_rect;
         sample_rect.set_val_rng(shifted);
-        track.set_sample_rect(sample_rect);
+        if track.single.set_sample_rect(sample_rect) {
+            track.trigger_update_view_buffer();
+        }
         Ok(())
     }
 
@@ -166,7 +170,8 @@ impl Tracks {
             .get_mut(track_id)
             .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
         let mut sample_rect = track
-            .sample_rect
+            .single
+            .sample_rect_raw()
             .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
         let Some(val_rng) = sample_rect.val_rng() else {
             return Ok(());
@@ -176,7 +181,9 @@ impl Tracks {
             min: -1.0,
             max: 1.0,
         });
-        track.set_sample_rect(sample_rect);
+        if track.single.set_sample_rect(sample_rect) {
+            track.trigger_update_view_buffer();
+        }
         Ok(())
     }
 
@@ -208,7 +215,8 @@ impl Tracks {
             .screen_rect
             .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
         let mut sample_rect = track
-            .sample_rect
+            .single
+            .sample_rect_raw()
             .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
         let Some(val_rng) = sample_rect.val_rng() else {
             return Ok(());
@@ -224,7 +232,9 @@ impl Tracks {
             return Ok(());
         }
         sample_rect.set_val_rng(zoomed);
-        track.set_sample_rect(sample_rect);
+        if track.single.set_sample_rect(sample_rect) {
+            track.trigger_update_view_buffer();
+        }
         Ok(())
     }
 
@@ -241,7 +251,9 @@ impl Tracks {
                 start: time_camera::time_to_sample_ix(time_range.start, track.sample_rate),
                 end: time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
             };
-            track.set_ix_range(ix_range, audio)?;
+            if track.single.set_ix_range(ix_range, audio)? {
+                track.trigger_update_view_buffer();
+            }
         }
 
         Ok(())
@@ -259,7 +271,8 @@ impl Tracks {
                 continue;
             }
             let width = track
-                .sample_rect
+                .single
+                .sample_rect_raw()
                 .map(|r| r.width() as u64)
                 .unwrap_or_default();
             if best.is_none_or(|(_, w)| w < width) {
@@ -574,7 +587,9 @@ mod tests {
         let mut sample_rect =
             audio::SampleRect::from_buffere(audio.get_buffer(track.single.buffer_id).unwrap());
         sample_rect.set_val_rng(val_rng);
-        track.set_sample_rect(sample_rect);
+        if track.single.set_sample_rect(sample_rect) {
+            track.trigger_update_view_buffer();
+        }
         track_id
     }
 
@@ -803,8 +818,14 @@ mod tests {
         let visible_track = tracks.get_track(short).unwrap();
         let hidden_track = tracks.get_track(long_hidden).unwrap();
         assert_eq!(tracks.ix_range().unwrap().end, 64.0);
-        assert_eq!(visible_track.sample_rect.unwrap().ix_rng().end, 64.0);
-        assert_eq!(hidden_track.sample_rect.unwrap().ix_rng().end, 64.0);
+        assert_eq!(
+            visible_track.single.sample_rect_raw().unwrap().ix_rng().end,
+            64.0
+        );
+        assert_eq!(
+            hidden_track.single.sample_rect_raw().unwrap().ix_rng().end,
+            64.0
+        );
     }
 
     #[test]
@@ -827,7 +848,8 @@ mod tests {
         let val_rng = tracks
             .get_track(track_id)
             .unwrap()
-            .sample_rect
+            .single
+            .sample_rect_raw()
             .unwrap()
             .val_rng
             .unwrap();
@@ -855,7 +877,8 @@ mod tests {
         let val_rng = tracks
             .get_track(track_id)
             .unwrap()
-            .sample_rect
+            .single
+            .sample_rect_raw()
             .unwrap()
             .val_rng
             .unwrap();
@@ -884,7 +907,8 @@ mod tests {
         let val_rng = tracks
             .get_track(track_id)
             .unwrap()
-            .sample_rect
+            .single
+            .sample_rect_raw()
             .unwrap()
             .val_rng
             .unwrap();

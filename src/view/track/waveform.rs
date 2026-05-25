@@ -105,7 +105,9 @@ fn ui_waveform(
         end: crate::model::time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
     };
 
-    track.set_ix_range(sample_ix_range, &model.audio)?;
+    if track.single.set_ix_range(sample_ix_range, &model.audio)? {
+        track.trigger_update_view_buffer();
+    }
     track.set_screen_rect(rect.into());
     track.update_sample_view(&mut model.audio, display_scale)?;
     let sample_view = track.get_sample_view()?;
