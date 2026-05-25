@@ -157,9 +157,7 @@ impl Tracks {
         );
         let mut sample_rect = sample_rect;
         sample_rect.set_val_rng(shifted);
-        if track.single.set_sample_rect(sample_rect) {
-            track.trigger_update_view_buffer();
-        }
+        track.single.set_sample_rect(sample_rect);
         Ok(())
     }
 
@@ -181,9 +179,7 @@ impl Tracks {
             min: -1.0,
             max: 1.0,
         });
-        if track.single.set_sample_rect(sample_rect) {
-            track.trigger_update_view_buffer();
-        }
+        track.single.set_sample_rect(sample_rect);
         Ok(())
     }
 
@@ -232,9 +228,7 @@ impl Tracks {
             return Ok(());
         }
         sample_rect.set_val_rng(zoomed);
-        if track.single.set_sample_rect(sample_rect) {
-            track.trigger_update_view_buffer();
-        }
+        track.single.set_sample_rect(sample_rect);
         Ok(())
     }
 
@@ -251,9 +245,7 @@ impl Tracks {
                 start: time_camera::time_to_sample_ix(time_range.start, track.sample_rate),
                 end: time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
             };
-            if track.single.set_ix_range(ix_range, audio)? {
-                track.trigger_update_view_buffer();
-            }
+            track.single.set_ix_range(ix_range, audio)?;
         }
 
         Ok(())
@@ -587,9 +579,7 @@ mod tests {
         let mut sample_rect =
             audio::SampleRect::from_buffere(audio.get_buffer(track.single.buffer_id).unwrap());
         sample_rect.set_val_rng(val_rng);
-        if track.single.set_sample_rect(sample_rect) {
-            track.trigger_update_view_buffer();
-        }
+        track.single.set_sample_rect(sample_rect);
         track_id
     }
 

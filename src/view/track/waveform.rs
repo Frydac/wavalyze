@@ -105,12 +105,11 @@ fn ui_waveform(
         end: crate::model::time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
     };
 
-    if track.single.set_ix_range(sample_ix_range, &model.audio)? {
-        track.trigger_update_view_buffer();
-    }
+    track.single.set_ix_range(sample_ix_range, &model.audio)?;
     track.set_screen_rect(rect.into());
-    track.update_sample_view(&mut model.audio, display_scale)?;
-    let sample_view = track.get_sample_view()?;
+    track.single.set_display_scale(display_scale);
+    track.update(&mut model.audio)?;
+    let sample_view = track.single.get_sample_view()?;
 
     let color = theme_colors.waveform;
     let line_color = color.linear_multiply(0.7);

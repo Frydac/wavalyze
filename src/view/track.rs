@@ -145,7 +145,7 @@ pub fn ui_side(
             ui.label("offset:");
             let response = ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
             if response.changed() {
-                track.trigger_update_view_buffer();
+                track.single.mark_dirty();
             }
 
             match model.audio.rms_db.get(buffer_id) {

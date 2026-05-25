@@ -5,14 +5,15 @@ use crate::{
         sample,
         sample_rect2::SampleRect,
     },
+    model::ruler::ValueDisplayScale,
     rect::Rect,
 };
 use anyhow::Result;
 
-/// Rerpesents a time domain view on an audio buffer
+/// Represents a time domain view on an audio buffer
 #[derive(Debug, PartialEq, Clone)]
 pub struct Single {
-    pub screen_rect: Option<Rect>,
+    screen_rect: Option<Rect>,
 
     pub buffer_id: BufferId,
 
@@ -20,7 +21,14 @@ pub struct Single {
     sample_rect: Option<SampleRect>,
 
     /// The data to display
-    pub sample_view: Option<audio::sample::View>,
+    pub sample_view: Option<sample::View>,
+
+    /// Display scale that was used to compute `sample_view`.
+    sample_view_scale: ValueDisplayScale,
+
+    /// Set by any input setter when its value actually changes. Cleared by
+    /// [`Self::update`] after recomputing the sample view.
+    dirty: bool,
 
     /// For positioning wrt the absolute zero pos for all tracks
     pub sample_ix_offset: f64,
@@ -33,6 +41,8 @@ impl Single {
             buffer_id,
             sample_rect: None,
             sample_view: None,
+            sample_view_scale: ValueDisplayScale::default(),
+            dirty: false,
             sample_ix_offset: 0.0,
         })
     }
@@ -51,22 +61,30 @@ impl Single {
         self.sample_rect
     }
 
-    /// Returns true when the stored rect actually changed.
-    pub fn set_sample_rect(&mut self, sample_rect: SampleRect) -> bool {
-        if self.sample_rect == Some(sample_rect) {
-            return false;
-        }
-        self.sample_rect = Some(sample_rect);
-        true
+    pub fn screen_rect(&self) -> Option<Rect> {
+        self.screen_rect
     }
 
-    /// Create or update the sample rect to the given index range. Returns true
-    /// when the stored rect actually changed.
+    pub fn set_screen_rect(&mut self, screen_rect: Rect) {
+        if self.screen_rect != Some(screen_rect) {
+            self.screen_rect = Some(screen_rect);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_sample_rect(&mut self, sample_rect: SampleRect) {
+        if self.sample_rect != Some(sample_rect) {
+            self.sample_rect = Some(sample_rect);
+            self.dirty = true;
+        }
+    }
+
+    /// Create or update the sample rect to the given index range.
     pub fn set_ix_range(
         &mut self,
         ix_range: sample::FracIxRange,
         audio: &AudioManager,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let mut new_sample_rect = match self.sample_rect {
             Some(rect) => rect,
             None => {
@@ -75,6 +93,48 @@ impl Single {
             }
         };
         new_sample_rect.set_ix_rng(ix_range);
-        Ok(self.set_sample_rect(new_sample_rect))
+        self.set_sample_rect(new_sample_rect);
+        Ok(())
+    }
+
+    pub fn set_display_scale(&mut self, scale: ValueDisplayScale) {
+        if self.sample_view_scale != scale {
+            self.sample_view_scale = scale;
+            self.dirty = true;
+        }
+    }
+
+    /// Flag the sample view as needing a recompute on the next [`Self::update`].
+    /// Used by callers that mutate a `pub` field directly (e.g. `sample_ix_offset`).
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Recompute [`Self::sample_view`] if any input has changed since the last
+    /// call. Cheap no-op when nothing changed.
+    pub fn update(&mut self, audio: &mut AudioManager) -> Result<()> {
+        if !self.dirty {
+            return Ok(());
+        }
+        let screen_rect = self
+            .screen_rect
+            .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
+        let sample_rect = self
+            .sample_rect()
+            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        self.sample_view = Some(audio.get_sample_view(
+            self.buffer_id,
+            sample_rect,
+            screen_rect,
+            self.sample_view_scale,
+        )?);
+        self.dirty = false;
+        Ok(())
+    }
+
+    pub fn get_sample_view(&self) -> Result<&sample::View> {
+        self.sample_view
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("sample_view is missing"))
     }
 }

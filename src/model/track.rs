@@ -1,9 +1,5 @@
-use crate::{
-    audio::sample,
-    model::{config::TrackConfig, ruler::ValueDisplayScale},
-    wav,
-};
-use anyhow::{Result, anyhow};
+use crate::{model::config::TrackConfig, wav};
+use anyhow::Result;
 use slotmap::new_key_type;
 
 #[path = "track/single.rs"]
@@ -42,10 +38,6 @@ pub struct Track {
     /// time-axis camera (seconds) and this track's sample indices.
     pub sample_rate: u32,
 
-    /// Dirty flag for the inputs of the view buffer
-    update_view_buffer_: bool,
-    sample_view_scale: ValueDisplayScale,
-
     track_md: TrackMetaData,
 
     // track height in gui
@@ -62,68 +54,27 @@ impl Track {
             screen_rect: None,
             single,
             sample_rate,
-            update_view_buffer_: false,
-            sample_view_scale: ValueDisplayScale::default(),
             track_md: TrackMetaData::None,
             height: min_total_height(track_config),
             visible: true,
         })
-
-        // todo!()
     }
 }
 
 impl Track {
     pub fn set_screen_rect(&mut self, screen_rect: Rect) {
         if self.screen_rect != Some(screen_rect) {
-            self.update_view_buffer_ = true;
             self.screen_rect = Some(screen_rect);
         }
+        self.single.set_screen_rect(screen_rect);
     }
 
-    pub fn trigger_update_view_buffer(&mut self) {
-        self.update_view_buffer_ = true;
-    }
-
-    pub fn update_sample_view(
-        &mut self,
-        audio: &mut AudioManager,
-        display_scale: ValueDisplayScale,
-    ) -> Result<()> {
-        if self.sample_view_scale != display_scale {
-            self.update_view_buffer_ = true;
-        }
-        if !self.update_view_buffer_ {
-            return Ok(());
-        }
-        self.update_view_buffer_ = false;
-
-        let screen_rect = self
-            .screen_rect
-            .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
-        let sample_rect = self
-            .single
-            .sample_rect()
-            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
-        let buffer_id = self.single.buffer_id;
-
-        self.single.sample_view =
-            Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect, display_scale)?);
-        self.sample_view_scale = display_scale;
-
+    /// Bring the inner items' view buffers up to date for this frame.
+    /// Each item internally decides whether anything actually needs recomputing.
+    pub fn update(&mut self, audio: &mut AudioManager) -> Result<()> {
+        self.single.update(audio)?;
         Ok(())
     }
-
-    pub fn get_sample_view(&self) -> Result<&sample::View> {
-        self.single
-            .sample_view
-            .as_ref()
-            .ok_or(anyhow!("sample_view is missing"))
-    }
-
-    // pub fn pos_y_sample_value<T: Sample>(&self, value: T) -> Option<f32> {
-    //     todo!()
-    // }
 }
 
 #[cfg(test)]
@@ -134,7 +85,7 @@ mod tests {
         buffer::{Buffer, BufferE},
         sample::view::ViewData,
     };
-    use crate::model::config::TrackConfig;
+    use crate::model::{config::TrackConfig, ruler::ValueDisplayScale};
 
     fn insert_buffer(audio: &mut AudioManager, nr_samples: usize) -> BufferId {
         let mut buffer = Buffer::new(48_000, 32);
@@ -156,35 +107,26 @@ mod tests {
         let buffer_id = insert_buffer(&mut audio, 32);
         let mut track = Track::new2(buffer_id, 48_000, &TrackConfig::default()).unwrap();
         track.set_screen_rect(Rect::new(0.0, 0.0, 16.0, 40.0));
+        track.single.set_display_scale(ValueDisplayScale::default());
 
-        if track
+        track
             .single
             .set_ix_range((0.0..16.0).into(), &audio)
-            .unwrap()
-        {
-            track.trigger_update_view_buffer();
-        }
-        track
-            .update_sample_view(&mut audio, ValueDisplayScale::default())
             .unwrap();
+        track.update(&mut audio).unwrap();
 
-        let initial_view = track.get_sample_view().unwrap();
+        let initial_view = track.single.get_sample_view().unwrap();
         assert!(
             matches!(initial_view.data, ViewData::Single(ref data) if !data.samples.is_empty())
         );
 
-        if track
+        track
             .single
             .set_ix_range((64.0..96.0).into(), &audio)
-            .unwrap()
-        {
-            track.trigger_update_view_buffer();
-        }
-        track
-            .update_sample_view(&mut audio, ValueDisplayScale::default())
             .unwrap();
+        track.update(&mut audio).unwrap();
 
-        let updated_view = track.get_sample_view().unwrap();
+        let updated_view = track.single.get_sample_view().unwrap();
         assert_eq!(updated_view.data, ViewData::MinMax(vec![]));
     }
 }
