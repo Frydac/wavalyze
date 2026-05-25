@@ -106,7 +106,7 @@ impl Model {
         track_id: TrackId,
     ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
         let track = self.tracks.get_track(track_id)?;
-        let buffer_id = track.single.item.buffer_id;
+        let buffer_id = track.single.buffer_id;
         for file in self.files2.iter() {
             if let Some(channel) = file.get_channel(buffer_id) {
                 return Some((file, channel));
@@ -528,7 +528,6 @@ mod tests {
                     .get_track(*track_id)
                     .unwrap()
                     .single
-                    .item
                     .buffer_id
             })
             .collect();

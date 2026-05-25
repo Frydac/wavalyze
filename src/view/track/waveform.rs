@@ -117,7 +117,6 @@ fn ui_waveform(
         .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
     let sample_rect = track
         .single
-        .item
         .sample_rect()
         .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
 

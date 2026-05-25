@@ -89,7 +89,7 @@ impl Track {
         if self.sample_rect != Some(sample_rect) {
             self.update_view_buffer_ = true;
             self.sample_rect = Some(sample_rect);
-            self.single.item.set_sample_rect(sample_rect);
+            self.single.set_sample_rect(sample_rect);
         }
     }
 
@@ -109,7 +109,7 @@ impl Track {
             new_sample_rect.set_ix_rng(ix_range);
             self.set_sample_rect(new_sample_rect);
         } else {
-            let buffer = audio.get_buffer(self.single.item.buffer_id)?;
+            let buffer = audio.get_buffer(self.single.buffer_id)?;
             let mut sample_rect = audio::SampleRect::from_buffere(buffer);
             sample_rect.set_ix_rng(ix_range);
             self.set_sample_rect(sample_rect);
@@ -135,23 +135,19 @@ impl Track {
             .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
         let sample_rect = self
             .single
-            .item
             .sample_rect()
             .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
-        let buffer_id = self.single.item.buffer_id;
+        let buffer_id = self.single.buffer_id;
 
-        self.single.item.sample_view =
+        self.single.sample_view =
             Some(audio.get_sample_view(buffer_id, sample_rect, screen_rect, display_scale)?);
         self.sample_view_scale = display_scale;
-
-        // trace!("self.single.item.sample_view: {:?}", self.single.item.sample_view);
 
         Ok(())
     }
 
     pub fn get_sample_view(&self) -> Result<&sample::View> {
         self.single
-            .item
             .sample_view
             .as_ref()
             .ok_or(anyhow!("sample_view is missing"))

@@ -1,37 +1,14 @@
 use crate::{
-    audio::{
-        self,
-        manager::{AudioManager, BufferId},
-        sample_rect2::SampleRect,
-    },
+    audio::{self, manager::BufferId, sample_rect2::SampleRect},
     rect::Rect,
 };
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 /// Rerpesents a time domain view on an audio buffer
 #[derive(Debug, PartialEq, Clone)]
 pub struct Single {
     pub screen_rect: Option<Rect>,
 
-    // NOTE: maybe more than one Item at some point (in sequence on the 'single' track)
-    pub item: Item,
-}
-
-impl Single {
-    pub fn new(buffer_id: BufferId) -> Result<Self> {
-        Ok(Self {
-            screen_rect: None,
-            item: Item::new(buffer_id),
-        })
-    }
-
-    // probably better to have like Track set_screen_rect and set_sample_rect. both updating the
-    // view buffer if needed, or maybe have a separate commit function for that
-    // we generally first handle interactions which adjusts the sample_rect (zoom, pan)
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Item {
     pub buffer_id: BufferId,
 
     /// Rectangular view over the buffer's samples
@@ -43,39 +20,15 @@ pub struct Item {
     pub sample_ix_offset: f64,
 }
 
-impl Item {
-    pub fn new(buffer_id: BufferId) -> Self {
-        Self {
+impl Single {
+    pub fn new(buffer_id: BufferId) -> Result<Self> {
+        Ok(Self {
+            screen_rect: None,
             buffer_id,
             sample_rect: None,
             sample_view: None,
             sample_ix_offset: 0.0,
-        }
-    }
-
-    pub fn update_sample_view(
-        &mut self,
-        samples_per_pixel: f32,
-        audio: &AudioManager,
-        sample_rect: &SampleRect,
-        screen_rect: &Rect,
-    ) -> Result<()> {
-        let buffer = audio
-            .buffers
-            .get(self.buffer_id)
-            .ok_or(anyhow!("Buffer {:?} not found", self.buffer_id))?;
-
-        let sample_view = audio.get_sample_view(
-            self.buffer_id,
-            *sample_rect,
-            *screen_rect,
-            crate::model::ruler::ValueDisplayScale::default(),
-        )?;
-        self.sample_view = Some(sample_view);
-
-        self.sample_rect = Some(*sample_rect);
-
-        Ok(())
+        })
     }
 
     pub fn sample_rect(&self) -> Option<SampleRect> {

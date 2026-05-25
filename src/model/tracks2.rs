@@ -90,7 +90,7 @@ impl Tracks {
     pub fn find_track(&self, buffer_id: BufferId) -> Option<(TrackId, &Track)> {
         self.tracks
             .iter()
-            .find(|(_, track)| track.single.item.buffer_id == buffer_id)
+            .find(|(_, track)| track.single.buffer_id == buffer_id)
     }
 
     pub fn get_track(&self, track_id: TrackId) -> Option<&Track> {
@@ -294,7 +294,7 @@ impl Tracks {
             if !track.visible {
                 continue;
             }
-            let buffer_id = track.single.item.buffer_id;
+            let buffer_id = track.single.buffer_id;
             let buffer = audio.get_buffer(buffer_id).ok()?;
             let nr_samples = buffer.nr_samples() as u64;
             if widest.is_none_or(|(_, n)| n < nr_samples) {
@@ -572,7 +572,7 @@ mod tests {
         let track = tracks.get_track_mut(track_id).unwrap();
         track.set_screen_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
         let mut sample_rect =
-            audio::SampleRect::from_buffere(audio.get_buffer(track.single.item.buffer_id).unwrap());
+            audio::SampleRect::from_buffere(audio.get_buffer(track.single.buffer_id).unwrap());
         sample_rect.set_val_rng(val_rng);
         track.set_sample_rect(sample_rect);
         track_id

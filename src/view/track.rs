@@ -140,8 +140,8 @@ pub fn ui_side(
             let Some(track) = model.tracks.get_track_mut(track_id) else {
                 return;
             };
-            let buffer_id = track.single.item.buffer_id;
-            let sample_ix_offset = &mut track.single.item.sample_ix_offset;
+            let buffer_id = track.single.buffer_id;
+            let sample_ix_offset = &mut track.single.sample_ix_offset;
             ui.label("offset:");
             let response = ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
             if response.changed() {

@@ -283,7 +283,7 @@ fn draw_hover_db(
         return;
     };
     {
-        let sample_view = match track.single.item.sample_view.as_ref() {
+        let sample_view = match track.single.sample_view.as_ref() {
             Some(view) => view,
             None => return,
         };
@@ -291,18 +291,18 @@ fn draw_hover_db(
             return;
         }
     }
-    let sample_rect = match track.single.item.sample_rect() {
+    let sample_rect = match track.single.sample_rect() {
         Some(rect) => rect,
         None => return,
     };
 
     let global_sample_ix = hover_info.sample_ix.round() as i64;
-    let sample_ix = global_sample_ix - track.single.item.sample_ix_offset as i64;
+    let sample_ix = global_sample_ix - track.single.sample_ix_offset as i64;
     if sample_ix < 0 {
         return;
     }
     let sample_ix = sample_ix as usize;
-    let buffer_id = track.single.item.buffer_id;
+    let buffer_id = track.single.buffer_id;
     let Ok(buffer) = audio.get_buffer(buffer_id) else {
         return;
     };
@@ -392,12 +392,12 @@ fn draw_hover_db_from_y(
         return;
     }
 
-    let sample_rect = match track.single.item.sample_rect() {
+    let sample_rect = match track.single.sample_rect() {
         Some(rect) => rect,
         None => return,
     };
 
-    if audio.get_buffer(track.single.item.buffer_id).is_err() {
+    if audio.get_buffer(track.single.buffer_id).is_err() {
         return;
     }
 
