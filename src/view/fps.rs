@@ -53,16 +53,18 @@ impl Fps {
             }
             let sum_duration = self.durations.iter().map(|d| d.as_secs_f64()).sum::<f64>();
             let avg_duration = sum_duration / self.durations.len() as f64;
+            // ui.label(format!("Max FPS: {:.3}", 1.0 / avg_duration));
+
+            let frame_time = ui.ctx().input(|i| i.stable_dt);
+            ui.label(format!("Rendered at: {:.3}fps", 1.0 / frame_time));
+            ui.label(format!("available frame time: {:.3} ms", frame_time * 1000.0));
             ui.label(format!(
-                "Measured frame duration (avg {} frames): {:.3} ms",
+                "Measured frame time (avg of {}): {:.3} ms",
                 self.durations.len(),
                 avg_duration * 1000.0
             ));
-            ui.label(format!("Max FPS: {:.3}", 1.0 / avg_duration));
-
-            let frame_time = ui.ctx().input(|i| i.stable_dt);
-            ui.label(format!("egui frame time: {:.3} ms", frame_time * 1000.0));
-            ui.label(format!("FPS from frame time: {:.3}", 1.0 / frame_time));
+            let fraction_of_available_duration = avg_duration / frame_time as f64;
+            ui.label(format!("Usage frame time: {:.1}%", fraction_of_available_duration * 100.0));
         });
     }
 }
