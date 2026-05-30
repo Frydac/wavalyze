@@ -1,11 +1,12 @@
 use crate::{
-    model::{FileVisibilityState, Model},
+    model::{Action, FileVisibilityState, Model},
     wav,
+    wav::file2::FileId,
 };
 
 #[derive(Debug, Clone)]
 struct FileRow {
-    file_ix: usize,
+    file_id: FileId,
     title: String,
     hover_text: String,
     visibility: FileVisibilityState,
@@ -25,22 +26,24 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
     ui.heading("Files");
     ui.add_space(5.0);
 
-    if model.files2.is_empty() {
+    if model.files.is_empty() {
         ui.label("No files loaded");
         return;
     }
 
     egui::ScrollArea::vertical().show(ui, |ui| {
+        // PERF: we could cache this datastructure, but I expect we won't have that many files open
+        // at the same time.
         let rows: Vec<_> = model
-            .files2
+            .files_order
             .iter()
-            .enumerate()
-            .map(|(file_ix, file)| FileRow {
-                file_ix,
+            .filter_map(|&file_id| model.files.get(file_id).map(|file| (file_id, file)))
+            .map(|(file_id, file)| FileRow {
+                file_id,
                 title: file_title(file),
                 hover_text: format!("{file}"),
                 visibility: model
-                    .file_visibility_state_at(file_ix)
+                    .file_visibility_state_for(file_id)
                     .unwrap_or(FileVisibilityState::NoneVisible),
                 channels: file
                     .channels
@@ -61,9 +64,9 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
             .collect();
 
         for row in rows {
-            ui.push_id(("file_tree", row.file_ix), |ui| {
+            ui.push_id(("file_tree", row.file_id), |ui| {
                 let mut root_checked = row.visibility == FileVisibilityState::AllVisible;
-                let id = ui.make_persistent_id(("file_header", row.file_ix));
+                let id = ui.make_persistent_id(("file_header", row.file_id));
                 egui::collapsing_header::CollapsingState::load_with_default_open(
                     ui.ctx(),
                     id,
@@ -76,9 +79,18 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                     );
                     if response.changed() {
                         let make_visible = row.visibility != FileVisibilityState::AllVisible;
-                        model.set_file_visible_at(row.file_ix, make_visible);
+                        model.set_file_visible_for(row.file_id, make_visible);
                     }
-                    add_row_label(ui, &row.title).on_hover_text(row.hover_text);
+                    add_row_label(ui, &row.title)
+                        .on_hover_text(row.hover_text)
+                        .context_menu(|ui| {
+                            if ui.button("Close file").clicked() {
+                                model.actions.push(Action::CloseFile {
+                                    file_id: row.file_id,
+                                });
+                                ui.close_menu();
+                            }
+                        });
                 })
                 .body(|ui| {
                     for channel in row.channels {

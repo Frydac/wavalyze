@@ -28,13 +28,16 @@ use tracing::{info, trace};
 // NOTE: move all under this?
 
 use crate::wav;
+use crate::wav::file2::FileId;
 use anyhow::Result;
+use slotmap::SlotMap;
 use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug)]
 pub struct Model {
     pub user_config: Config,
-    pub files2: Vec<wav::file2::File>,
+    pub files: SlotMap<FileId, wav::file2::File>,
+    pub files_order: Vec<FileId>,
     pub audio: audio::manager::AudioManager,
     pub tracks: tracks2::Tracks,
     pub actions: Vec<Action>,
@@ -50,7 +53,8 @@ impl Default for Model {
         let (actions_tx, actions_rx) = std::sync::mpsc::channel();
         Self {
             user_config: Config::default(),
-            files2: Vec::new(),
+            files: SlotMap::default(),
+            files_order: Vec::new(),
             audio: audio::manager::AudioManager::default(),
             tracks: tracks2::Tracks::default(),
             actions: Vec::new(),
@@ -92,9 +96,22 @@ impl Model {
         }
 
         // Store the file instance itself
-        self.files2.push(file);
+        self.insert_file(file);
 
         Ok(())
+    }
+
+    /// Insert a file into the slotmap and append it to the display/order vec. The two fields
+    /// are always mutated together through this helper (and `clear_files`/`remove_file`).
+    pub fn insert_file(&mut self, file: wav::file2::File) -> FileId {
+        let id = self.files.insert(file);
+        self.files_order.push(id);
+        id
+    }
+
+    pub fn clear_files(&mut self) {
+        self.files.clear();
+        self.files_order.clear();
     }
 
     pub fn load_demo_waveform(&mut self) -> Result<()> {
@@ -107,7 +124,7 @@ impl Model {
     ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
         let track = self.tracks.get_track(track_id)?;
         let buffer_id = track.single.buffer_id;
-        for file in self.files2.iter() {
+        for file in self.files.values() {
             if let Some(channel) = file.get_channel(buffer_id) {
                 return Some((file, channel));
             }
@@ -165,16 +182,33 @@ impl Model {
         }
     }
 
-    pub fn file_visibility_state_at(&self, file_ix: usize) -> Option<FileVisibilityState> {
-        let file = self.files2.get(file_ix)?;
+    pub fn file_visibility_state_for(&self, file_id: FileId) -> Option<FileVisibilityState> {
+        let file = self.files.get(file_id)?;
         Some(self.file_visibility_state(file))
     }
 
-    pub fn set_file_visible_at(&mut self, file_ix: usize, visible: bool) -> bool {
-        let Some(file) = self.files2.get(file_ix).cloned() else {
+    pub fn set_file_visible_for(&mut self, file_id: FileId, visible: bool) -> bool {
+        let Some(file) = self.files.get(file_id).cloned() else {
             return false;
         };
         self.set_file_visible(&file, visible);
+        true
+    }
+
+    /// Unload an entire file: remove all of its channel tracks, drop the underlying audio
+    /// buffers, and discard the file spec itself.
+    pub fn remove_file(&mut self, file_id: FileId) -> bool {
+        let Some(file) = self.files.get(file_id).cloned() else {
+            return false;
+        };
+        for channel in file.channels.values() {
+            if let Some(track_id) = self.find_track_id_for_buffer(channel.buffer_id) {
+                self.tracks.remove_track(track_id);
+            }
+        }
+        self.audio.remove_buffers_from_file(&file);
+        self.files.remove(file_id);
+        self.files_order.retain(|id| *id != file_id);
         true
     }
 
@@ -206,7 +240,11 @@ impl Model {
 
     fn track_insert_index_for_buffer(&self, buffer_id: audio::BufferId) -> Option<usize> {
         let mut insert_ix = 0;
-        for file in &self.files2 {
+        for file in self
+            .files_order
+            .iter()
+            .filter_map(|id| self.files.get(*id))
+        {
             for channel in file.channels.values() {
                 if channel.buffer_id == buffer_id {
                     return Some(insert_ix);
@@ -254,7 +292,7 @@ impl Model {
 
         self.tracks
             .add_tracks_from_file(&file, &self.user_config.track)?;
-        self.files2.push(file);
+        self.insert_file(file);
 
         Ok(())
     }
@@ -401,24 +439,24 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.files2.push(file);
+        let file_id = model.insert_file(file);
 
         assert_eq!(
-            model.file_visibility_state_at(0),
+            model.file_visibility_state_for(file_id),
             Some(FileVisibilityState::AllVisible)
         );
 
         model.set_channel_visible(buffers[0], false);
 
         assert_eq!(
-            model.file_visibility_state_at(0),
+            model.file_visibility_state_for(file_id),
             Some(FileVisibilityState::PartiallyVisible)
         );
 
-        model.set_file_visible_at(0, false);
+        model.set_file_visible_for(file_id, false);
 
         assert_eq!(
-            model.file_visibility_state_at(0),
+            model.file_visibility_state_for(file_id),
             Some(FileVisibilityState::NoneVisible)
         );
     }
@@ -432,12 +470,12 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.files2.push(file.clone());
+        let file_id = model.insert_file(file.clone());
 
         assert!(model.remove_channel_track(buffers[0]));
         assert!(model.find_track_id_for_buffer(buffers[0]).is_none());
         assert_eq!(
-            model.file_visibility_state_at(0),
+            model.file_visibility_state_for(file_id),
             Some(FileVisibilityState::PartiallyVisible)
         );
         assert!(
@@ -456,7 +494,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.files2.push(file);
+        let file_id = model.insert_file(file);
 
         assert!(model.remove_channel_track(buffers[0]));
         assert!(model.restore_channel_track(buffers[0]).unwrap());
@@ -466,7 +504,7 @@ mod tests {
         assert_eq!(model.tracks.tracks_order[0], restored_track_id);
         assert!(model.tracks.get_track(restored_track_id).unwrap().visible);
         assert_eq!(
-            model.file_visibility_state_at(0),
+            model.file_visibility_state_for(file_id),
             Some(FileVisibilityState::AllVisible)
         );
     }
@@ -481,7 +519,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.files2.push(file);
+        model.insert_file(file);
 
         let track_id = model.find_track_id_for_buffer(buffers[0]).unwrap();
         model.tracks.set_track_height(track_id, 120.0);
@@ -512,8 +550,8 @@ mod tests {
             .tracks
             .add_tracks_from_file(&second_file, &model.user_config.track)
             .unwrap();
-        model.files2.push(first_file);
-        model.files2.push(second_file);
+        model.insert_file(first_file);
+        model.insert_file(second_file);
 
         assert!(model.remove_channel_track(first_file_buffers[1]));
         assert!(model.restore_channel_track(first_file_buffers[1]).unwrap());
@@ -543,7 +581,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.files2.push(file);
+        model.insert_file(file);
 
         assert!(!model.restore_channel_track(buffers[0]).unwrap());
         assert_eq!(model.tracks.tracks_order.len(), 2);

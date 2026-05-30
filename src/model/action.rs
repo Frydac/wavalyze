@@ -4,6 +4,7 @@ use crate::{
         PixelCoord, hover_info::HoverInfoE, jobs, selection_info::SelectionInfoE, track::TrackId,
     },
     wav,
+    wav::file2::FileId,
 };
 use anyhow::{Context, Result};
 
@@ -11,6 +12,8 @@ use anyhow::{Context, Result};
 pub enum Action {
     RemoveAllTracks,
     RemoveTrack(TrackId),
+    /// Unload a whole file: all its channels, their tracks, the audio buffers, and the file spec.
+    CloseFile { file_id: FileId },
 
     /// Load a WAV from a filesystem path (native CLI startup, future native file-path flows).
     OpenFilePath(wav::ReadConfig),
@@ -93,6 +96,9 @@ impl Action {
             }
             Action::RemoveAllTracks => {
                 model.tracks.remove_all_tracks();
+            }
+            Action::CloseFile { file_id } => {
+                model.remove_file(file_id);
             }
             Action::OpenFilePath(read_config) => {
                 #[cfg(not(target_arch = "wasm32"))]

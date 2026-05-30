@@ -19,7 +19,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     let nr_samples = (SAMPLE_RATE as f32 * duration_s) as usize;
 
     model.tracks.remove_all_tracks();
-    model.files2.clear();
+    model.clear_files();
     model.audio = audio::manager::AudioManager::default();
 
     let mut ch1 = Buffer::with_capacity(SAMPLE_RATE, BIT_DEPTH, nr_samples);
@@ -130,7 +130,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     model
         .tracks
         .add_tracks_from_file(&file, &model.user_config.track)?;
-    model.files2.push(file);
+    model.insert_file(file);
 
     Ok(())
 }
