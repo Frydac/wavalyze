@@ -252,7 +252,17 @@ fn draw_hover_label(ui: &egui::Ui, rect: Rect, y: f32, text: String, tick_color:
     ];
     ui.painter()
         .line_segment(tick_line, Stroke::new(1.0, tick_color));
-    draw_value_label(ui, rect, y, text)
+    let text_rect = draw_value_label(ui, rect, y, text);
+    let text_rect_draw = text_rect.expand(2.0);
+    let line_color = ui.style().visuals.text_color();
+    ui.painter().rect_stroke(
+        text_rect_draw,
+        3.0,
+        egui::Stroke::new(1.0, line_color),
+        egui::epaint::StrokeKind::Inside,
+    );
+
+    text_rect
 }
 
 fn layout_value_label(
