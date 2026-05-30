@@ -80,7 +80,9 @@ impl View {
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
-        self.ui_right_side_panel(ctx);
+        if self.model.user_config.view.show_right_panel {
+            self.ui_right_side_panel(ctx);
+        }
         self.ui_left_side_panel(ctx);
         self.ui_bottom_panel(ctx);
 
@@ -226,6 +228,20 @@ impl View {
                     ui.add_space(16.0);
                 }
 
+                ui.menu_button("View", |ui| {
+                    if ui
+                        .checkbox(
+                            &mut self.model.user_config.view.show_right_panel,
+                            "Right panel",
+                        )
+                        .clicked()
+                    {
+                        self.model.user_config.save_to_storage();
+                        ui.close_menu();
+                    }
+                });
+                ui.add_space(16.0);
+
                 ui.menu_button("Debug", |ui| {
                     if ui
                         .checkbox(&mut self.show_tracing_window, "Tracing")
@@ -237,6 +253,23 @@ impl View {
                 ui.add_space(16.0);
 
                 egui::widgets::global_theme_preference_buttons(ui);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let show = self.model.user_config.view.show_right_panel;
+                    let label = if show { ">" } else { "<" };
+                    if ui
+                        .button(label)
+                        .on_hover_text(if show {
+                            "Hide right panel"
+                        } else {
+                            "Show right panel"
+                        })
+                        .clicked()
+                    {
+                        self.model.user_config.view.show_right_panel = !show;
+                        self.model.user_config.save_to_storage();
+                    }
+                });
             });
         });
     }

@@ -28,6 +28,7 @@ pub struct Config {
     pub shortcuts: ShortcutConfig,
     pub selection: SelectionConfig,
     pub track: TrackConfig,
+    pub view: ViewConfig,
     pub colors: ColorPaletteSet,
 }
 
@@ -54,6 +55,22 @@ pub struct SelectionConfig {
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TrackConfig {
     pub min_height: f32,
+}
+
+/// Visibility and layout settings for the main view panels.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct ViewConfig {
+    /// Show the right side panel (settings, FPS, jobs, ruler/hover/selection info).
+    pub show_right_panel: bool,
+}
+
+impl Default for ViewConfig {
+    fn default() -> Self {
+        Self {
+            show_right_panel: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -134,6 +151,7 @@ impl Default for Config {
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
             track: TrackConfig::default(),
+            view: ViewConfig::default(),
             colors: ColorPaletteSet::default(),
         }
     }
