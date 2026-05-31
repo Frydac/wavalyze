@@ -2,6 +2,8 @@ use crate::{model::config::TrackConfig, wav};
 use anyhow::Result;
 use slotmap::new_key_type;
 
+#[path = "track/diff.rs"]
+pub mod diff;
 #[path = "track/single.rs"]
 pub mod single;
 
@@ -9,6 +11,7 @@ use crate::{
     audio::manager::{AudioManager, BufferId},
     rect::Rect,
 };
+use diff::Diff;
 use single::Single;
 
 new_key_type! { pub struct TrackId; }
@@ -34,6 +37,10 @@ pub struct Track {
     // track_item: TrackItem,
     pub single: Single,
 
+    /// Present for tracks created by a diff action. `single` remains the render target for now;
+    /// future diff render modes can use this metadata to draw/overlay the source buffers.
+    pub diff: Option<Diff>,
+
     /// Sample rate of the underlying buffer. Needed to convert between the shared
     /// time-axis camera (seconds) and this track's sample indices.
     pub sample_rate: u32,
@@ -53,11 +60,21 @@ impl Track {
         Ok(Self {
             screen_rect: None,
             single,
+            diff: None,
             sample_rate,
             track_md: TrackMetaData::None,
             height: min_total_height(track_config),
             visible: true,
         })
+    }
+
+    pub fn new_diff(diff: Diff, sample_rate: u32, track_config: &TrackConfig) -> Result<Self> {
+        let mut track = Self::new2(diff.buffer_id_diff, sample_rate, track_config)?;
+        // The generated diff buffer is a normal waveform buffer, but it may start before/after
+        // absolute sample zero depending on the source offsets.
+        track.single.sample_ix_offset = diff.sample_ix_offset_diff as f64;
+        track.diff = Some(diff);
+        Ok(track)
     }
 }
 

@@ -596,7 +596,7 @@ mod tests {
             },
         );
 
-        assert_eq!(actions, vec![Action::ZoomToSelection]);
+        assert!(matches!(actions.as_slice(), [Action::ZoomToSelection]));
     }
 
     #[test]
@@ -657,6 +657,9 @@ mod tests {
             },
         );
 
-        assert_eq!(actions, vec![Action::ZoomToSelectionLeftEdge]);
+        assert!(matches!(
+            actions.as_slice(),
+            [Action::ZoomToSelectionLeftEdge]
+        ));
     }
 }

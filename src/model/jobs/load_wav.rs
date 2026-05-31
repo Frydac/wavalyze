@@ -45,11 +45,7 @@ pub fn spawn_load_wav_job(
 ) {
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
-        let result = wav::read::read_bytes_to_loaded_file_with_sink(&config, job_id, Some(&sink))
-            .map(|mut loaded| {
-                build_thumbnails_in_worker(&mut loaded, &sink);
-                loaded
-            });
+        let result = load_wav_bytes_for_job(job_id, &config, &sink);
         finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
     });
 }
@@ -64,13 +60,36 @@ pub fn spawn_load_wav_path_job(
 ) {
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
-        let result = wav::read::read_path_to_loaded_file_with_sink(&config, job_id, Some(&sink))
-            .map(|mut loaded| {
-                build_thumbnails_in_worker(&mut loaded, &sink);
-                loaded
-            });
+        let result = load_wav_path_for_job(job_id, &config, &sink);
         finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
     });
+}
+
+pub fn load_wav_bytes_for_job(
+    job_id: JobId,
+    config: &wav::ReadConfigBytes,
+    sink: &dyn LoadProgressSink,
+) -> anyhow::Result<wav::read::LoadedFile> {
+    // Shared by normal file-open jobs and composite jobs (for example CLI diff) so they all get
+    // the same decoder + thumbnail stages and progress labels.
+    wav::read::read_bytes_to_loaded_file_with_sink(config, job_id, Some(sink)).map(|mut loaded| {
+        build_thumbnails_in_worker(&mut loaded, sink);
+        loaded
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_wav_path_for_job(
+    job_id: JobId,
+    config: &wav::ReadConfig,
+    sink: &dyn LoadProgressSink,
+) -> anyhow::Result<wav::read::LoadedFile> {
+    // Keep path loading factored out of the spawner so parent jobs can reuse the exact same load
+    // pipeline without spawning child jobs or integrating intermediate files.
+    wav::read::read_path_to_loaded_file_with_sink(config, job_id, Some(sink)).map(|mut loaded| {
+        build_thumbnails_in_worker(&mut loaded, sink);
+        loaded
+    })
 }
 
 /// Build per-channel thumbnails on the worker thread, emitting `LoadStage::Thumbnail` progress
@@ -122,17 +141,33 @@ fn finish_load_wav_job(
 // thread (the WAV reader is fully serial — no `par_iter`/`rayon::scope` internally), and dropped
 // at end of read. `Cell` is sufficient; no synchronization is needed. `LoadProgressSink` has no
 // `Send + Sync` bound (see `src/wav/read.rs:122`).
-struct ThreadedLoadJobProgressSink {
+pub struct ThreadedLoadJobProgressSink {
     job_id: JobId,
     tx: Sender<JobEvent>,
+    stage_prefix: Option<String>,
+    overall_start: f32,
+    overall_end: f32,
     state: Cell<LoadJobProgress>,
 }
 
 impl ThreadedLoadJobProgressSink {
-    fn new(job_id: JobId, tx: Sender<JobEvent>) -> Self {
+    pub fn new(job_id: JobId, tx: Sender<JobEvent>) -> Self {
+        Self::new_mapped(job_id, tx, None, 0.0, 1.0)
+    }
+
+    pub fn new_mapped(
+        job_id: JobId,
+        tx: Sender<JobEvent>,
+        stage_prefix: Option<String>,
+        overall_start: f32,
+        overall_end: f32,
+    ) -> Self {
         Self {
             job_id,
             tx,
+            stage_prefix,
+            overall_start,
+            overall_end,
             state: Cell::new(LoadJobProgress {
                 stage: wav::read::LoadStage::Start,
                 current: 0,
@@ -142,21 +177,28 @@ impl ThreadedLoadJobProgressSink {
     }
 
     fn publish(&self, lp: LoadJobProgress) {
+        let stage_name = self.stage_name(lp.stage);
+        // Composite jobs map the WAV loader's own 0..1 progress into one slice of the parent job
+        // while preserving the loader's detailed stage names.
+        let overall_fraction =
+            self.overall_start + lp.fraction() * (self.overall_end - self.overall_start).max(0.0);
         let _ = self.tx.send(JobEvent::Progress(JobProgressEvent {
             job_id: self.job_id,
             progress: JobProgress {
-                stage_name: lp.stage.label().to_string(),
+                stage_name: stage_name.clone(),
                 stage_current: lp.current,
                 stage_total: lp.total,
-                overall_fraction: lp.fraction(),
+                overall_fraction,
             },
-            message: Some(format!(
-                "{} ({}/{})",
-                lp.stage.label(),
-                lp.current,
-                lp.total
-            )),
+            message: Some(format!("{} ({}/{})", stage_name, lp.current, lp.total)),
         }));
+    }
+
+    fn stage_name(&self, stage: wav::read::LoadStage) -> String {
+        match &self.stage_prefix {
+            Some(prefix) => format!("{prefix}: {}", stage.label()),
+            None => stage.label().to_string(),
+        }
     }
 }
 

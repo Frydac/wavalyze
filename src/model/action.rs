@@ -8,21 +8,29 @@ use crate::{
 };
 use anyhow::{Context, Result};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Action {
     RemoveAllTracks,
     RemoveTrack(TrackId),
     /// Unload a whole file: all its channels, their tracks, the audio buffers, and the file spec.
-    CloseFile { file_id: FileId },
+    CloseFile {
+        file_id: FileId,
+    },
 
     /// Load a WAV from a filesystem path (native CLI startup, future native file-path flows).
     OpenFilePath(wav::ReadConfig),
     /// Load a WAV from in-memory bytes (file picker, drag-drop, wasm).
     OpenFileBytes(wav::ReadConfigBytes),
+    /// Load two WAV files and compute a diff track from their selected channels.
+    OpenDiffFilePaths {
+        file_a: wav::ReadConfig,
+        file_b: wav::ReadConfig,
+    },
     StartDemoJob(jobs::DemoTimedConfig),
     LoadDemo,
     /// Integrate a fully-loaded WAV file into the model. Pushed by background load jobs on success.
     IntegrateLoadedFile(wav::read::LoadedFile),
+    IntegrateLoadedDiff(jobs::LoadedDiff),
 
     /// Set x-zoom so the longest track is full width
     /// Set y-zoom to fill the screen, with a minimum height per track
@@ -76,6 +84,13 @@ pub enum Action {
     /// Start a background job to compute the RMS (in dB) of a single buffer. Result lands via
     /// `Action::SetBufferRms` once the worker finishes.
     ComputeBufferRms(BufferId),
+    DiffBuffers {
+        buffer_id_a: BufferId,
+        buffer_id_b: BufferId,
+        sample_ix_offset_a: crate::audio::sample::Ix,
+        sample_ix_offset_b: crate::audio::sample::Ix,
+    },
+    IntegrateDiffBuffer(jobs::ComputedDiff),
     /// Integrate a freshly computed RMS value. Pushed by the compute-rms worker via `actions_tx`.
     /// Silently dropped if the buffer no longer exists (e.g., file closed mid-flight).
     SetBufferRms {
@@ -112,6 +127,15 @@ impl Action {
             Action::OpenFileBytes(read_config) => {
                 model.start_load_wav_job(read_config);
             }
+            Action::OpenDiffFilePaths { file_a, file_b } => {
+                #[cfg(not(target_arch = "wasm32"))]
+                model.start_load_diff_paths_job(file_a, file_b);
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = (file_a, file_b);
+                    tracing::warn!("Action::OpenDiffFilePaths ignored on wasm");
+                }
+            }
             Action::StartDemoJob(config) => {
                 model.start_demo_job(config);
             }
@@ -126,6 +150,13 @@ impl Action {
                 model
                     .add_loaded_file(loaded)
                     .context("Action::IntegrateLoadedFile failed")?;
+                model.actions.push(Action::ZoomToFull);
+                model.actions.push(Action::FillScreenHeight);
+            }
+            Action::IntegrateLoadedDiff(diff) => {
+                model
+                    .add_loaded_diff(diff)
+                    .context("Action::IntegrateLoadedDiff failed")?;
                 model.actions.push(Action::ZoomToFull);
                 model.actions.push(Action::FillScreenHeight);
             }
@@ -198,6 +229,28 @@ impl Action {
                 model
                     .start_compute_rms_job(buffer_id)
                     .context("Action::ComputeBufferRms failed")?;
+            }
+            Action::DiffBuffers {
+                buffer_id_a,
+                buffer_id_b,
+                sample_ix_offset_a,
+                sample_ix_offset_b,
+            } => {
+                model
+                    .start_diff_buffers_job(
+                        buffer_id_a,
+                        buffer_id_b,
+                        sample_ix_offset_a,
+                        sample_ix_offset_b,
+                    )
+                    .context("Action::DiffBuffers failed")?;
+            }
+            Action::IntegrateDiffBuffer(diff) => {
+                model
+                    .add_diff_buffer(diff)
+                    .context("Action::IntegrateDiffBuffer failed")?;
+                model.actions.push(Action::ZoomToFull);
+                model.actions.push(Action::FillScreenHeight);
             }
             Action::SetBufferRms { buffer_id, rms_db } => {
                 if model.audio.buffers.contains_key(buffer_id) {

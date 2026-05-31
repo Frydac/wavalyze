@@ -125,6 +125,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
         layout: Some(audio::Layout::LAYOUT_4_0),
         path: None,
         nr_samples: nr_samples as u64,
+        sample_ix_offset: 0,
     };
 
     model

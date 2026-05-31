@@ -100,6 +100,10 @@ fn parse_channel_ixs(s: &str) -> Result<Vec<wav::ChIx>> {
     Ok(channels)
 }
 
+fn parse_sample_ix_offset(s: &str) -> Result<sample::Ix> {
+    s.parse().map_err(|e| anyhow!("Invalid sample offset: {e}"))
+}
+
 impl std::str::FromStr for ReadConfig {
     type Err = anyhow::Error;
 
@@ -109,9 +113,23 @@ impl std::str::FromStr for ReadConfig {
 
         let mut ch_ixs = None;
         let mut sample_range = sample::OptIxRange::default();
+        let mut sample_ix_offset = 0;
+        let mut offset_specified = false;
 
         for part in parts {
             if part.is_empty() {
+                continue;
+            }
+
+            if let Some(offset) = part
+                .strip_prefix("offset=")
+                .or_else(|| part.strip_prefix("o="))
+            {
+                if offset_specified {
+                    return Err(anyhow!("Offset specified multiple times"));
+                }
+                sample_ix_offset = parse_sample_ix_offset(offset)?;
+                offset_specified = true;
                 continue;
             }
 
@@ -137,6 +155,7 @@ impl std::str::FromStr for ReadConfig {
             filepath,
             ch_ixs,
             sample_range,
+            sample_ix_offset,
         })
     }
 }
@@ -159,6 +178,7 @@ mod tests {
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     sample_range: sample::OptIxRange::default(),
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -176,6 +196,7 @@ mod tests {
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: Some(vec![0, 2, 4]),
                     sample_range: sample::OptIxRange::default(),
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -197,6 +218,7 @@ mod tests {
                         start: Some(1000),
                         end: Some(5000),
                     },
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -218,6 +240,7 @@ mod tests {
                         start: Some(1000),
                         end: Some(5000),
                     },
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -239,6 +262,7 @@ mod tests {
                         start: Some(1000),
                         end: Some(5000),
                     },
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -260,6 +284,7 @@ mod tests {
                         start: Some(1000),
                         end: None,
                     },
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -281,6 +306,7 @@ mod tests {
                         start: None,
                         end: Some(5000),
                     },
+                    sample_ix_offset: 0,
                 }]
             }
         );
@@ -298,7 +324,29 @@ mod tests {
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: Some(vec![2]),
                     sample_range: sample::OptIxRange::default(),
+                    sample_ix_offset: 0,
                 }]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_args_offset_long_form() {
+        let args = Args::parse_from(["wavalyze", "song.wav:0:offset=-10"]);
+        assert_eq!(args.files[0].sample_ix_offset, -10);
+        assert_eq!(args.files[0].ch_ixs, Some(vec![0]));
+    }
+
+    #[test]
+    fn test_parse_args_offset_short_form_order_independent() {
+        let args = Args::parse_from(["wavalyze", "song.wav:o=12:100-200:0"]);
+        assert_eq!(args.files[0].sample_ix_offset, 12);
+        assert_eq!(args.files[0].ch_ixs, Some(vec![0]));
+        assert_eq!(
+            args.files[0].sample_range,
+            sample::OptIxRange {
+                start: Some(100),
+                end: Some(200),
             }
         );
     }
@@ -316,6 +364,7 @@ mod tests {
                             filepath: PathBuf::from("file1.wav"),
                             ch_ixs: None,
                             sample_range: sample::OptIxRange::default(),
+                            sample_ix_offset: 0,
                         },
                         ReadConfig {
                             filepath: PathBuf::from("file2.wav"),
@@ -324,6 +373,7 @@ mod tests {
                                 start: Some(100),
                                 end: Some(200),
                             },
+                            sample_ix_offset: 0,
                         }
                     ],
                 }),
@@ -344,11 +394,13 @@ mod tests {
                         filepath: PathBuf::from("file1.wav"),
                         ch_ixs: Some(vec![0]),
                         sample_range: sample::OptIxRange::default(),
+                        sample_ix_offset: 0,
                     },
                     file2: ReadConfig {
                         filepath: PathBuf::from("file2.wav"),
                         ch_ixs: Some(vec![1]),
                         sample_range: sample::OptIxRange::default(),
+                        sample_ix_offset: 0,
                     },
                 }),
                 files: vec![]
@@ -386,6 +438,7 @@ mod tests {
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     sample_range: sample::OptIxRange::default(),
+                    sample_ix_offset: 0,
                 }]
             }
         );

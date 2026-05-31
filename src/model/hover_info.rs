@@ -11,7 +11,11 @@ impl HoverInfo {
     pub fn sample_pos_hovered(&self, sample_pos_x: f64, samples_per_pixel: f64) -> bool {
         let pixels_per_half_sample = 0.5 / samples_per_pixel;
         self.sample_pos_x.is_some_and(|x| {
-            crate::math::compare::near_absolute(x as f32, sample_pos_x as f32, pixels_per_half_sample as f32)
+            crate::math::compare::near_absolute(
+                x as f32,
+                sample_pos_x as f32,
+                pixels_per_half_sample as f32,
+            )
         })
     }
 }
@@ -28,7 +32,9 @@ impl HoverInfoE {
     pub fn sample_pos_is_hovered(&self, sample_pos_x: f64, samples_per_pixel: f64) -> bool {
         match self {
             HoverInfoE::NotHovered => false,
-            HoverInfoE::IsHovered(hover_info) => hover_info.sample_pos_hovered(sample_pos_x, samples_per_pixel),
+            HoverInfoE::IsHovered(hover_info) => {
+                hover_info.sample_pos_hovered(sample_pos_x, samples_per_pixel)
+            }
         }
     }
 }

@@ -62,7 +62,10 @@ fn handle_cli_arguments(model: &mut model::Model, args: &Args) {
             }
             args::Commands::Diff { file1, file2 } => {
                 trace!("Diff command");
-                // todo!("diff files");
+                model.actions.push(Action::OpenDiffFilePaths {
+                    file_a: file1.clone(),
+                    file_b: file2.clone(),
+                });
             }
         },
     }

@@ -70,6 +70,18 @@ impl Tracks {
         Ok(track_id)
     }
 
+    pub fn add_diff_track_to_end(
+        &mut self,
+        diff: track::diff::Diff,
+        sample_rate: u32,
+        track_config: &TrackConfig,
+    ) -> Result<TrackId> {
+        let track = Track::new_diff(diff, sample_rate, track_config)?;
+        let track_id = self.tracks.insert(track);
+        self.tracks_order.push(track_id);
+        Ok(track_id)
+    }
+
     pub fn remove_track(&mut self, track_id: TrackId) {
         self.tracks.remove(track_id);
         self.tracks_order.retain(|id| *id != track_id);
@@ -77,7 +89,11 @@ impl Tracks {
 
     pub fn add_tracks_from_file(&mut self, file: &File, track_config: &TrackConfig) -> Result<()> {
         for (_ch_ix, channel) in file.channels.iter() {
-            let _ = self.add_track_to_end(channel.buffer_id, file.sample_rate, track_config)?;
+            let track_id =
+                self.add_track_to_end(channel.buffer_id, file.sample_rate, track_config)?;
+            if let Some(track) = self.tracks.get_mut(track_id) {
+                track.single.sample_ix_offset = file.sample_ix_offset as f64;
+            }
         }
         Ok(())
     }
@@ -290,11 +306,11 @@ impl Tracks {
         })
     }
 
-    fn get_widest_visible_track_nr_samples(
+    fn visible_tracks_time_bounds(
         &self,
         audio: &audio::manager::AudioManager,
-    ) -> Option<(u32, u64)> {
-        let mut widest: Option<(u32, u64)> = None;
+    ) -> Option<std::ops::Range<f64>> {
+        let mut bounds: Option<std::ops::Range<f64>> = None;
         for track in self.tracks.values() {
             if !track.visible {
                 continue;
@@ -302,11 +318,21 @@ impl Tracks {
             let buffer_id = track.single.buffer_id;
             let buffer = audio.get_buffer(buffer_id).ok()?;
             let nr_samples = buffer.nr_samples() as u64;
-            if widest.is_none_or(|(_, n)| n < nr_samples) {
-                widest = Some((track.sample_rate, nr_samples));
+            let start_sample_ix = -track.single.sample_ix_offset;
+            let end_sample_ix = nr_samples as f64 - track.single.sample_ix_offset;
+            let start_s = time_camera::sample_ix_to_time(start_sample_ix, track.sample_rate);
+            let end_s = time_camera::sample_ix_to_time(end_sample_ix, track.sample_rate);
+            match bounds {
+                Some(ref mut bounds) => {
+                    bounds.start = bounds.start.min(start_s);
+                    bounds.end = bounds.end.max(end_s);
+                }
+                None => {
+                    bounds = Some(start_s..end_s);
+                }
             }
         }
-        widest
+        bounds
     }
 
     /// Zoom to fit the longest visible track (in *seconds*, sample-rate-aware).
@@ -315,12 +341,12 @@ impl Tracks {
             self.ruler.screen_rect().width() > 0.0,
             "Ruler screen rect width is zero"
         );
-        let (sample_rate, nr_samples) = self
-            .get_widest_visible_track_nr_samples(audio)
+        let time_bounds = self
+            .visible_tracks_time_bounds(audio)
             .ok_or_else(|| anyhow::anyhow!("No tracks"))?;
-        let duration_s = nr_samples as f64 / sample_rate as f64;
+        let duration_s = time_bounds.end - time_bounds.start;
         let screen_width = self.ruler.screen_rect().width() as f64;
-        self.time_camera.time_start = 0.0;
+        self.time_camera.time_start = time_bounds.start;
         self.time_camera
             .set_seconds_per_pixel(duration_s / screen_width);
         self.update_tracks_to_camera(audio)?;

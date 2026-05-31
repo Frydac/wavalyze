@@ -19,9 +19,13 @@ use std::sync::mpsc::{Receiver, Sender};
 
 pub mod compute_rms;
 pub mod demo;
+pub mod diff;
 pub mod load_wav;
 pub use compute_rms::spawn_compute_rms_job;
 pub use demo::{DemoTimedConfig, spawn_demo_timed_job};
+#[cfg(not(target_arch = "wasm32"))]
+pub use diff::spawn_load_diff_paths_job;
+pub use diff::{ComputedDiff, LoadedDiff, spawn_diff_buffers_job};
 pub use load_wav::spawn_load_wav_job;
 #[cfg(not(target_arch = "wasm32"))]
 pub use load_wav::spawn_load_wav_path_job;
@@ -39,6 +43,7 @@ pub enum JobKind {
     DemoTimed,
     LoadWav,
     ComputeRms,
+    Diff,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 use crate::{
-    audio::{self, manager::BufferId},
+    audio::{self, manager::BufferId, sample},
     wav::read::ChIx,
 };
 use slotmap::new_key_type;
@@ -25,6 +25,7 @@ pub struct File {
     pub path: Option<PathBuf>,
     /// Number of samples per channel
     pub nr_samples: u64,
+    pub sample_ix_offset: sample::Ix,
 }
 
 impl std::fmt::Display for File {
@@ -39,6 +40,7 @@ impl std::fmt::Display for File {
             write!(f, ", layout: {:?}", layout)?;
         }
         write!(f, ", nr_samples: {}", self.nr_samples)?;
+        write!(f, ", sample_ix_offset: {}", self.sample_ix_offset)?;
         Ok(())
     }
 }

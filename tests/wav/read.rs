@@ -65,6 +65,7 @@ fn test_read_options_i16() {
             start: Some(1),
             end: Some(3),
         },
+        sample_ix_offset: 0,
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(&config, &mut buffers).unwrap();
@@ -117,6 +118,7 @@ fn test_read_options_i24() {
             start: Some(1),
             end: Some(3),
         },
+        sample_ix_offset: 0,
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(&config, &mut buffers).unwrap();
@@ -150,6 +152,7 @@ fn test_read_options_i32() {
             start: Some(1),
             end: Some(3),
         },
+        sample_ix_offset: 0,
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(&config, &mut buffers).unwrap();
@@ -183,6 +186,7 @@ fn test_read_options_f32() {
             start: Some(1),
             end: Some(3),
         },
+        sample_ix_offset: 0,
     };
     let mut buffers = Buffers::default();
     let file = read_to_file(&config, &mut buffers).unwrap();

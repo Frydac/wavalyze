@@ -27,6 +27,10 @@ pub struct ReadConfig {
     /// Range of samples indices per channel to read, default: all
     // pub sample_range: Option<sample::IxRange>,
     pub sample_range: sample::OptIxRange,
+
+    /// Signed sample offset applied when this buffer is used on an absolute sample timeline.
+    /// Positive values mean absolute sample `n` reads local buffer sample `n + offset`.
+    pub sample_ix_offset: sample::Ix,
 }
 
 /// In-memory read options for interactive file loads on all platforms.
@@ -37,6 +41,8 @@ pub struct ReadConfigBytes {
     pub bytes: Vec<u8>,
     pub ch_ixs: Option<Vec<ChIx>>,
     pub sample_range: sample::OptIxRange,
+    /// Same timeline semantics as [`ReadConfig::sample_ix_offset`].
+    pub sample_ix_offset: sample::Ix,
 }
 
 /// Shared subset of read options for both file and byte sources.
@@ -61,6 +67,7 @@ pub struct LoadedFile {
     pub path: Option<PathBuf>,
     /// Number of samples per channel
     pub nr_samples: u64,
+    pub sample_ix_offset: sample::Ix,
 }
 
 // Equality by load_id only: each LoadedFile is tagged with a unique LoadId at construction, so the
@@ -97,6 +104,7 @@ impl ReadConfig {
             filepath: filepath.into(),
             ch_ixs: None,
             sample_range: sample::OptIxRange::default(),
+            sample_ix_offset: 0,
         }
     }
 
@@ -110,6 +118,13 @@ impl ReadConfig {
     pub fn with_sample_range(self, sample_range: sample::OptIxRange) -> Self {
         Self {
             sample_range,
+            ..self
+        }
+    }
+
+    pub fn with_sample_ix_offset(self, sample_ix_offset: sample::Ix) -> Self {
+        Self {
+            sample_ix_offset,
             ..self
         }
     }
@@ -122,6 +137,7 @@ impl ReadConfigBytes {
             bytes,
             ch_ixs: None,
             sample_range: sample::OptIxRange::default(),
+            sample_ix_offset: 0,
         }
     }
 
@@ -135,6 +151,13 @@ impl ReadConfigBytes {
     pub fn with_sample_range(self, sample_range: sample::OptIxRange) -> Self {
         Self {
             sample_range,
+            ..self
+        }
+    }
+
+    pub fn with_sample_ix_offset(self, sample_ix_offset: sample::Ix) -> Self {
+        Self {
+            sample_ix_offset,
             ..self
         }
     }
@@ -182,6 +205,7 @@ pub fn read_path_to_loaded_file_with_sink(
     read_to_loaded_file_from_reader(
         reader,
         &options,
+        config.sample_ix_offset,
         load_id,
         progress,
         filepath,
@@ -202,6 +226,7 @@ pub fn read_bytes_to_loaded_file_with_sink(
     read_to_loaded_file_from_reader(
         reader,
         &options,
+        config.sample_ix_offset,
         load_id,
         progress,
         label,
@@ -213,6 +238,7 @@ pub fn read_bytes_to_loaded_file_with_sink(
 fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     mut reader: hound::WavReader<R>,
     options: &ReadOptions,
+    sample_ix_offset: sample::Ix,
     load_id: LoadId,
     progress: Option<&dyn LoadProgressSink>,
     source_label: &str,
@@ -281,6 +307,7 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
         sample_type: spec.sample_format.into(),
         path,
         nr_samples: reader.duration() as u64,
+        sample_ix_offset,
     };
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -489,6 +516,7 @@ impl LoadedFile {
             sample_type: self.sample_type,
             path: self.path,
             nr_samples: self.nr_samples,
+            sample_ix_offset: self.sample_ix_offset,
         }
     }
 }

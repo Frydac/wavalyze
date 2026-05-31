@@ -334,6 +334,12 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                         .map(|layout| format!("{layout:?}"))
                         .unwrap_or_else(|| String::from("unknown")),
                 });
+            } else if model
+                .tracks
+                .get_track(track_id)
+                .is_some_and(|track| track.diff.is_some())
+            {
+                text = String::from("Diff");
             }
 
             let rect = ui.max_rect();

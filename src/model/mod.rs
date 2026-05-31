@@ -240,11 +240,7 @@ impl Model {
 
     fn track_insert_index_for_buffer(&self, buffer_id: audio::BufferId) -> Option<usize> {
         let mut insert_ix = 0;
-        for file in self
-            .files_order
-            .iter()
-            .filter_map(|id| self.files.get(*id))
-        {
+        for file in self.files_order.iter().filter_map(|id| self.files.get(*id)) {
             for channel in file.channels.values() {
                 if channel.buffer_id == buffer_id {
                     return Some(insert_ix);
@@ -261,7 +257,7 @@ impl Model {
         self.tracks.zoom_to_full(&self.audio)
     }
 
-    pub fn add_loaded_file(&mut self, loaded: wav::read::LoadedFile) -> Result<()> {
+    pub fn add_loaded_file(&mut self, loaded: wav::read::LoadedFile) -> Result<FileId> {
         let mut channels = std::collections::BTreeMap::new();
         let mut thumbnails = loaded.thumbnails;
         for (ch_ix, buffer) in loaded.channels {
@@ -288,13 +284,98 @@ impl Model {
             layout: loaded.layout,
             path: loaded.path,
             nr_samples: loaded.nr_samples,
+            sample_ix_offset: loaded.sample_ix_offset,
         };
 
         self.tracks
             .add_tracks_from_file(&file, &self.user_config.track)?;
-        self.insert_file(file);
+        let file_id = self.insert_file(file);
+
+        Ok(file_id)
+    }
+
+    pub fn add_loaded_diff(&mut self, diff: jobs::LoadedDiff) -> Result<()> {
+        // The CLI diff job loads both source files and computes the diff on a worker. Integrate all
+        // three tracks together so the visible order is deterministic: A, B, Diff.
+        let file_a_id = self.add_loaded_file(diff.file_a)?;
+        let file_b_id = self.add_loaded_file(diff.file_b)?;
+        let buffer_id_a = self.single_channel_buffer_id(file_a_id)?;
+        let buffer_id_b = self.single_channel_buffer_id(file_b_id)?;
+        let sample_rate = self.audio.get_buffer(buffer_id_a)?.sample_rate();
+        anyhow::ensure!(
+            sample_rate == self.audio.get_buffer(buffer_id_b)?.sample_rate(),
+            "diff source sample rates differ"
+        );
+
+        let buffer_id_diff = self
+            .audio
+            .buffers
+            .insert(std::sync::Arc::new(diff.diff_buffer));
+        self.audio
+            .thumbnails
+            .insert(buffer_id_diff, diff.diff_thumbnail);
+        self.tracks.add_diff_track_to_end(
+            track::diff::Diff {
+                buffer_id_diff,
+                buffer_id_a,
+                buffer_id_b,
+                sample_ix_offset_a: diff.sample_ix_offset_a,
+                sample_ix_offset_b: diff.sample_ix_offset_b,
+                sample_ix_offset_diff: diff.sample_ix_offset_diff,
+            },
+            sample_rate,
+            &self.user_config.track,
+        )?;
 
         Ok(())
+    }
+
+    pub fn add_diff_buffer(&mut self, diff: jobs::ComputedDiff) -> Result<()> {
+        // Existing-buffer diffs skip file integration and only add the computed render buffer plus
+        // Diff metadata pointing back to the already-loaded source buffers.
+        let sample_rate = self.audio.get_buffer(diff.buffer_id_a)?.sample_rate();
+        anyhow::ensure!(
+            sample_rate == self.audio.get_buffer(diff.buffer_id_b)?.sample_rate(),
+            "diff source sample rates differ"
+        );
+        let buffer_id_diff = self
+            .audio
+            .buffers
+            .insert(std::sync::Arc::new(diff.diff_buffer));
+        self.audio
+            .thumbnails
+            .insert(buffer_id_diff, diff.diff_thumbnail);
+        self.tracks.add_diff_track_to_end(
+            track::diff::Diff {
+                buffer_id_diff,
+                buffer_id_a: diff.buffer_id_a,
+                buffer_id_b: diff.buffer_id_b,
+                sample_ix_offset_a: diff.sample_ix_offset_a,
+                sample_ix_offset_b: diff.sample_ix_offset_b,
+                sample_ix_offset_diff: diff.sample_ix_offset_diff,
+            },
+            sample_rate,
+            &self.user_config.track,
+        )?;
+
+        Ok(())
+    }
+
+    fn single_channel_buffer_id(&self, file_id: FileId) -> Result<audio::BufferId> {
+        let file = self
+            .files
+            .get(file_id)
+            .ok_or_else(|| anyhow::anyhow!("File {:?} not found", file_id))?;
+        anyhow::ensure!(
+            file.channels.len() == 1,
+            "expected exactly one channel, got {}",
+            file.channels.len()
+        );
+        file.channels
+            .values()
+            .next()
+            .map(|channel| channel.buffer_id)
+            .ok_or_else(|| anyhow::anyhow!("file has no channels"))
     }
 
     pub fn drain_job_events(&mut self) -> bool {
@@ -370,6 +451,71 @@ impl Model {
         );
         Ok(job_id)
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn start_load_diff_paths_job(
+        &mut self,
+        file_a: wav::ReadConfig,
+        file_b: wav::ReadConfig,
+    ) -> jobs::JobId {
+        let label = format!(
+            "Diff {} - {}",
+            file_a
+                .filepath
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("A"),
+            file_b
+                .filepath
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("B")
+        );
+        let job_id = self.job_mgr.start_job(jobs::JobKind::Diff, label);
+        jobs::spawn_load_diff_paths_job(
+            job_id,
+            file_a,
+            file_b,
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
+        job_id
+    }
+
+    pub fn start_diff_buffers_job(
+        &mut self,
+        buffer_id_a: audio::BufferId,
+        buffer_id_b: audio::BufferId,
+        sample_ix_offset_a: audio::sample::Ix,
+        sample_ix_offset_b: audio::sample::Ix,
+    ) -> Result<jobs::JobId> {
+        let buffer_a = self.audio.buffer_arc(buffer_id_a)?;
+        let buffer_b = self.audio.buffer_arc(buffer_id_b)?;
+        anyhow::ensure!(
+            buffer_a.sample_rate() == buffer_b.sample_rate(),
+            "diff inputs must have the same sample rate ({} != {})",
+            buffer_a.sample_rate(),
+            buffer_b.sample_rate()
+        );
+        let job_id = self.job_mgr.start_job(
+            jobs::JobKind::Diff,
+            format!("Diff {buffer_id_a:?} - {buffer_id_b:?}"),
+        );
+        jobs::spawn_diff_buffers_job(
+            job_id,
+            jobs::diff::DiffBuffersJobInput {
+                buffer_id_a,
+                buffer_id_b,
+                buffer_a,
+                buffer_b,
+                sample_ix_offset_a,
+                sample_ix_offset_b,
+            },
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
+        Ok(job_id)
+    }
 }
 
 impl Model {
@@ -390,7 +536,8 @@ mod tests {
     use super::{FileVisibilityState, Model};
     use crate::{
         audio,
-        model::track,
+        audio::thumbnail::ThumbnailE,
+        model::{jobs, track},
         wav::{self, file2},
     };
 
@@ -427,6 +574,29 @@ mod tests {
             layout: None,
             path: None,
             nr_samples: 16,
+            sample_ix_offset: 0,
+        }
+    }
+
+    fn loaded_file_with_one_buffer(
+        buffer: audio::buffer::BufferE,
+        sample_ix_offset: audio::sample::Ix,
+    ) -> wav::read::LoadedFile {
+        let mut channels = BTreeMap::new();
+        let mut thumbnails = BTreeMap::new();
+        channels.insert(0, buffer.clone());
+        thumbnails.insert(0, ThumbnailE::from_buffer_e(&buffer, None));
+        wav::read::LoadedFile {
+            load_id: 0,
+            channels,
+            thumbnails,
+            sample_type: audio::SampleType::Float,
+            bit_depth: 32,
+            sample_rate: 48_000,
+            layout: None,
+            path: None,
+            nr_samples: buffer.nr_samples() as u64,
+            sample_ix_offset,
         }
     }
 
@@ -459,6 +629,36 @@ mod tests {
             model.file_visibility_state_for(file_id),
             Some(FileVisibilityState::NoneVisible)
         );
+    }
+
+    #[test]
+    fn add_loaded_diff_creates_two_source_tracks_and_diff_track() {
+        let mut model = Model::default();
+        let buffer_a = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let buffer_b = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let diff_buffer =
+            audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let diff_thumbnail = ThumbnailE::from_buffer_e(&diff_buffer, None);
+
+        model
+            .add_loaded_diff(jobs::LoadedDiff {
+                file_a: loaded_file_with_one_buffer(buffer_a, -2),
+                file_b: loaded_file_with_one_buffer(buffer_b, 3),
+                sample_ix_offset_a: -2,
+                sample_ix_offset_b: 3,
+                sample_ix_offset_diff: 0,
+                diff_buffer,
+                diff_thumbnail,
+            })
+            .unwrap();
+
+        assert_eq!(model.tracks.tracks_order.len(), 3);
+        let diff_track = model
+            .tracks
+            .get_track(*model.tracks.tracks_order.last().unwrap())
+            .unwrap();
+        assert!(diff_track.diff.is_some());
+        assert_eq!(model.files_order.len(), 2);
     }
 
     #[test]

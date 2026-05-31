@@ -30,7 +30,8 @@ pub struct Single {
     /// [`Self::update`] after recomputing the sample view.
     dirty: bool,
 
-    /// For positioning wrt the absolute zero pos for all tracks
+    /// Signed sample offset used to map absolute sample indices to this buffer's local indices.
+    /// A sample at absolute index `n` reads local index `n + sample_ix_offset`.
     pub sample_ix_offset: f64,
 }
 
@@ -50,7 +51,8 @@ impl Single {
     /// Track-local sample rect (with [`Self::sample_ix_offset`] applied).
     pub fn sample_rect(&self) -> Option<SampleRect> {
         self.sample_rect.map(|mut sample_rect| {
-            sample_rect.shift_ix_rng(-self.sample_ix_offset);
+            // Convert the absolute timeline window into this buffer's local sample indices.
+            sample_rect.shift_ix_rng(self.sample_ix_offset);
             sample_rect
         })
     }
