@@ -4,13 +4,52 @@ use crate::{
         config::RULER_SLOT_WIDTH,
         track::{self, TrackId},
     },
-    view::{db_ruler, value_ruler2},
+    view::{db_ruler, grid::KeyValueGrid, value_ruler2},
 };
 use anyhow::Result;
 
 mod hover;
 mod selection;
 mod waveform;
+
+/// Preformatted metadata for the track-header hover popup.
+///
+/// The header itself is width-constrained and intentionally terse, while the popup can show the
+/// full file/channel context in a stable key/value layout.
+#[derive(Debug, Clone)]
+struct TrackHeaderHoverInfo {
+    path: String,
+    channel: String,
+    nr_channels: String,
+    sample_type: String,
+    bit_depth: String,
+    sample_rate: String,
+    nr_samples: String,
+    duration: String,
+    layout: String,
+}
+
+impl TrackHeaderHoverInfo {
+    fn ui(&self, ui: &mut egui::Ui, track_id: TrackId) {
+        ui.heading("Track source");
+        ui.separator();
+
+        // Use a per-track grid id so multiple track headers can coexist without sharing egui
+        // interaction/layout state.
+        let id: u64 = ui.id().with(("track_header_hover_grid", track_id)).value();
+        let mut grid = KeyValueGrid::new(id).key_col_width(95.0);
+        grid.row("path", self.path.clone());
+        grid.row("channel ix", self.channel.clone());
+        grid.row("channels", self.nr_channels.clone());
+        grid.row("sample type", self.sample_type.clone());
+        grid.row("bit depth", self.bit_depth.clone());
+        grid.row("sample rate", self.sample_rate.clone());
+        grid.row("samples", self.nr_samples.clone());
+        grid.row("duration", self.duration.clone());
+        grid.row("layout", self.layout.clone());
+        grid.show(ui);
+    }
+}
 
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     let theme_colors = model.user_config.active_theme_colors(ui.visuals()).clone();
@@ -260,7 +299,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
         // .outer_margin(ui.style().spacing.window_margin / 6.0)
         .show(ui, |ui| {
             let mut text = String::from("track header");
-            let mut hover_text = None;
+            let mut hover_info = None;
             let mut path_text = None;
             let mut channel_text = None;
 
@@ -274,7 +313,27 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 path_text = Some(path.to_string());
                 channel_text = Some(format!(" - ch {}", channel.ch_ix));
                 text = format!("{} - ch {}", path, channel.ch_ix);
-                hover_text = Some(format!("{file}"));
+                // Build the hover data once per frame here, while we still have both the file and
+                // the specific channel for this track. The popup renderer below only formats it.
+                hover_info = Some(TrackHeaderHoverInfo {
+                    path: path.to_string(),
+                    channel: channel.ch_ix.to_string(),
+                    nr_channels: file.channels.len().to_string(),
+                    sample_type: format!("{:?}", file.sample_type),
+                    bit_depth: file.bit_depth.to_string(),
+                    sample_rate: format!("{} Hz", file.sample_rate),
+                    nr_samples: file.nr_samples.to_string(),
+                    duration: if file.sample_rate == 0 {
+                        String::from("unknown")
+                    } else {
+                        format!("{:.3} s", file.nr_samples as f64 / file.sample_rate as f64)
+                    },
+                    layout: file
+                        .layout
+                        .as_ref()
+                        .map(|layout| format!("{layout:?}"))
+                        .unwrap_or_else(|| String::from("unknown")),
+                });
             }
 
             let rect = ui.max_rect();
@@ -334,13 +393,13 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 rect.center().y - galley.size().y / 2.0,
             );
             ui.painter().galley(text_pos, galley, color);
-            if let Some(hover_text) = hover_text {
+            if let Some(hover_info) = hover_info {
                 ui.interact(
                     label_rect,
-                    ui.id().with("header_label"),
+                    ui.id().with(("header_label", track_id)),
                     egui::Sense::hover(),
                 )
-                .on_hover_text(hover_text);
+                .on_hover_ui(move |ui| hover_info.ui(ui, track_id));
             }
         });
     Ok(())
