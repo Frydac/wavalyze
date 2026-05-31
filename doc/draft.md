@@ -1,20 +1,42 @@
 ## Ideas
 
-* when shift click, always adjust existing selection.
+* when shift click in track, always adjust existing selection. Not only when at edge of selection.
   * use closest edge to move around
+
+* marks
+  * save marks in certain sample index positions
+  * show sample value for each mark and 'jump to' button
+  * show marks in ruler and track overview
+  * name?
+* track color
+  * make color table with generator
+    * use hsv or better to vary hue
+  * use different color per file?
+* track overview with navigation
+  * similar to ableton arangement view overview
+  * similar to scrollbar, but some extra features
+  * unfortunately there is not mouse pointer pinning
+  * click and drag on bar to pan
+  * click and drag on bar side to move side only
+  * double click to zoom to full
+  * show marks/selection/
+* zoom to rectangle/box
+  * ctrl-left click and drag?
+* watch file for changes and reload, maybe reload option to always reload or ask user?
+  * update diff when one of 2 source files changes?
 
 
 ## Diff functionality
   * at least start with cli options to select 2 tracks from 1 or 2 files
   * super position tracks with 2 colors in some way
     * when hovering, show diff value too
+    * maybe just draw both waveforms with transparency over each other
 
 
 ## TODO
-* remove all
-* drag drop files
-* show tree with checkboxes to toggle tracks
-* watch file for changes and reload, maybe reload option to always reload or ask user?
+* [x] remove all
+* [x] drag drop files
+* [x] show tree with checkboxes to toggle tracks
 
 
 * rulers

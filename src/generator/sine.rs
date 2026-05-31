@@ -1,4 +1,4 @@
-// Generate a endless sinewave
+// Generate a sinewave
 // TODO: make generic for float, and integer based PCM16, PCM24, PCM32?
 
 pub struct Sine {

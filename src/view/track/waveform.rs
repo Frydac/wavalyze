@@ -158,7 +158,8 @@ fn draw_waveform(
                         return;
                     };
                     let pos_mid = crate::Pos { x: pos.x, y: y_mid };
-                    let is_hovered = hover_info.sample_pos_is_hovered(pos.x.into(), sample_view.samples_per_pixel as f64);
+                    let is_hovered = hover_info
+                        .sample_pos_is_hovered(pos.x.into(), sample_view.samples_per_pixel as f64);
                     let stroke_width = if is_hovered { 2.0 } else { 1.0 };
 
                     let color = if is_hovered {
