@@ -9,7 +9,7 @@
 //! The overview maps mouse deltas through its own width, then applies `ZoomX` around anchors in
 //! `ruler_rect`; if those widths diverge, edge-resizing will no longer visually track the pointer.
 
-use crate::model::{self, Action};
+use crate::model::{self, Action, selection_info::SelectionInfoE, time_camera};
 
 pub(crate) const HEIGHT: f32 = 18.0;
 
@@ -58,6 +58,18 @@ pub(crate) fn ui(
         return;
     };
 
+    // Double-clicking anywhere on the overview is a quick way back to the full visible duration.
+    let overview_response = ui.interact(
+        overview_rect,
+        ui.id().with("overview_zoom_to_full"),
+        egui::Sense::click(),
+    );
+    if overview_response.double_clicked() {
+        model.actions.push(Action::ZoomToFull);
+        return;
+    }
+
+    draw_selection(ui, model, geometry);
     handle_interaction(ui, model, geometry);
     draw_viewport(ui, model, geometry.viewport_rect);
 }
@@ -271,6 +283,63 @@ fn draw_viewport(ui: &mut egui::Ui, model: &model::Model, viewport_rect: egui::R
             egui::epaint::StrokeKind::Inside,
         );
     }
+}
+
+fn draw_selection(ui: &mut egui::Ui, model: &model::Model, geometry: Geometry) {
+    let SelectionInfoE::IsSelected(selection_info) = model.tracks.selection_info else {
+        return;
+    };
+    if selection_info.ix_rng.end <= selection_info.ix_rng.start {
+        return;
+    }
+
+    // Selection sample indices are global/ruler-facing values, so use the same reference sample
+    // rate that the time ruler uses for sample-index display.
+    let Some(sample_rate) = model.tracks.reference_sample_rate() else {
+        return;
+    };
+    let start_s = time_camera::sample_ix_to_time(selection_info.ix_rng.start as f64, sample_rate)
+        .clamp(0.0, geometry.total_duration_s);
+    let end_s = time_camera::sample_ix_to_time(selection_info.ix_rng.end as f64, sample_rate)
+        .clamp(0.0, geometry.total_duration_s);
+    if start_s == end_s {
+        return;
+    }
+
+    let x_start = time_to_overview_x(start_s, geometry.total_duration_s, geometry.inner_rect);
+    let x_end = time_to_overview_x(end_s, geometry.total_duration_s, geometry.inner_rect);
+    let mut left = x_start.min(x_end);
+    let mut right = x_start.max(x_end);
+    if right - left < 1.0 {
+        right = (left + 1.0).min(geometry.inner_rect.right());
+        if right == geometry.inner_rect.right() {
+            left = (right - 1.0).max(geometry.inner_rect.left());
+        }
+    }
+
+    let selection_rect = egui::Rect::from_min_max(
+        egui::pos2(left, geometry.inner_rect.top()),
+        egui::pos2(right, geometry.inner_rect.bottom()),
+    );
+    if !selection_rect.is_positive() {
+        return;
+    }
+
+    let theme_colors = model.user_config.active_theme_colors(ui.visuals());
+    ui.painter()
+        .rect_filled(selection_rect, 1.0, theme_colors.waveform_selection_fill);
+
+    let edge_stroke = egui::Stroke::new(1.0, theme_colors.accent.gamma_multiply(0.7));
+    ui.painter().vline(
+        selection_rect.left(),
+        selection_rect.top()..=selection_rect.bottom(),
+        edge_stroke,
+    );
+    ui.painter().vline(
+        selection_rect.right(),
+        selection_rect.top()..=selection_rect.bottom(),
+        edge_stroke,
+    );
 }
 
 fn visible_tracks_duration_s(model: &model::Model) -> Option<f64> {
