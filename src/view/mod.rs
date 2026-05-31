@@ -17,6 +17,8 @@ use anyhow::Result;
 use egui;
 use std::sync::mpsc::{Receiver, Sender};
 
+const TOP_TOOL_BAR_HEIGHT: f32 = 50.0;
+
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
@@ -342,14 +344,14 @@ impl View {
     fn ui_central_panel(&mut self, ctx: &egui::Context) -> Result<()> {
         egui::CentralPanel::default().show(ctx, |ui| {
             let top_width = ui.available_width().max(0.0);
-            ui.allocate_ui([top_width, 50.0].into(), |ui| {
+            ui.allocate_ui([top_width, TOP_TOOL_BAR_HEIGHT].into(), |ui| {
                 self.ui_top_panel_tool_bar(ui, ctx);
                 // ui.painter().rect(ui.min_rect().shrink(1.0), 0.0, egui::Color32::TRANSPARENT, egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
                 // ui.separator();
             });
 
             let ruler_width = ui.available_width().max(0.0);
-            ui.allocate_ui([ruler_width, 50.0].into(), |ui| {
+            ui.allocate_ui([ruler_width, ruler::HEIGHT].into(), |ui| {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_min_size(size);

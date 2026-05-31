@@ -5,10 +5,14 @@ use thousands::Separable;
 use crate::view::util::zoom_delta_to_scroll_delta;
 
 mod hover;
+mod overview;
 mod selection;
 mod ticks;
 
 pub use ticks::NR_PIXELS_PER_TICK;
+
+const TIME_RULER_HEIGHT: f32 = 50.0;
+pub(crate) const HEIGHT: f32 = overview::HEIGHT + TIME_RULER_HEIGHT;
 
 pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     let container_rect = ui.min_rect();
@@ -18,15 +22,33 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
         .min(container_rect.width());
     let mut info_rect = container_rect;
     info_rect.set_width(info_width);
-    let ruler_rect = egui::Rect::from_min_size(
+    let content_rect = egui::Rect::from_min_size(
         [info_rect.max.x, container_rect.min.y].into(),
         [container_rect.width() - info_width, container_rect.height()].into(),
+    );
+    // The ruler block is split vertically: an overview strip above the interactive time ruler.
+    // Both use `content_rect`, so they align horizontally with the waveform area rather than the
+    // track side bar. Overview edge-resizing depends on that shared width to anchor `ZoomX` in
+    // the same coordinate space as the waveform/time ruler.
+    let overview_rect = egui::Rect::from_min_size(
+        content_rect.min,
+        egui::vec2(
+            content_rect.width(),
+            overview::HEIGHT.min(content_rect.height()),
+        ),
+    );
+    let ruler_rect = egui::Rect::from_min_max(
+        egui::pos2(content_rect.left(), overview_rect.bottom()),
+        content_rect.right_bottom(),
     );
     // println!("ruler_rect first: {}", ruler_rect);
 
     // debug_rect_text(ui, rect.shrink(1.0), egui::Color32::LIGHT_GREEN, "ruler container");
     // debug_rect_text(ui, info_rect.shrink(1.0), egui::Color32::LIGHT_GRAY, "ruler info");
     // debug_rect_text(ui, ruler_rect.shrink(1.0), egui::Color32::LIGHT_BLUE, "ruler");
+
+    // Overview interactions push the same navigation actions as the ruler/waveform views.
+    overview::ui(ui, model, overview_rect, ruler_rect);
 
     let response = ui.allocate_rect(ruler_rect, egui::Sense::click_and_drag());
     let mut ui_ruler = ui.new_child(
