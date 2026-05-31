@@ -1,6 +1,6 @@
 # Wavalyze CLI Interface
 
-Wavalyze provides a flexible and intuitive command-line interface for analyzing WAV files. The interface supports multiple files with optional channel and sample range specifications.
+Wavalyze provides a command-line interface for opening and diffing WAV files. File arguments can include optional channel, sample range, and sample offset specifications.
 
 ## Quick Start
 
@@ -14,22 +14,23 @@ For more complex operations, you can use explicit subcommands:
 
 ```bash
 wavalyze open song.wav:0,2:1000-5000
-wavalyze diff file1.wav file2.wav
+wavalyze diff file1.wav file2.wav:0:o=-10
 ```
 
 ## File Specifications
 
-When opening files, you can attach optional specifications directly to the filename using colons as separators. Specifications can be provided in any order.
+When opening or diffing files, you can attach optional specifications directly to the filename using colons as separators. Specifications can be provided in any order.
 
 ### Syntax
 
 ```
-FILE[:SPEC[:SPEC]]
+FILE[:SPEC[:SPEC...]]
 ```
 
 Where `SPEC` can be:
 - **Channels**: Comma-separated channel numbers (e.g., `0,2,4`)
 - **Sample Range**: Start and end sample indices (e.g., `1000-5000`)
+- **Sample Offset**: Signed sample offset using `offset=N` or `o=N` (e.g., `offset=-10`, `o=25`)
 
 ### Channel Selection
 
@@ -55,15 +56,28 @@ wavalyze song.wav:-5000           # From the start to sample 5000
 
 If no range is specified, the entire file is opened.
 
-### Combining Channels and Ranges
+### Sample Offset
 
-You can combine channel and range specifications in either order:
+Specify a signed sample offset with `offset=N` or the short form `o=N`:
+
+```bash
+wavalyze song.wav:0:offset=-10
+wavalyze song.wav:0:o=25
+```
+
+Offsets place a buffer on the shared absolute sample timeline. A positive offset means absolute sample `n` reads local buffer sample `n + offset`.
+
+### Combining Specifications
+
+You can combine channel, range, and offset specifications in any order:
 
 ```bash
 wavalyze song.wav:0,2:1000-5000
 wavalyze song.wav:1000-5000:0,2
 wavalyze song.wav:-10000:1,3      # First 10000 samples, channels 1 and 3
 wavalyze song.wav:0:5000-         # Channel 0, from sample 5000 onwards
+wavalyze song.wav:0:5000-:o=-32   # Channel 0, range from 5000, offset by -32 samples
+wavalyze song.wav:o=12:0:100-200  # Same syntax, different order
 ```
 
 ## Commands
@@ -76,9 +90,6 @@ Opens one or more WAV files for editing or analysis.
 wavalyze open file1.wav file2.wav:0,1 file3.wav:1000-5000
 ```
 
-**Flags:**
-- `-v, --verbose`: Enable verbose output
-
 The `open` command is the default, so you can omit it:
 
 ```bash
@@ -87,21 +98,38 @@ wavalyze file1.wav file2.wav:0,1 file3.wav:1000-5000
 
 ### diff
 
-Compares two WAV files.
+Loads two source tracks and creates a third Diff track. The Diff track renders a generated diff buffer computed as:
 
-```bash
-wavalyze diff original.wav modified.wav
+```text
+A[n + offset_a] - B[n + offset_b]
 ```
 
-**Flags:**
-- `-v, --verbose`: Enable verbose output
-
-### info
-
-Displays information about one or more WAV files.
+Out-of-range samples are treated as zero. Both inputs must have the same sample rate.
 
 ```bash
-wavalyze info file1.wav file2.wav file3.wav
+wavalyze diff original.wav processed.wav
+wavalyze diff original.wav:0 processed.wav:0:o=-10
+```
+
+For each diff input, exactly one channel must be selected. If no channel is specified, the file is accepted only when it is mono. Multi-channel files must specify one channel explicitly:
+
+```bash
+wavalyze diff mono_a.wav mono_b.wav       # OK if both files are mono
+wavalyze diff stereo_a.wav:0 stereo_b.wav:1
+wavalyze diff stereo_a.wav stereo_b.wav   # Error if either file has multiple channels
+```
+
+The diff command runs as one background Diff job. It reuses the normal WAV loading pipeline and reports detailed progress for both inputs (`A: reading samples`, `B: thumbnails`, etc.), then computes the diff and integrates the three tracks together.
+
+## Global Options
+
+### `--log-level`
+
+Sets the tracing/log level. Examples:
+
+```bash
+wavalyze --log-level debug song.wav
+wavalyze --log-level wavalyze=debug,eframe=info song.wav
 ```
 
 ## Examples
@@ -132,6 +160,7 @@ wavalyze music.wav:0,2,4:-480000
 
 ```bash
 wavalyze diff original.wav processed.wav
+wavalyze diff original.wav:0:o=-12 processed.wav:0
 ```
 
 ### Open multiple files with different specifications
@@ -144,6 +173,8 @@ wavalyze file1.wav:0,1 file2.wav:1000-50000 file3.wav:0:100000-
 
 - Channel indices are zero-based (the first channel is channel 0)
 - Sample ranges are inclusive of the start index and exclusive of the end index
+- Offsets are signed sample counts and use `offset=N` or `o=N`
 - Specifications are case-sensitive
 - All paths use your platform's standard path separators (forward slashes on Unix-like systems, backslashes on Windows)
-- If both channels and range are specified, both filters are applied
+- If channels, range, and offset are specified, all specifications are applied
+- `diff` currently produces three tracks: source A, source B, and the generated Diff track
