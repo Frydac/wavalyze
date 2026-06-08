@@ -154,7 +154,7 @@ impl Default for Config {
             tracks_width_info: 250.0,
             show_amplitude_ruler: true,
             show_db_ruler: false,
-            round_minmax_waveform_to_pixel_center: false,
+            round_minmax_waveform_to_pixel_center: true,
             value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
