@@ -124,13 +124,15 @@ fn ui_waveform(
 
     draw_waveform(
         ui,
-        sample_view,
-        sample_rect,
-        screen_rect,
-        display_scale,
-        round_minmax_to_pixel_center,
-        &hover_info,
-        theme_colors,
+        WaveformDrawParams {
+            sample_view,
+            sample_rect,
+            screen_rect,
+            display_scale,
+            round_minmax_to_pixel_center,
+            hover_info: &hover_info,
+            theme_colors,
+        },
     );
 
     draw_value_grid(ui, sample_rect, screen_rect, display_scale);
@@ -138,53 +140,60 @@ fn ui_waveform(
     Ok(())
 }
 
-fn draw_waveform(
-    ui: &mut egui::Ui,
-    sample_view: &sample::View,
+struct WaveformDrawParams<'a> {
+    sample_view: &'a sample::View,
     sample_rect: audio::SampleRect,
     screen_rect: Rect,
     display_scale: crate::model::ruler::ValueDisplayScale,
     round_minmax_to_pixel_center: bool,
-    hover_info: &HoverInfoE,
-    theme_colors: &ThemeColors,
-) {
-    match sample_view.data {
+    hover_info: &'a HoverInfoE,
+    theme_colors: &'a ThemeColors,
+}
+
+fn draw_waveform(ui: &mut egui::Ui, params: WaveformDrawParams<'_>) {
+    match params.sample_view.data {
         ViewData::Single(ref single_view) => {
-            if sample_view.samples_per_pixel < SINGLE_SAMPLE_DRAW_MAX_SPP {
+            if params.sample_view.samples_per_pixel < SINGLE_SAMPLE_DRAW_MAX_SPP {
                 single_view.samples.iter().for_each(|pos| {
-                    let Some(val_rng) = sample_rect.val_rng() else {
+                    let Some(val_rng) = params.sample_rect.val_rng() else {
                         return;
                     };
-                    let Some(y_mid) =
-                        sample_value_to_screen_y(0.0, val_rng, screen_rect, display_scale)
-                    else {
+                    let Some(y_mid) = sample_value_to_screen_y(
+                        0.0,
+                        val_rng,
+                        params.screen_rect,
+                        params.display_scale,
+                    ) else {
                         return;
                     };
                     let pos_mid = crate::Pos { x: pos.x, y: y_mid };
-                    let is_hovered = hover_info
-                        .sample_pos_is_hovered(pos.x.into(), sample_view.samples_per_pixel as f64);
+                    let is_hovered = params.hover_info.sample_pos_is_hovered(
+                        pos.x.into(),
+                        params.sample_view.samples_per_pixel as f64,
+                    );
                     let stroke_width = if is_hovered { 2.0 } else { 1.0 };
 
                     let color = if is_hovered {
-                        theme_colors.waveform_hovered_sample
+                        params.theme_colors.waveform_hovered_sample
                     } else {
-                        theme_colors.waveform
+                        params.theme_colors.waveform
                     };
                     let line_color = color.linear_multiply(0.7);
 
-                    if pos.y < screen_rect.top() && pos_mid.y < screen_rect.top()
-                        || pos.y > screen_rect.bottom() && pos_mid.y > screen_rect.bottom()
+                    if pos.y < params.screen_rect.top() && pos_mid.y < params.screen_rect.top()
+                        || pos.y > params.screen_rect.bottom()
+                            && pos_mid.y > params.screen_rect.bottom()
                     {
                         return;
                     }
 
-                    let pos_mid = screen_rect.clip_pos(pos_mid);
+                    let pos_mid = params.screen_rect.clip_pos(pos_mid);
                     let pos_mid = rpc(ui, pos_mid.into());
 
                     let mut pos = *pos;
 
-                    if screen_rect.contains(pos) {
-                        let circle_size = if sample_view.samples_per_pixel < 1.0 / 16.0 {
+                    if params.screen_rect.contains(pos) {
+                        let circle_size = if params.sample_view.samples_per_pixel < 1.0 / 16.0 {
                             3.0
                         } else {
                             2.0
@@ -196,7 +205,7 @@ fn draw_waveform(
                         ui.painter()
                             .circle_filled(pos_centered_x, circle_size, color);
                     } else {
-                        pos = screen_rect.clip_pos(pos);
+                        pos = params.screen_rect.clip_pos(pos);
                     };
 
                     let pos = rpc(ui, pos.into());
@@ -209,7 +218,7 @@ fn draw_waveform(
             } else {
                 single_view.line_segments.iter().for_each(|segment| {
                     let positions = segment.iter().map(|pos| rpc(ui, pos.into())).collect();
-                    let color = theme_colors.waveform;
+                    let color = params.theme_colors.waveform;
                     let line_color = color.linear_multiply(0.7);
                     ui.painter()
                         .line(positions, egui::Stroke::new(1.0, line_color));
@@ -219,12 +228,14 @@ fn draw_waveform(
         ViewData::MinMax(ref mix_max_positions) => {
             let stroke_width = minmax_column_stroke_width(ui.ctx().pixels_per_point());
             mix_max_positions.iter().for_each(|pos| {
-                let min = minmax_column_pos(ui, &pos.min, round_minmax_to_pixel_center);
-                let max = minmax_column_pos(ui, &pos.max, round_minmax_to_pixel_center);
-                if !screen_rect.contains(min.into()) && !screen_rect.contains(max.into()) {
+                let min = minmax_column_pos(ui, &pos.min, params.round_minmax_to_pixel_center);
+                let max = minmax_column_pos(ui, &pos.max, params.round_minmax_to_pixel_center);
+                if !params.screen_rect.contains(min.into())
+                    && !params.screen_rect.contains(max.into())
+                {
                     return;
                 }
-                let color = theme_colors.waveform;
+                let color = params.theme_colors.waveform;
                 ui.painter()
                     .line_segment([min, max], egui::Stroke::new(stroke_width, color));
             });
