@@ -39,6 +39,9 @@ fn default_true() -> bool {
 /// Width of a single value/dB ruler column inside a track's side panel.
 pub const RULER_SLOT_WIDTH: f32 = 80.0;
 
+/// Minimum width for non-ruler controls in the per-track side panel.
+pub const TRACK_SIDE_CONTROLS_MIN_WIDTH: f32 = 170.0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
 pub enum StartEditMode {
     #[default]
@@ -184,7 +187,9 @@ impl Config {
 
     /// Total width the per-track side panel should claim, given the enabled rulers.
     pub fn effective_tracks_width_info(&self) -> f32 {
-        self.tracks_width_info + self.ruler_stack_extra_width()
+        let ruler_count = self.show_amplitude_ruler as u32 + self.show_db_ruler as u32;
+        let min_width = TRACK_SIDE_CONTROLS_MIN_WIDTH + RULER_SLOT_WIDTH * ruler_count as f32;
+        (self.tracks_width_info + self.ruler_stack_extra_width()).max(min_width)
     }
 
     /// Load config from file or use default
@@ -353,5 +358,46 @@ selection_fill = [1, 2, 3, 4]
         assert_eq!(config.ruler_stack_extra_width(), 0.0);
         config.show_db_ruler = false;
         assert_eq!(config.ruler_stack_extra_width(), 0.0);
+    }
+
+    #[test]
+    fn effective_tracks_width_info_keeps_room_for_controls_and_enabled_rulers() {
+        let mut config = Config {
+            tracks_width_info: 150.0,
+            ..Config::default()
+        };
+
+        assert_eq!(
+            config.effective_tracks_width_info(),
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH + super::RULER_SLOT_WIDTH
+        );
+
+        config.show_db_ruler = true;
+        assert_eq!(
+            config.effective_tracks_width_info(),
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH + 2.0 * super::RULER_SLOT_WIDTH
+        );
+
+        config.show_amplitude_ruler = false;
+        assert_eq!(
+            config.effective_tracks_width_info(),
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH + super::RULER_SLOT_WIDTH
+        );
+
+        config.show_db_ruler = false;
+        assert_eq!(
+            config.effective_tracks_width_info(),
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH
+        );
+    }
+
+    #[test]
+    fn effective_tracks_width_info_preserves_larger_user_widths() {
+        let config = Config {
+            tracks_width_info: 300.0,
+            ..Config::default()
+        };
+
+        assert_eq!(config.effective_tracks_width_info(), 300.0);
     }
 }
