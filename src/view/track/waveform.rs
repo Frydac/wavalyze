@@ -214,6 +214,7 @@ fn draw_waveform(
             }
         }
         ViewData::MinMax(ref mix_max_positions) => {
+            let stroke_width = minmax_column_stroke_width(ui.ctx().pixels_per_point());
             mix_max_positions.iter().for_each(|pos| {
                 let min = rpc(ui, (&pos.min).into());
                 let max = rpc(ui, (&pos.max).into());
@@ -222,10 +223,22 @@ fn draw_waveform(
                 }
                 let color = theme_colors.waveform;
                 ui.painter()
-                    .line_segment([min, max], egui::Stroke::new(1.0, color));
+                    .line_segment([min, max], egui::Stroke::new(stroke_width, color));
             });
         }
     };
+}
+
+fn minmax_column_stroke_width(pixels_per_point: f32) -> f32 {
+    if pixels_per_point <= 0.0 {
+        return 1.0;
+    }
+
+    // Min/max data is one vertical column per egui point. On fractional display scales
+    // (e.g. 1.25 or 1.5), adjacent point-centered strokes can round to physical pixel
+    // centers that are two pixels apart. Widen to a whole number of physical pixels so
+    // zoomed-out waveforms remain continuous instead of developing alternating gaps.
+    (pixels_per_point.ceil() / pixels_per_point).max(1.0)
 }
 
 fn draw_value_grid(
@@ -279,5 +292,24 @@ fn draw_value_grid(
             grid_stroke
         };
         ui.painter().line_segment([left, right], stroke);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::minmax_column_stroke_width;
+
+    #[test]
+    fn minmax_column_stroke_width_covers_fractional_scale_pixels() {
+        assert_eq!(minmax_column_stroke_width(1.0), 1.0);
+        assert_eq!(minmax_column_stroke_width(2.0), 1.0);
+        assert!((minmax_column_stroke_width(1.25) - 1.6).abs() < f32::EPSILON);
+        assert!((minmax_column_stroke_width(1.5) - (2.0 / 1.5)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn minmax_column_stroke_width_handles_invalid_scale() {
+        assert_eq!(minmax_column_stroke_width(0.0), 1.0);
+        assert_eq!(minmax_column_stroke_width(-1.0), 1.0);
     }
 }
