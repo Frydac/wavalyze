@@ -19,5 +19,9 @@ perf.*
 
 .codex
 CLAUDE.md
+AGENTS.md
+GEMINI.md
 doc/dev/sample_to_pixel_001.excalidraw
 doc/images/wavalyze.svg
+tags.lock
+tags.temp
