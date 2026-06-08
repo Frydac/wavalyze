@@ -67,6 +67,10 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                 });
                 ui.checkbox(&mut config.show_amplitude_ruler, "Show amplitude ruler");
                 ui.checkbox(&mut config.show_db_ruler, "Show dB ruler");
+                ui.checkbox(
+                    &mut config.round_minmax_waveform_to_pixel_center,
+                    "Round zoomed-out waveform columns",
+                );
             });
         }
         ui.separator();

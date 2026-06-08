@@ -24,6 +24,10 @@ pub struct Config {
     /// widens by one ruler slot.
     #[serde(default)]
     pub show_db_ruler: bool,
+    /// Round zoomed-out min/max waveform columns to pixel centers. This can look crisper at some
+    /// zoom levels, but raw positions behave better on fractional display scaling.
+    #[serde(default)]
+    pub round_minmax_waveform_to_pixel_center: bool,
     pub value_display_scale: ValueDisplayScale,
     pub shortcuts: ShortcutConfig,
     pub selection: SelectionConfig,
@@ -150,6 +154,7 @@ impl Default for Config {
             tracks_width_info: 250.0,
             show_amplitude_ruler: true,
             show_db_ruler: false,
+            round_minmax_waveform_to_pixel_center: false,
             value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
@@ -346,6 +351,16 @@ selection_fill = [1, 2, 3, 4]
 
         assert!(config.show_amplitude_ruler);
         assert!(!config.show_db_ruler);
+    }
+
+    #[test]
+    fn old_config_without_waveform_rounding_flag_defaults_off() {
+        let config: Config = toml::from_str(
+            "zoom_x_scroll_factor = 2.0\nshow_hover_info = true\ntracks_width_info = 120.0\n",
+        )
+        .unwrap();
+
+        assert!(!config.round_minmax_waveform_to_pixel_center);
     }
 
     #[test]

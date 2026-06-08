@@ -96,6 +96,7 @@ fn ui_waveform(
     let time_range = model.tracks.time_camera.time_range(screen_width);
     let hover_info = model.tracks.hover_info;
     let display_scale = model.user_config.value_display_scale;
+    let round_minmax_to_pixel_center = model.user_config.round_minmax_waveform_to_pixel_center;
     let track = model
         .tracks
         .get_track_mut(track_id)
@@ -127,6 +128,7 @@ fn ui_waveform(
         sample_rect,
         screen_rect,
         display_scale,
+        round_minmax_to_pixel_center,
         &hover_info,
         theme_colors,
     );
@@ -142,6 +144,7 @@ fn draw_waveform(
     sample_rect: audio::SampleRect,
     screen_rect: Rect,
     display_scale: crate::model::ruler::ValueDisplayScale,
+    round_minmax_to_pixel_center: bool,
     hover_info: &HoverInfoE,
     theme_colors: &ThemeColors,
 ) {
@@ -216,8 +219,8 @@ fn draw_waveform(
         ViewData::MinMax(ref mix_max_positions) => {
             let stroke_width = minmax_column_stroke_width(ui.ctx().pixels_per_point());
             mix_max_positions.iter().for_each(|pos| {
-                let min = rpc(ui, (&pos.min).into());
-                let max = rpc(ui, (&pos.max).into());
+                let min = minmax_column_pos(ui, &pos.min, round_minmax_to_pixel_center);
+                let max = minmax_column_pos(ui, &pos.max, round_minmax_to_pixel_center);
                 if !screen_rect.contains(min.into()) && !screen_rect.contains(max.into()) {
                     return;
                 }
@@ -227,6 +230,15 @@ fn draw_waveform(
             });
         }
     };
+}
+
+fn minmax_column_pos(ui: &egui::Ui, pos: &crate::Pos, round_to_pixel_center: bool) -> egui::Pos2 {
+    let pos = egui::Pos2::from(pos);
+    if round_to_pixel_center {
+        rpc(ui, pos)
+    } else {
+        pos
+    }
 }
 
 fn minmax_column_stroke_width(pixels_per_point: f32) -> f32 {
