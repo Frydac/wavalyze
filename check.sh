@@ -8,4 +8,4 @@ cargo +1.93.0 fmt --all -- --check
 cargo +1.93.0 clippy --quiet --workspace --all-targets --all-features --  -D warnings -W clippy::all
 cargo +1.93.0 test --quiet --workspace --all-targets --all-features
 cargo +1.93.0 test --quiet --workspace --doc
-env -u NO_COLOR ./trunk-threaded.sh build
+env -u NO_COLOR ./scripts/trunk-threaded.sh build

@@ -93,7 +93,7 @@ jobs:
       - name: Download and install Trunk binary
         run: wget -qO- https://github.com/thedodd/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
       - name: Build
-        run: env -u NO_COLOR ./trunk-threaded.sh build
+        run: env -u NO_COLOR ./scripts/trunk-threaded.sh build
         env:
           RUSTFLAGS: ${{ env.WASM_THREAD_RUSTFLAGS }}
 

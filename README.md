@@ -41,7 +41,7 @@ Web (WASM):
 ```
 rustup toolchain install nightly-2026-01-15 --target wasm32-unknown-unknown --component rust-src
 cargo +1.93.0 install --locked trunk
-./trunk-threaded.sh serve
+./scripts/trunk-threaded.sh serve
 ```
 
 Open `http://127.0.0.1:8080/index.html#dev` to bypass the service worker cache during development.
@@ -57,4 +57,33 @@ For a local CI-like run, use:
 
 ```bash
 ./check.sh
+```
+
+## Repository layout
+
+- `src/`: Rust application, UI, model, audio, WAV loading, and WASM entrypoints
+- `tests/`: integration tests grouped by subsystem
+- `assets/`: icons, manifest, service worker, and other files copied into the web build
+- `web/`: web hosting support files, including `_headers` for Cloudflare/COOP/COEP headers
+- `scripts/`: project helper scripts, including the Trunk wrapper used for threaded WASM builds
+- `doc/`: project notes, diagrams, screenshots, and generated CLI documentation
+- `dev/nix/`: optional Nix development shell definition
+- `.github/`: CI and deployment workflows
+- `.cargo/`: Cargo configuration
+
+Important root files:
+
+- `Cargo.toml` / `Cargo.lock`: Rust package manifest and locked dependency graph
+- `index.html` / `Trunk.toml`: Trunk web build entrypoint and configuration
+- `wrangler.jsonc`: Cloudflare Workers static-assets deploy configuration
+- `rust-toolchain` / `rustfmt.toml`: pinned Rust toolchain and formatting settings
+- `check.sh`: local CI-like check script
+- `.typos.toml`: spell-check configuration
+
+Generated or local-only paths such as `target/`, `dist/`, `data/`, `perf.data*`, and `tags` are ignored by Git.
+
+Optional Nix shell:
+
+```bash
+nix develop ./dev/nix
 ```

@@ -25,6 +25,17 @@
 * watch file for changes and reload, maybe reload option to always reload or ask user?
   * update diff when one of 2 source files changes?
 
+* peak value
+  * show peak value with marker/highlight and sample value
+* blocks
+  * gui element for block size
+  * use existing offset as start of first block?
+  * show in ruler
+  * show in selection
+  * add snap to block option?
+* option "auto fill screen height"
+  * when enabling/disabling tracks, add action to fill screen height
+
 
 ## Diff functionality
   * at least start with cli options to select 2 tracks from 1 or 2 files

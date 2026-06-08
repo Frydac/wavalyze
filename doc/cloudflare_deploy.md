@@ -6,13 +6,13 @@ This document records the setup that ended up working for deploying `wavalyze` t
 
 - Hosting target: `https://wavalyze.emile-vrijdags-github.workers.dev/`
 - Build system: GitHub Actions
-- Build command: `env -u NO_COLOR ./trunk build --release`
+- Build command: `env -u NO_COLOR ./scripts/trunk-threaded.sh build --release`
 - Deploy tool: Wrangler v4 via GitHub Actions
 - Deploy target: Cloudflare Worker with static assets
 
 Relevant files:
 
-- [`_headers`](../_headers)
+- [`web/_headers`](../web/_headers)
 - [`index.html`](../index.html)
 - [`wrangler.jsonc`](../wrangler.jsonc)
 - [`.github/workflows/cloudflare-pages.yml`](../.github/workflows/cloudflare-pages.yml)
@@ -34,7 +34,7 @@ Cloudflare-managed Git builds did not work for this Rust app because the Cloudfl
 
 ## Files and config
 
-### `_headers`
+### `web/_headers`
 
 This file defines the COOP/COEP headers:
 
@@ -46,10 +46,10 @@ This file defines the COOP/COEP headers:
 
 ### `index.html`
 
-This file copies `_headers` into the Trunk output so it ends up in `dist/`:
+This file copies `web/_headers` into the Trunk output so it ends up in `dist/`:
 
 ```html
-<link data-trunk rel="copy-file" href="_headers" />
+<link data-trunk rel="copy-file" href="web/_headers" />
 ```
 
 ### `wrangler.jsonc`
@@ -198,7 +198,7 @@ true
 ### Check build output locally
 
 ```bash
-env -u NO_COLOR trunk build --release
+env -u NO_COLOR ./scripts/trunk-threaded.sh build --release
 find dist -maxdepth 1 -type f | sort
 ```
 
