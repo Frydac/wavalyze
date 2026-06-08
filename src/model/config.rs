@@ -132,7 +132,7 @@ impl ThemeColors {
             accent: Color32::LIGHT_GRAY,
             waveform: Color32::LIGHT_RED,
             waveform_hovered_sample: Color32::WHITE,
-            waveform_selection_fill: Color32::from_rgba_unmultiplied(211, 211, 211, 5),
+            waveform_selection_fill: Color32::from_rgba_unmultiplied(211, 211, 211, 15),
         }
     }
 
