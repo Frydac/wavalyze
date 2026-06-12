@@ -16,7 +16,8 @@ pub struct DbRulerContext<'a> {
     pub actions: &'a mut Vec<Action>,
     pub hover_info: &'a HoverInfoE,
     pub audio: &'a crate::audio::manager::AudioManager,
-    pub zoom_y_factor: f32,
+    pub pan_y_mult: f32,
+    pub zoom_y_mult: f32,
     pub display_scale: ValueDisplayScale,
 }
 
@@ -181,12 +182,12 @@ fn handle_db_ruler_scroll(
     if modifiers.shift && !modifiers.ctrl && scroll_y != 0.0 {
         ctx.actions.push(Action::PanY {
             track_id,
-            nr_pixels: scroll_y,
+            nr_pixels: scroll_y * ctx.pan_y_mult,
         });
     } else if modifiers.ctrl && zoom_scroll_delta != 0.0 {
         ctx.actions.push(Action::ZoomY {
             track_id,
-            nr_pixels: zoom_scroll_delta * ctx.zoom_y_factor,
+            nr_pixels: zoom_scroll_delta * ctx.zoom_y_mult,
             center_y: hover_pos
                 .map(|p: egui::Pos2| p.y)
                 .unwrap_or(rect.center().y),

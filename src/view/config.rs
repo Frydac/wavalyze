@@ -5,14 +5,58 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
     ui.group(|ui| {
         ui.heading("Settings");
         ui.separator();
-        ui.horizontal(|ui| {
-            ui.label("Zoom X Factor: ");
-            ui.add(
-                egui::DragValue::new(&mut config.zoom_x_scroll_factor)
-                    .speed(0.1)
-                    .range(0.1..=10.0)
-                    .prefix(""),
+        ui.group(|ui| {
+            ui.label("Navigation (scroll wheel)").on_hover_text(
+                "Sensitivity and direction of scroll-wheel pan/zoom on the waveform. \
+                     Does not affect mouse-drag panning.",
             );
+            ui.separator();
+            let nav = &mut config.navigation;
+            // label, factor, invert, what the axis controls (used for both column tooltips)
+            let axes: [(&str, &mut f32, &mut bool, &str); 4] = [
+                (
+                    "Pan X",
+                    &mut nav.pan_x_factor,
+                    &mut nav.invert_pan_x,
+                    "panning left/right in time",
+                ),
+                (
+                    "Pan Y",
+                    &mut nav.pan_y_factor,
+                    &mut nav.invert_pan_y,
+                    "panning up/down in sample value",
+                ),
+                (
+                    "Zoom X",
+                    &mut nav.zoom_x_factor,
+                    &mut nav.invert_zoom_x,
+                    "zooming in/out in time",
+                ),
+                (
+                    "Zoom Y",
+                    &mut nav.zoom_y_factor,
+                    &mut nav.invert_zoom_y,
+                    "zooming in/out in sample value",
+                ),
+            ];
+            egui::Grid::new(ui.id().with("navigation_grid"))
+                .num_columns(3)
+                .spacing([8.0, 4.0])
+                .show(ui, |ui| {
+                    for (label, factor, invert, what) in axes {
+                        ui.label(label).on_hover_text(what);
+                        ui.add(
+                            egui::DragValue::new(factor)
+                                .speed(0.1)
+                                .range(0.1..=10.0)
+                                .prefix(""),
+                        )
+                        .on_hover_text(format!("Speed multiplier for {what}. Higher = faster."));
+                        ui.checkbox(invert, "Invert")
+                            .on_hover_text(format!("Reverse the scroll direction for {what}."));
+                        ui.end_row();
+                    }
+                });
         });
         ui.horizontal(|ui| {
             ui.label("Value Skew: ");

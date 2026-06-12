@@ -81,7 +81,7 @@ pub fn ui_hover(
                 i.smooth_scroll_delta,
                 zoom_delta_to_scroll_delta(i.zoom_delta(), scroll_zoom_speed),
                 pos,
-                model.user_config.zoom_x_scroll_factor,
+                &model.user_config.navigation,
             ) {
                 match action {
                     TrackScrollAction::PanX { nr_pixels } => {
@@ -123,18 +123,18 @@ fn track_scroll_action(
     scroll: egui::Vec2,
     zoom_scroll_delta: f32,
     pos: egui::Pos2,
-    zoom_x_factor: f32,
+    navigation: &crate::model::config::NavigationConfig,
 ) -> Option<TrackScrollAction> {
     let scroll_y = effective_scroll_delta(scroll);
     let zoom_delta = effective_zoom_delta(scroll_y, zoom_scroll_delta);
     if modifiers.alt {
         if modifiers.shift && !modifiers.ctrl && scroll_y != 0.0 {
             Some(TrackScrollAction::PanY {
-                nr_pixels: scroll_y,
+                nr_pixels: scroll_y * navigation.pan_y_mult(),
             })
         } else if modifiers.ctrl && zoom_delta != 0.0 {
             Some(TrackScrollAction::ZoomY {
-                nr_pixels: zoom_delta * zoom_x_factor,
+                nr_pixels: zoom_delta * navigation.zoom_y_mult(),
                 center_y: pos.y,
             })
         } else {
@@ -143,14 +143,14 @@ fn track_scroll_action(
     } else if modifiers.shift && !modifiers.ctrl {
         if scroll.x != 0.0 {
             Some(TrackScrollAction::PanX {
-                nr_pixels: scroll.x,
+                nr_pixels: scroll.x * navigation.pan_x_mult(),
             })
         } else {
             None
         }
     } else if modifiers.ctrl && zoom_delta != 0.0 {
         Some(TrackScrollAction::ZoomX {
-            nr_pixels: zoom_delta * zoom_x_factor,
+            nr_pixels: zoom_delta * navigation.zoom_x_mult(),
             center_x: pos.x,
         })
     } else {
@@ -173,6 +173,7 @@ fn effective_zoom_delta(scroll_y: f32, zoom_scroll_delta: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{TrackScrollAction, track_scroll_action};
+    use crate::model::config::NavigationConfig;
     use egui::{Modifiers, Pos2, Vec2};
 
     #[test]
@@ -185,7 +186,7 @@ mod tests {
             Vec2::new(0.0, 3.0),
             0.0,
             Pos2::new(10.0, 20.0),
-            4.0,
+            &NavigationConfig::default(),
         );
 
         assert_eq!(
@@ -207,7 +208,7 @@ mod tests {
             Vec2::new(3.0, 0.0),
             0.0,
             Pos2::new(10.0, 20.0),
-            4.0,
+            &NavigationConfig::default(),
         );
 
         assert_eq!(
@@ -230,7 +231,7 @@ mod tests {
             Vec2::new(3.0, 0.0),
             0.0,
             Pos2::new(10.0, 20.0),
-            4.0,
+            &NavigationConfig::default(),
         );
 
         assert_eq!(
@@ -252,7 +253,7 @@ mod tests {
             Vec2::new(3.0, 5.0),
             0.0,
             Pos2::new(10.0, 20.0),
-            4.0,
+            &NavigationConfig::default(),
         );
 
         assert_eq!(action, Some(TrackScrollAction::PanX { nr_pixels: 3.0 }));
@@ -265,10 +266,56 @@ mod tests {
             Vec2::new(3.0, 5.0),
             0.0,
             Pos2::new(10.0, 20.0),
-            4.0,
+            &NavigationConfig::default(),
         );
 
         assert_eq!(action, None);
+    }
+
+    #[test]
+    fn invert_zoom_x_flips_zoom_direction() {
+        let navigation = NavigationConfig {
+            invert_zoom_x: true,
+            ..NavigationConfig::default()
+        };
+        let action = track_scroll_action(
+            Modifiers {
+                ctrl: true,
+                ..Modifiers::NONE
+            },
+            Vec2::new(0.0, 3.0),
+            0.0,
+            Pos2::new(10.0, 20.0),
+            &navigation,
+        );
+
+        assert_eq!(
+            action,
+            Some(TrackScrollAction::ZoomX {
+                nr_pixels: -12.0,
+                center_x: 10.0,
+            })
+        );
+    }
+
+    #[test]
+    fn pan_x_factor_scales_pan() {
+        let navigation = NavigationConfig {
+            pan_x_factor: 2.0,
+            ..NavigationConfig::default()
+        };
+        let action = track_scroll_action(
+            Modifiers {
+                shift: true,
+                ..Modifiers::NONE
+            },
+            Vec2::new(3.0, 5.0),
+            0.0,
+            Pos2::new(10.0, 20.0),
+            &navigation,
+        );
+
+        assert_eq!(action, Some(TrackScrollAction::PanX { nr_pixels: 6.0 }));
     }
 
     #[test]
@@ -281,7 +328,7 @@ mod tests {
             Vec2::ZERO,
             3.0,
             Pos2::new(10.0, 20.0),
-            4.0,
+            &NavigationConfig::default(),
         );
 
         assert_eq!(

@@ -9,9 +9,6 @@ pub const APP_NAME: &str = "wavalyze";
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct Config {
-    /// Factor to multiply with the scroll wheel to zoom over the X-axis
-    pub zoom_x_scroll_factor: f32,
-
     /// Show 'hover info' for each track, which is a floating rectangle over each track at the
     /// mouse position
     pub show_hover_info: bool,
@@ -29,6 +26,8 @@ pub struct Config {
     #[serde(default)]
     pub round_minmax_waveform_to_pixel_center: bool,
     pub value_display_scale: ValueDisplayScale,
+    /// Scroll-wheel pan/zoom sensitivity and direction, per axis.
+    pub navigation: NavigationConfig,
     pub shortcuts: ShortcutConfig,
     pub selection: SelectionConfig,
     pub track: TrackConfig,
@@ -62,6 +61,65 @@ pub struct SelectionConfig {
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TrackConfig {
     pub min_height: f32,
+}
+
+/// Scroll-wheel navigation sensitivity and direction for the waveform, per axis.
+///
+/// Each axis has a `*_factor` (multiplier applied to the scroll delta) and an `invert_*`
+/// boolean (flips the scroll direction). These apply to scroll-wheel pan/zoom only; mouse-drag
+/// panning stays direct 1:1 manipulation. Use the `*_mult()` helpers to get the signed
+/// multiplier (factor, negated when inverted).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct NavigationConfig {
+    /// Pan left/right in time.
+    pub pan_x_factor: f32,
+    /// Pan up/down in sample value.
+    pub pan_y_factor: f32,
+    /// Zoom in/out in time.
+    pub zoom_x_factor: f32,
+    /// Zoom in/out in sample value.
+    pub zoom_y_factor: f32,
+    pub invert_pan_x: bool,
+    pub invert_pan_y: bool,
+    pub invert_zoom_x: bool,
+    pub invert_zoom_y: bool,
+}
+
+impl Default for NavigationConfig {
+    fn default() -> Self {
+        Self {
+            // Pan factors default to 1.0 (raw scroll delta, unchanged from previous behaviour).
+            pan_x_factor: 1.0,
+            pan_y_factor: 1.0,
+            // Zoom factors default to 4.0 (the previous `zoom_x_scroll_factor` default).
+            zoom_x_factor: 4.0,
+            zoom_y_factor: 4.0,
+            invert_pan_x: false,
+            invert_pan_y: false,
+            invert_zoom_x: false,
+            invert_zoom_y: false,
+        }
+    }
+}
+
+impl NavigationConfig {
+    fn signed(factor: f32, invert: bool) -> f32 {
+        if invert { -factor } else { factor }
+    }
+
+    pub fn pan_x_mult(&self) -> f32 {
+        Self::signed(self.pan_x_factor, self.invert_pan_x)
+    }
+    pub fn pan_y_mult(&self) -> f32 {
+        Self::signed(self.pan_y_factor, self.invert_pan_y)
+    }
+    pub fn zoom_x_mult(&self) -> f32 {
+        Self::signed(self.zoom_x_factor, self.invert_zoom_x)
+    }
+    pub fn zoom_y_mult(&self) -> f32 {
+        Self::signed(self.zoom_y_factor, self.invert_zoom_y)
+    }
 }
 
 /// Visibility and layout settings for the main view panels.
@@ -149,7 +207,7 @@ impl ThemeColors {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            zoom_x_scroll_factor: 4.0,
+            navigation: NavigationConfig::default(),
             show_hover_info: true,
             tracks_width_info: 250.0,
             show_amplitude_ruler: true,
@@ -248,6 +306,36 @@ mod tests {
             config.shortcuts.bindings.len(),
             ShortcutAction::ALL.len() * ShortcutScope::ALL.len()
         );
+    }
+
+    #[test]
+    fn old_config_without_navigation_uses_defaults() {
+        let config: Config =
+            toml::from_str("show_hover_info = true\ntracks_width_info = 120.0\n").unwrap();
+
+        assert_eq!(config.navigation, super::NavigationConfig::default());
+    }
+
+    #[test]
+    fn default_config_serializes_to_toml() {
+        // TOML requires scalar fields before tables; a misplaced struct field breaks `confy`
+        // saving. Guard the round-trip so field reordering can't regress config persistence.
+        let toml = toml::to_string(&Config::default()).expect("serialize default config");
+        let parsed: Config = toml::from_str(&toml).expect("parse serialized config");
+        assert_eq!(parsed, Config::default());
+    }
+
+    #[test]
+    fn navigation_invert_negates_multiplier() {
+        let nav = super::NavigationConfig {
+            zoom_x_factor: 4.0,
+            invert_zoom_x: true,
+            pan_y_factor: 2.0,
+            ..super::NavigationConfig::default()
+        };
+
+        assert_eq!(nav.zoom_x_mult(), -4.0);
+        assert_eq!(nav.pan_y_mult(), 2.0);
     }
 
     #[test]

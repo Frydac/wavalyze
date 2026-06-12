@@ -244,7 +244,8 @@ pub fn ui_side(
         if let Some(track) = model.tracks.get_track(track_id) {
             let hover_info = model.tracks.hover_info;
             let theme_colors = model.user_config.active_theme_colors(ui.visuals());
-            let zoom_y_factor = model.user_config.zoom_x_scroll_factor;
+            let pan_y_mult = model.user_config.navigation.pan_y_mult();
+            let zoom_y_mult = model.user_config.navigation.zoom_y_mult();
             let display_scale = model.user_config.value_display_scale;
 
             if let Some(rect) = db_rect {
@@ -252,7 +253,8 @@ pub fn ui_side(
                     actions: &mut model.actions,
                     hover_info: &hover_info,
                     audio: &model.audio,
-                    zoom_y_factor,
+                    pan_y_mult,
+                    zoom_y_mult,
                     display_scale,
                 };
                 db_ruler::ui(
@@ -273,7 +275,8 @@ pub fn ui_side(
                     actions: &mut model.actions,
                     hover_info: &hover_info,
                     audio: &model.audio,
-                    zoom_y_factor,
+                    pan_y_mult,
+                    zoom_y_mult,
                     display_scale,
                 };
                 value_ruler2::ui(

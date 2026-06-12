@@ -74,7 +74,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model) -> Result<()> {
     handle_scroll_interaction(
         &mut ui_ruler,
         &mut model.actions,
-        model.user_config.zoom_x_scroll_factor,
+        &model.user_config.navigation,
     );
 
     // Draw stuff
@@ -116,7 +116,11 @@ pub fn handle_drag_interaction(
     }
 }
 
-pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, zoom_x_factor: f32) {
+pub fn handle_scroll_interaction(
+    ui: &mut egui::Ui,
+    actions: &mut Vec<Action>,
+    navigation: &model::config::NavigationConfig,
+) {
     let rect = ui.min_rect();
     let pos_in_rect = ui
         .ctx()
@@ -129,7 +133,7 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
                 let scroll = i.smooth_scroll_delta;
                 if scroll.x != 0.0 {
                     actions.push(model::action::Action::PanX {
-                        nr_pixels: scroll.x,
+                        nr_pixels: scroll.x * navigation.pan_x_mult(),
                     });
                 }
             } else if i.modifiers.ctrl && !i.modifiers.shift {
@@ -137,7 +141,7 @@ pub fn handle_scroll_interaction(ui: &mut egui::Ui, actions: &mut Vec<Action>, z
                     zoom_delta_to_scroll_delta(i.zoom_delta(), scroll_zoom_speed);
                 if zoom_scroll_delta != 0.0 {
                     actions.push(model::action::Action::ZoomX {
-                        nr_pixels: zoom_scroll_delta * zoom_x_factor,
+                        nr_pixels: zoom_scroll_delta * navigation.zoom_x_mult(),
                         center_x: pos.x,
                     });
                 }
