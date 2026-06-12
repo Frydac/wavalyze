@@ -10,7 +10,9 @@ use anyhow::{Context, Result};
 
 #[derive(Debug)]
 pub enum Action {
-    RemoveAllTracks,
+    RemoveAllTracks, // TODO: still needed?
+
+    CloseAll, // remove all tracks/buffers/files
     RemoveTrack(TrackId),
     /// Unload a whole file: all its channels, their tracks, the audio buffers, and the file spec.
     CloseFile {
@@ -29,8 +31,14 @@ pub enum Action {
     StartDemoJob(jobs::DemoTimedConfig),
     LoadDemo,
     /// Integrate a fully-loaded WAV file into the model. Pushed by background load jobs on success.
-    IntegrateLoadedFile(wav::read::LoadedFile),
-    IntegrateLoadedDiff(jobs::LoadedDiff),
+    IntegrateLoadedFile {
+        generation: u64,
+        loaded: wav::read::LoadedFile,
+    },
+    IntegrateLoadedDiff {
+        generation: u64,
+        diff: jobs::LoadedDiff,
+    },
 
     /// Set x-zoom so the longest track is full width
     /// Set y-zoom to fill the screen, with a minimum height per track
@@ -90,7 +98,10 @@ pub enum Action {
         sample_ix_offset_a: crate::audio::sample::Ix,
         sample_ix_offset_b: crate::audio::sample::Ix,
     },
-    IntegrateDiffBuffer(jobs::ComputedDiff),
+    IntegrateDiffBuffer {
+        generation: u64,
+        diff: jobs::ComputedDiff,
+    },
     /// Integrate a freshly computed RMS value. Pushed by the compute-rms worker via `actions_tx`.
     /// Silently dropped if the buffer no longer exists (e.g., file closed mid-flight).
     SetBufferRms {
@@ -111,6 +122,9 @@ impl Action {
             }
             Action::RemoveAllTracks => {
                 model.tracks.remove_all_tracks();
+            }
+            Action::CloseAll => {
+                model.close_all();
             }
             Action::CloseFile { file_id } => {
                 model.remove_file(file_id);
@@ -146,19 +160,23 @@ impl Action {
                 model.actions.push(Action::ZoomToFull);
                 model.actions.push(Action::FillScreenHeight);
             }
-            Action::IntegrateLoadedFile(loaded) => {
-                model
-                    .add_loaded_file(loaded)
-                    .context("Action::IntegrateLoadedFile failed")?;
-                model.actions.push(Action::ZoomToFull);
-                model.actions.push(Action::FillScreenHeight);
+            Action::IntegrateLoadedFile { generation, loaded } => {
+                if model.is_current_generation(generation) {
+                    model
+                        .add_loaded_file(loaded)
+                        .context("Action::IntegrateLoadedFile failed")?;
+                    model.actions.push(Action::ZoomToFull);
+                    model.actions.push(Action::FillScreenHeight);
+                }
             }
-            Action::IntegrateLoadedDiff(diff) => {
-                model
-                    .add_loaded_diff(diff)
-                    .context("Action::IntegrateLoadedDiff failed")?;
-                model.actions.push(Action::ZoomToFull);
-                model.actions.push(Action::FillScreenHeight);
+            Action::IntegrateLoadedDiff { generation, diff } => {
+                if model.is_current_generation(generation) {
+                    model
+                        .add_loaded_diff(diff)
+                        .context("Action::IntegrateLoadedDiff failed")?;
+                    model.actions.push(Action::ZoomToFull);
+                    model.actions.push(Action::FillScreenHeight);
+                }
             }
             Action::ZoomToFull => {
                 model.tracks.zoom_to_full(&model.audio)?;
@@ -245,12 +263,14 @@ impl Action {
                     )
                     .context("Action::DiffBuffers failed")?;
             }
-            Action::IntegrateDiffBuffer(diff) => {
-                model
-                    .add_diff_buffer(diff)
-                    .context("Action::IntegrateDiffBuffer failed")?;
-                model.actions.push(Action::ZoomToFull);
-                model.actions.push(Action::FillScreenHeight);
+            Action::IntegrateDiffBuffer { generation, diff } => {
+                if model.is_current_generation(generation) {
+                    model
+                        .add_diff_buffer(diff)
+                        .context("Action::IntegrateDiffBuffer failed")?;
+                    model.actions.push(Action::ZoomToFull);
+                    model.actions.push(Action::FillScreenHeight);
+                }
             }
             Action::SetBufferRms { buffer_id, rms_db } => {
                 if model.audio.buffers.contains_key(buffer_id) {

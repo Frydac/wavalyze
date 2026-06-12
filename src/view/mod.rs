@@ -219,16 +219,17 @@ impl View {
             // The top panel is often a good place for a menu bar:
 
             egui::menu::bar(ui, |ui| {
-                // NOTE: no File->Quit on web pages!
                 let is_web = cfg!(target_arch = "wasm32");
-                if !is_web {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                    ui.add_space(16.0);
-                }
+                ui.menu_button("File", |ui| {
+                    if ui.button("Close All").clicked() {
+                        self.model.actions.push(Action::CloseAll);
+                        ui.close_menu();
+                    }
+                    if !is_web && ui.button("Quit").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+                ui.add_space(16.0);
 
                 ui.menu_button("View", |ui| {
                     if ui
@@ -313,7 +314,7 @@ impl View {
                 if ui.button("close all x").clicked() {
                     // × ✖ ❌ 🗑️
                     // if ui.button("✖").clicked() {
-                    self.model.actions.push(Action::RemoveAllTracks);
+                    self.model.actions.push(Action::CloseAll);
                     // model.actions.push(Action::RemoveTrack(track_id));
                 }
             });

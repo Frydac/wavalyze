@@ -46,6 +46,11 @@ pub struct Model {
     pub actions_tx: Sender<Action>,
     actions_rx: Receiver<Action>,
     pub job_mgr: JobManager,
+
+    /// Monotonic token for async job results. Close All increments this so load/diff workers that
+    /// were already running can finish without repopulating a cleared model; their integration
+    /// actions are ignored when tagged with an older generation.
+    generation: u64,
 }
 
 impl Default for Model {
@@ -61,6 +66,7 @@ impl Default for Model {
             actions_tx,
             actions_rx,
             job_mgr: JobManager::default(),
+            generation: 0,
         }
     }
 }
@@ -112,6 +118,24 @@ impl Model {
     pub fn clear_files(&mut self) {
         self.files.clear();
         self.files_order.clear();
+    }
+
+    pub fn close_all(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.tracks.remove_all_tracks();
+        self.tracks.hover_info = Default::default();
+        self.tracks.selection_info = Default::default();
+        self.files.clear();
+        self.files_order.clear();
+        self.audio.clear();
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn is_current_generation(&self, generation: u64) -> bool {
+        self.generation == generation
     }
 
     pub fn load_demo_waveform(&mut self) -> Result<()> {
@@ -410,8 +434,10 @@ impl Model {
     pub fn start_load_wav_job(&mut self, config: wav::ReadConfigBytes) -> jobs::JobId {
         let label = config.name.clone().unwrap_or_else(|| "file".to_string());
         let job_id = self.job_mgr.start_job(jobs::JobKind::LoadWav, label);
+        let generation = self.generation();
         jobs::spawn_load_wav_job(
             job_id,
+            generation,
             config,
             self.job_mgr.sender(),
             self.actions_tx.clone(),
@@ -428,8 +454,10 @@ impl Model {
             .unwrap_or("file")
             .to_string();
         let job_id = self.job_mgr.start_job(jobs::JobKind::LoadWav, label);
+        let generation = self.generation();
         jobs::spawn_load_wav_path_job(
             job_id,
+            generation,
             config,
             self.job_mgr.sender(),
             self.actions_tx.clone(),
@@ -472,8 +500,10 @@ impl Model {
                 .unwrap_or("B")
         );
         let job_id = self.job_mgr.start_job(jobs::JobKind::Diff, label);
+        let generation = self.generation();
         jobs::spawn_load_diff_paths_job(
             job_id,
+            generation,
             file_a,
             file_b,
             self.job_mgr.sender(),
@@ -501,8 +531,10 @@ impl Model {
             jobs::JobKind::Diff,
             format!("Diff {buffer_id_a:?} - {buffer_id_b:?}"),
         );
+        let generation = self.generation();
         jobs::spawn_diff_buffers_job(
             job_id,
+            generation,
             jobs::diff::DiffBuffersJobInput {
                 buffer_id_a,
                 buffer_id_b,
@@ -533,7 +565,7 @@ impl Model {
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{FileVisibilityState, Model};
+    use super::{Action, FileVisibilityState, Model};
     use crate::{
         audio,
         audio::thumbnail::ThumbnailE,
@@ -785,5 +817,93 @@ mod tests {
 
         assert!(!model.restore_channel_track(buffers[0]).unwrap());
         assert_eq!(model.tracks.tracks_order.len(), 2);
+    }
+
+    #[test]
+    fn close_all_clears_files_tracks_and_audio() {
+        let mut model = Model::new();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let thumbnail =
+            ThumbnailE::from_buffer_e(model.audio.get_buffer(buffers[0]).unwrap(), None);
+        model.audio.thumbnails.insert(buffers[0], thumbnail);
+        model.audio.rms_db.insert(buffers[1], -12.0);
+        model.tracks.hover_info =
+            crate::model::hover_info::HoverInfoE::IsHovered(Default::default());
+        model.tracks.selection_info =
+            crate::model::selection_info::SelectionInfoE::IsSelected(Default::default());
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.insert_file(file);
+
+        model.close_all();
+
+        assert!(model.files.is_empty());
+        assert!(model.files_order.is_empty());
+        assert!(model.tracks.tracks.is_empty());
+        assert!(model.tracks.tracks_order.is_empty());
+        assert_eq!(
+            model.tracks.hover_info,
+            crate::model::hover_info::HoverInfoE::NotHovered
+        );
+        assert_eq!(
+            model.tracks.selection_info,
+            crate::model::selection_info::SelectionInfoE::NotSelected
+        );
+        assert!(model.audio.buffers.is_empty());
+        assert!(model.audio.thumbnails.is_empty());
+        assert!(model.audio.rms_db.is_empty());
+    }
+
+    #[test]
+    fn stale_loaded_file_integration_after_close_all_is_ignored() {
+        let mut model = Model::new();
+        let generation = model.generation();
+        model.close_all();
+        let buffer = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+
+        Action::IntegrateLoadedFile {
+            generation,
+            loaded: loaded_file_with_one_buffer(buffer, 0),
+        }
+        .process(&mut model)
+        .unwrap();
+
+        assert!(model.files.is_empty());
+        assert!(model.tracks.tracks.is_empty());
+        assert!(model.audio.buffers.is_empty());
+    }
+
+    #[test]
+    fn stale_loaded_diff_integration_after_close_all_is_ignored() {
+        let mut model = Model::new();
+        let generation = model.generation();
+        model.close_all();
+        let buffer_a = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let buffer_b = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let diff_buffer =
+            audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let diff_thumbnail = ThumbnailE::from_buffer_e(&diff_buffer, None);
+
+        Action::IntegrateLoadedDiff {
+            generation,
+            diff: jobs::LoadedDiff {
+                file_a: loaded_file_with_one_buffer(buffer_a, 0),
+                file_b: loaded_file_with_one_buffer(buffer_b, 0),
+                sample_ix_offset_a: 0,
+                sample_ix_offset_b: 0,
+                sample_ix_offset_diff: 0,
+                diff_buffer,
+                diff_thumbnail,
+            },
+        }
+        .process(&mut model)
+        .unwrap();
+
+        assert!(model.files.is_empty());
+        assert!(model.tracks.tracks.is_empty());
+        assert!(model.audio.buffers.is_empty());
     }
 }

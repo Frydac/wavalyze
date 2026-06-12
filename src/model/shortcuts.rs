@@ -6,6 +6,7 @@ use tracing::warn;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShortcutAction {
+    CloseAll,
     ZoomToSelection,
     ZoomToSelectionLeftEdge,
     ZoomToSelectionRightEdge,
@@ -15,7 +16,8 @@ pub enum ShortcutAction {
 }
 
 impl ShortcutAction {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
+        Self::CloseAll,
         Self::ZoomToSelection,
         Self::ZoomToSelectionLeftEdge,
         Self::ZoomToSelectionRightEdge,
@@ -26,6 +28,7 @@ impl ShortcutAction {
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::CloseAll => "Close All",
             Self::ZoomToSelection => "Zoom To Selection",
             Self::ZoomToSelectionLeftEdge => "Zoom To Selection Left Edge",
             Self::ZoomToSelectionRightEdge => "Zoom To Selection Right Edge",
@@ -37,6 +40,7 @@ impl ShortcutAction {
 
     pub fn to_model_action(self) -> Action {
         match self {
+            Self::CloseAll => Action::CloseAll,
             Self::ZoomToSelection => Action::ZoomToSelection,
             Self::ZoomToSelectionLeftEdge => Action::ZoomToSelectionLeftEdge,
             Self::ZoomToSelectionRightEdge => Action::ZoomToSelectionRightEdge,
@@ -95,6 +99,11 @@ impl ShortcutBinding {
 
     pub fn with_command(mut self) -> Self {
         self.command = true;
+        self
+    }
+
+    pub fn with_ctrl(mut self) -> Self {
+        self.ctrl = true;
         self
     }
 
@@ -182,6 +191,12 @@ impl Default for ShortcutConfig {
 impl ShortcutConfig {
     pub fn default_binding_for(action: ShortcutAction, scope: ShortcutScope) -> ShortcutBinding {
         match (action, scope) {
+            (ShortcutAction::CloseAll, ShortcutScope::Global) => ShortcutBinding::new(action, "W")
+                .with_scope(scope)
+                .with_ctrl(),
+            (ShortcutAction::CloseAll, ShortcutScope::OneHand) => ShortcutBinding::new(action, "W")
+                .with_scope(scope)
+                .with_ctrl(),
             (ShortcutAction::ZoomToSelection, ShortcutScope::Global) => {
                 ShortcutBinding::new(action, "L")
                     .with_scope(scope)
@@ -410,12 +425,13 @@ mod tests {
             config.bindings.len(),
             ShortcutAction::ALL.len() * ShortcutScope::ALL.len()
         );
-        assert_eq!(
-            config.bindings[0],
-            ShortcutConfig::default_binding_for(
-                ShortcutAction::ZoomToSelection,
-                ShortcutScope::Global,
-            )
+        assert!(
+            config
+                .bindings
+                .contains(&ShortcutConfig::default_binding_for(
+                    ShortcutAction::ZoomToSelection,
+                    ShortcutScope::Global,
+                ))
         );
     }
 
@@ -434,16 +450,23 @@ mod tests {
 
         config.normalize();
 
-        assert_eq!(
-            config.bindings[6],
-            ShortcutBinding::new(ShortcutAction::ZoomToFull, "1")
-                .with_scope(ShortcutScope::Global)
-                .with_command()
+        assert!(
+            config.bindings.contains(
+                &ShortcutBinding::new(ShortcutAction::ZoomToFull, "1")
+                    .with_scope(ShortcutScope::Global)
+                    .with_command()
+            )
         );
     }
 
     #[test]
     fn default_global_bindings_match_expected() {
+        assert_eq!(
+            ShortcutConfig::default_binding_for(ShortcutAction::CloseAll, ShortcutScope::Global),
+            ShortcutBinding::new(ShortcutAction::CloseAll, "W")
+                .with_scope(ShortcutScope::Global)
+                .with_ctrl()
+        );
         assert_eq!(
             ShortcutConfig::default_binding_for(
                 ShortcutAction::ZoomToSelection,
@@ -486,6 +509,12 @@ mod tests {
 
     #[test]
     fn default_one_hand_bindings_match_expected() {
+        assert_eq!(
+            ShortcutConfig::default_binding_for(ShortcutAction::CloseAll, ShortcutScope::OneHand),
+            ShortcutBinding::new(ShortcutAction::CloseAll, "W")
+                .with_scope(ShortcutScope::OneHand)
+                .with_ctrl()
+        );
         assert_eq!(
             ShortcutConfig::default_binding_for(
                 ShortcutAction::ZoomToSelection,
@@ -530,12 +559,13 @@ mod tests {
 
         config.normalize();
 
-        assert_eq!(
-            config.bindings[0],
-            ShortcutConfig::default_binding_for(
-                ShortcutAction::ZoomToSelection,
-                ShortcutScope::Global,
-            )
+        assert!(
+            config
+                .bindings
+                .contains(&ShortcutConfig::default_binding_for(
+                    ShortcutAction::ZoomToSelection,
+                    ShortcutScope::Global,
+                ))
         );
     }
 
@@ -552,12 +582,13 @@ mod tests {
 
         config.normalize();
 
-        assert_eq!(
-            config.bindings[8],
-            ShortcutConfig::default_binding_for(
-                ShortcutAction::FillScreenHeight,
-                ShortcutScope::Global,
-            )
+        assert!(
+            config
+                .bindings
+                .contains(&ShortcutConfig::default_binding_for(
+                    ShortcutAction::FillScreenHeight,
+                    ShortcutScope::Global,
+                ))
         );
     }
 
@@ -597,6 +628,35 @@ mod tests {
         );
 
         assert!(matches!(actions.as_slice(), [Action::ZoomToSelection]));
+    }
+
+    #[test]
+    fn dispatch_ctrl_w_closes_all() {
+        let ctx = Context::default();
+        let mut actions = Vec::new();
+        let shortcut_config = ShortcutConfig::default();
+        let tracks = Tracks::default();
+
+        let _ = ctx.run(
+            RawInput {
+                events: vec![Event::Key {
+                    key: Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers {
+                        ctrl: true,
+                        ..Modifiers::NONE
+                    },
+                }],
+                ..Default::default()
+            },
+            |ctx| {
+                super::dispatch_shortcuts(ctx, &tracks, &shortcut_config, &mut actions);
+            },
+        );
+
+        assert!(matches!(actions.as_slice(), [Action::CloseAll]));
     }
 
     #[test]

@@ -39,6 +39,7 @@ impl LoadJobProgress {
 /// emitted on the job channel so the recent-finished list updates.
 pub fn spawn_load_wav_job(
     job_id: JobId,
+    generation: u64,
     config: wav::ReadConfigBytes,
     events_tx: Sender<JobEvent>,
     actions_tx: Sender<Action>,
@@ -46,7 +47,7 @@ pub fn spawn_load_wav_job(
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
         let result = load_wav_bytes_for_job(job_id, &config, &sink);
-        finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
+        finish_load_wav_job(job_id, generation, result, &events_tx, &actions_tx);
     });
 }
 
@@ -54,6 +55,7 @@ pub fn spawn_load_wav_job(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn spawn_load_wav_path_job(
     job_id: JobId,
+    generation: u64,
     config: wav::ReadConfig,
     events_tx: Sender<JobEvent>,
     actions_tx: Sender<Action>,
@@ -61,7 +63,7 @@ pub fn spawn_load_wav_path_job(
     spawn_worker(move || {
         let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
         let result = load_wav_path_for_job(job_id, &config, &sink);
-        finish_load_wav_job(job_id, result, &events_tx, &actions_tx);
+        finish_load_wav_job(job_id, generation, result, &events_tx, &actions_tx);
     });
 }
 
@@ -109,6 +111,7 @@ fn build_thumbnails_in_worker(loaded: &mut wav::read::LoadedFile, sink: &dyn Loa
 
 fn finish_load_wav_job(
     job_id: JobId,
+    generation: u64,
     result: anyhow::Result<wav::read::LoadedFile>,
     events_tx: &Sender<JobEvent>,
     actions_tx: &Sender<Action>,
@@ -125,7 +128,7 @@ fn finish_load_wav_job(
                     .and_then(|name| name.to_str())
                     .unwrap_or("file")
             );
-            let _ = actions_tx.send(Action::IntegrateLoadedFile(loaded));
+            let _ = actions_tx.send(Action::IntegrateLoadedFile { generation, loaded });
             let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent { job_id, summary }));
         }
         Err(error) => {

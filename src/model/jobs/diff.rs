@@ -82,6 +82,7 @@ pub struct DiffBuffersJobInput {
 
 pub fn spawn_diff_buffers_job(
     job_id: JobId,
+    generation: u64,
     input: DiffBuffersJobInput,
     events_tx: Sender<JobEvent>,
     actions_tx: Sender<Action>,
@@ -108,13 +109,14 @@ pub fn spawn_diff_buffers_job(
                 diff_thumbnail,
             }
         });
-        finish_computed_diff_job(job_id, result, &events_tx, &actions_tx);
+        finish_computed_diff_job(job_id, generation, result, &events_tx, &actions_tx);
     });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn spawn_load_diff_paths_job(
     job_id: JobId,
+    generation: u64,
     file_a: wav::ReadConfig,
     file_b: wav::ReadConfig,
     events_tx: Sender<JobEvent>,
@@ -122,7 +124,7 @@ pub fn spawn_load_diff_paths_job(
 ) {
     spawn_worker(move || {
         let result = load_and_compute_diff(job_id, file_a, file_b, &events_tx);
-        finish_loaded_diff_job(job_id, result, &events_tx, &actions_tx);
+        finish_loaded_diff_job(job_id, generation, result, &events_tx, &actions_tx);
     });
 }
 
@@ -277,6 +279,7 @@ fn single_loaded_buffer(loaded: &wav::read::LoadedFile) -> Result<&BufferE> {
 
 fn finish_computed_diff_job(
     job_id: JobId,
+    generation: u64,
     result: Result<ComputedDiff>,
     events_tx: &Sender<JobEvent>,
     actions_tx: &Sender<Action>,
@@ -284,7 +287,7 @@ fn finish_computed_diff_job(
     match result {
         Ok(diff) => {
             let samples = diff.diff_buffer.nr_samples();
-            let _ = actions_tx.send(Action::IntegrateDiffBuffer(diff));
+            let _ = actions_tx.send(Action::IntegrateDiffBuffer { generation, diff });
             let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent {
                 job_id,
                 summary: format!("Computed diff ({samples} samples)"),
@@ -302,6 +305,7 @@ fn finish_computed_diff_job(
 #[cfg(not(target_arch = "wasm32"))]
 fn finish_loaded_diff_job(
     job_id: JobId,
+    generation: u64,
     result: Result<LoadedDiff>,
     events_tx: &Sender<JobEvent>,
     actions_tx: &Sender<Action>,
@@ -309,7 +313,7 @@ fn finish_loaded_diff_job(
     match result {
         Ok(diff) => {
             let samples = diff.diff_buffer.nr_samples();
-            let _ = actions_tx.send(Action::IntegrateLoadedDiff(diff));
+            let _ = actions_tx.send(Action::IntegrateLoadedDiff { generation, diff });
             let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent {
                 job_id,
                 summary: format!("Loaded and computed diff ({samples} samples)"),

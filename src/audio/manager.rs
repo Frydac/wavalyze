@@ -31,7 +31,9 @@ pub type BufferRmsDb = SecondaryMap<BufferId, f32>;
 pub struct AudioManager {
     pub buffers: Buffers,
     pub thumbnails: Thumbnails,
+
     /// Lazily populated by `Action::ComputeBufferRms` jobs. Missing entry means "not computed yet".
+    /// TODO: this shouldn't live in this abstraction!
     pub rms_db: BufferRmsDb,
 }
 
@@ -74,6 +76,12 @@ impl AudioManager {
         for (ch_ix, channel) in file.channels.iter() {
             self.remove_buffer(channel.buffer_id);
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.thumbnails.clear();
+        self.rms_db.clear();
     }
 
     pub fn get_buffer(&self, buffer_id: BufferId) -> Result<&BufferE> {
