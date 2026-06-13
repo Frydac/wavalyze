@@ -51,6 +51,81 @@ impl TrackHeaderHoverInfo {
     }
 }
 
+/// One side of a diff track: the file/channel of a source buffer being compared.
+#[derive(Debug, Clone)]
+struct DiffSourceInfo {
+    path: String,
+    channel: String,
+    sample_rate: String,
+    duration: String,
+}
+
+impl DiffSourceInfo {
+    fn rows(&self, ui: &mut egui::Ui, id: u64) {
+        let mut grid = KeyValueGrid::new(id).key_col_width(95.0);
+        grid.row("path", self.path.clone());
+        grid.row("channel ix", self.channel.clone());
+        grid.row("sample rate", self.sample_rate.clone());
+        grid.row("duration", self.duration.clone());
+        grid.show(ui);
+    }
+}
+
+/// Hover popup for a diff track: describes both source channels being diffed (A − B).
+#[derive(Debug, Clone)]
+struct DiffHeaderHoverInfo {
+    a: DiffSourceInfo,
+    b: DiffSourceInfo,
+}
+
+impl DiffHeaderHoverInfo {
+    fn ui(&self, ui: &mut egui::Ui, track_id: TrackId) {
+        ui.heading("Diff sources (A − B)");
+        ui.separator();
+        ui.strong("A");
+        let id_a = ui.id().with(("diff_header_hover_a", track_id)).value();
+        self.a.rows(ui, id_a);
+        ui.add_space(6.0);
+        ui.strong("B");
+        let id_b = ui.id().with(("diff_header_hover_b", track_id)).value();
+        self.b.rows(ui, id_b);
+    }
+}
+
+/// Either kind of track-header hover popup.
+enum HeaderHover {
+    Single(TrackHeaderHoverInfo),
+    Diff(DiffHeaderHoverInfo),
+}
+
+/// Resolve a source buffer to a [`DiffSourceInfo`], falling back to "unknown" if the file/channel is
+/// no longer present (e.g. the source file was closed).
+fn diff_source_info(model: &Model, buffer_id: crate::audio::BufferId) -> DiffSourceInfo {
+    match model.get_file_channel_for_buffer(buffer_id) {
+        Some((file, channel)) => DiffSourceInfo {
+            path: file
+                .path
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            channel: channel.ch_ix.to_string(),
+            sample_rate: format!("{} Hz", file.sample_rate),
+            duration: if file.sample_rate == 0 {
+                String::from("unknown")
+            } else {
+                format!("{:.3} s", file.nr_samples as f64 / file.sample_rate as f64)
+            },
+        },
+        None => DiffSourceInfo {
+            path: String::from("unknown"),
+            channel: String::from("unknown"),
+            sample_rate: String::from("unknown"),
+            duration: String::from("unknown"),
+        },
+    }
+}
+
 pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
     let theme_colors = model.user_config.active_theme_colors(ui.visuals()).clone();
     let min_height = track::min_total_height(&model.user_config.track);
@@ -318,7 +393,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 text = format!("{} - ch {}", path, channel.ch_ix);
                 // Build the hover data once per frame here, while we still have both the file and
                 // the specific channel for this track. The popup renderer below only formats it.
-                hover_info = Some(TrackHeaderHoverInfo {
+                hover_info = Some(HeaderHover::Single(TrackHeaderHoverInfo {
                     path: path.to_string(),
                     channel: channel.ch_ix.to_string(),
                     nr_channels: file.channels.len().to_string(),
@@ -336,13 +411,18 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                         .as_ref()
                         .map(|layout| format!("{layout:?}"))
                         .unwrap_or_else(|| String::from("unknown")),
-                });
-            } else if model
+                }));
+            } else if let Some(diff) = model
                 .tracks
                 .get_track(track_id)
-                .is_some_and(|track| track.diff.is_some())
+                .and_then(|track| track.diff.clone())
             {
                 text = String::from("Diff");
+                // Resolve both source buffers so the popup can show what is being diffed.
+                hover_info = Some(HeaderHover::Diff(DiffHeaderHoverInfo {
+                    a: diff_source_info(model, diff.buffer_id_a),
+                    b: diff_source_info(model, diff.buffer_id_b),
+                }));
             }
 
             let rect = ui.max_rect();
@@ -403,12 +483,19 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
             );
             ui.painter().galley(text_pos, galley, color);
             if let Some(hover_info) = hover_info {
-                ui.interact(
+                let response = ui.interact(
                     label_rect,
                     ui.id().with(("header_label", track_id)),
                     egui::Sense::hover(),
-                )
-                .on_hover_ui(move |ui| hover_info.ui(ui, track_id));
+                );
+                match hover_info {
+                    HeaderHover::Single(info) => {
+                        response.on_hover_ui(move |ui| info.ui(ui, track_id));
+                    }
+                    HeaderHover::Diff(info) => {
+                        response.on_hover_ui(move |ui| info.ui(ui, track_id));
+                    }
+                }
             }
         });
     Ok(())

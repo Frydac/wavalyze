@@ -60,15 +60,25 @@ pub struct ComputedDiff {
     pub diff_thumbnail: ThumbnailE,
 }
 
+/// One computed diff between a channel of file A and a channel of file B.
+#[derive(Debug)]
+pub struct LoadedDiffPair {
+    pub ch_a: wav::read::ChIx,
+    pub ch_b: wav::read::ChIx,
+    pub sample_ix_offset_diff: sample::Ix,
+    pub diff_buffer: BufferE,
+    pub diff_thumbnail: ThumbnailE,
+}
+
+/// Result of loading two files and diffing one or more channel pairs between them. A single pair is
+/// the degenerate (single-channel) case.
 #[derive(Debug)]
 pub struct LoadedDiff {
     pub file_a: wav::read::LoadedFile,
     pub file_b: wav::read::LoadedFile,
     pub sample_ix_offset_a: sample::Ix,
     pub sample_ix_offset_b: sample::Ix,
-    pub sample_ix_offset_diff: sample::Ix,
-    pub diff_buffer: BufferE,
-    pub diff_thumbnail: ThumbnailE,
+    pub pairs: Vec<LoadedDiffPair>,
 }
 
 pub struct DiffBuffersJobInput {
@@ -119,11 +129,12 @@ pub fn spawn_load_diff_paths_job(
     generation: u64,
     file_a: wav::ReadConfig,
     file_b: wav::ReadConfig,
+    pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
     events_tx: Sender<JobEvent>,
     actions_tx: Sender<Action>,
 ) {
     spawn_worker(move || {
-        let result = load_and_compute_diff(job_id, file_a, file_b, &events_tx);
+        let result = load_and_compute_diff(job_id, file_a, file_b, pairs, &events_tx);
         finish_loaded_diff_job(job_id, generation, result, &events_tx, &actions_tx);
     });
 }
@@ -131,12 +142,15 @@ pub fn spawn_load_diff_paths_job(
 #[cfg(not(target_arch = "wasm32"))]
 fn load_and_compute_diff(
     job_id: JobId,
-    file_a: wav::ReadConfig,
-    file_b: wav::ReadConfig,
+    mut file_a: wav::ReadConfig,
+    mut file_b: wav::ReadConfig,
+    pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
     events_tx: &Sender<JobEvent>,
 ) -> Result<LoadedDiff> {
-    // CLI diff is kept as one parent job so the model receives A, B, and Diff in one integration
-    // action. The A/B loads still use the normal WAV load helper and detailed progress sink.
+    // Kept as one parent job so the model receives every source channel and diff in a single
+    // integration action (deterministic ordering). The A/B loads use the normal WAV load helper and
+    // detailed progress sink; each selected pair then produces one diff track.
+    anyhow::ensure!(!pairs.is_empty(), "diff requires at least one channel pair");
     publish_progress(
         job_id,
         events_tx,
@@ -148,8 +162,10 @@ fn load_and_compute_diff(
             end: 0.02,
         },
     );
-    let file_a = normalize_cli_diff_read_config(file_a).context("invalid first diff input")?;
-    let file_b = normalize_cli_diff_read_config(file_b).context("invalid second diff input")?;
+    // Restrict each load to only the channels referenced by the selected pairs, so unselected
+    // channels are never decoded.
+    file_a.ch_ixs = Some(distinct_sorted(pairs.iter().map(|(ch_a, _)| *ch_a)));
+    file_b.ch_ixs = Some(distinct_sorted(pairs.iter().map(|(_, ch_b)| *ch_b)));
     publish_progress(
         job_id,
         events_tx,
@@ -172,7 +188,6 @@ fn load_and_compute_diff(
     // Use the regular WAV load path but map its detailed progress into the A slice of this job.
     let loaded_a = load_wav::load_wav_path_for_job(job_id, &file_a, &sink_a)
         .context("failed to load first diff input")?;
-    ensure_single_loaded_channel(&loaded_a).context("first diff input")?;
 
     let sink_b = load_wav::ThreadedLoadJobProgressSink::new_mapped(
         job_id,
@@ -184,94 +199,58 @@ fn load_and_compute_diff(
     // Same for B; no intermediate `IntegrateLoadedFile` action is emitted before the diff exists.
     let loaded_b = load_wav::load_wav_path_for_job(job_id, &file_b, &sink_b)
         .context("failed to load second diff input")?;
-    ensure_single_loaded_channel(&loaded_b).context("second diff input")?;
 
-    let buffer_a = single_loaded_buffer(&loaded_a)?;
-    let buffer_b = single_loaded_buffer(&loaded_b)?;
-    let diff = compute_diff_buffer_with_progress(
-        job_id,
-        buffer_a,
-        buffer_b,
-        file_a.sample_ix_offset,
-        file_b.sample_ix_offset,
-        events_tx,
-        ProgressRange {
-            start: 0.82,
-            end: 0.96,
-        },
-    )?;
-    publish_progress(
-        job_id,
-        events_tx,
-        "diff thumbnail",
-        0,
-        1,
-        ProgressRange {
-            start: 0.96,
-            end: 1.0,
-        },
-    );
-    let diff_thumbnail = ThumbnailE::from_buffer_e(&diff.buffer, None);
-    publish_progress(
-        job_id,
-        events_tx,
-        "diff thumbnail",
-        1,
-        1,
-        ProgressRange {
-            start: 0.96,
-            end: 1.0,
-        },
-    );
+    // Spread the remaining progress (0.82..1.0) evenly across the per-pair diff computations.
+    let pair_count = pairs.len();
+    let mut pair_results = Vec::with_capacity(pair_count);
+    for (ix, (ch_a, ch_b)) in pairs.into_iter().enumerate() {
+        let buffer_a = loaded_a
+            .channels
+            .get(&ch_a)
+            .ok_or_else(|| anyhow!("first diff input is missing channel {ch_a}"))?;
+        let buffer_b = loaded_b
+            .channels
+            .get(&ch_b)
+            .ok_or_else(|| anyhow!("second diff input is missing channel {ch_b}"))?;
+        let span = 1.0 - 0.82;
+        let progress_range = ProgressRange {
+            start: 0.82 + span * (ix as f32) / pair_count as f32,
+            end: 0.82 + span * (ix as f32 + 1.0) / pair_count as f32,
+        };
+        let diff = compute_diff_buffer_with_progress(
+            job_id,
+            buffer_a,
+            buffer_b,
+            file_a.sample_ix_offset,
+            file_b.sample_ix_offset,
+            events_tx,
+            progress_range,
+        )?;
+        let diff_thumbnail = ThumbnailE::from_buffer_e(&diff.buffer, None);
+        pair_results.push(LoadedDiffPair {
+            ch_a,
+            ch_b,
+            sample_ix_offset_diff: diff.sample_ix_offset_diff,
+            diff_buffer: diff.buffer,
+            diff_thumbnail,
+        });
+    }
 
     Ok(LoadedDiff {
         file_a: loaded_a,
         file_b: loaded_b,
         sample_ix_offset_a: file_a.sample_ix_offset,
         sample_ix_offset_b: file_b.sample_ix_offset,
-        sample_ix_offset_diff: diff.sample_ix_offset_diff,
-        diff_buffer: diff.buffer,
-        diff_thumbnail,
+        pairs: pair_results,
     })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn normalize_cli_diff_read_config(mut config: wav::ReadConfig) -> Result<wav::ReadConfig> {
-    match config.ch_ixs.as_deref() {
-        Some([_]) => Ok(config),
-        Some(_) => Err(anyhow!("diff inputs must select exactly one channel")),
-        None => {
-            let channels = wav::read::peek_nr_channels(&config.filepath)?;
-            if channels == 1 {
-                config.ch_ixs = Some(vec![0]);
-                Ok(config)
-            } else {
-                Err(anyhow!(
-                    "diff input '{}' has {channels} channels; select one channel explicitly",
-                    config.filepath.display()
-                ))
-            }
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn ensure_single_loaded_channel(loaded: &wav::read::LoadedFile) -> Result<()> {
-    anyhow::ensure!(
-        loaded.channels.len() == 1,
-        "expected exactly one loaded channel, got {}",
-        loaded.channels.len()
-    );
-    Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn single_loaded_buffer(loaded: &wav::read::LoadedFile) -> Result<&BufferE> {
-    loaded
-        .channels
-        .values()
-        .next()
-        .ok_or_else(|| anyhow!("loaded file has no channels"))
+fn distinct_sorted(iter: impl Iterator<Item = wav::read::ChIx>) -> Vec<wav::read::ChIx> {
+    let mut ch_ixs: Vec<_> = iter.collect();
+    ch_ixs.sort_unstable();
+    ch_ixs.dedup();
+    ch_ixs
 }
 
 fn finish_computed_diff_job(
@@ -309,11 +288,11 @@ fn finish_loaded_diff_job(
 ) {
     match result {
         Ok(diff) => {
-            let samples = diff.diff_buffer.nr_samples();
+            let pair_count = diff.pairs.len();
             let _ = actions_tx.send(Action::IntegrateLoadedDiff { generation, diff });
             let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent {
                 job_id,
-                summary: format!("Loaded and computed diff ({samples} samples)"),
+                summary: format!("Loaded and computed {pair_count} diff(s)"),
             }));
         }
         Err(error) => {
@@ -521,30 +500,29 @@ mod tests {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
-    fn cli_diff_allows_unspecified_mono_channel() {
-        let path = write_test_wav("mono_unspecified.wav", 1);
-        let config = wav::ReadConfig::new(path);
+    fn load_diff_computes_one_pair_per_selection() {
+        let path_a = write_test_wav("multi_a_2ch.wav", 2);
+        let path_b = write_test_wav("multi_b_3ch.wav", 3);
+        let (tx, _rx) = std::sync::mpsc::channel();
 
-        let config = normalize_cli_diff_read_config(config).unwrap();
+        let diff = load_and_compute_diff(
+            9,
+            wav::ReadConfig::new(path_a),
+            wav::ReadConfig::new(path_b),
+            vec![(0, 0), (1, 2)],
+            &tx,
+        )
+        .unwrap();
 
-        assert_eq!(config.ch_ixs, Some(vec![0]));
-    }
+        // Only the referenced channels are decoded.
+        assert_eq!(diff.file_a.channels.len(), 2);
+        assert_eq!(diff.file_b.channels.len(), 2);
+        assert!(diff.file_b.channels.contains_key(&2));
+        assert!(!diff.file_b.channels.contains_key(&1));
 
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn cli_diff_rejects_unspecified_multi_channel() {
-        let path = write_test_wav("stereo_unspecified.wav", 2);
-        let config = wav::ReadConfig::new(path);
-
-        assert!(normalize_cli_diff_read_config(config).is_err());
-    }
-
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn cli_diff_rejects_multiple_selected_channels() {
-        let config = wav::ReadConfig::new("unused.wav").with_ch_ixs([0, 1]);
-
-        assert!(normalize_cli_diff_read_config(config).is_err());
+        let pairs: Vec<_> = diff.pairs.iter().map(|p| (p.ch_a, p.ch_b)).collect();
+        assert_eq!(pairs, vec![(0, 0), (1, 2)]);
+        assert!(diff.pairs.iter().all(|p| p.diff_buffer.nr_samples() == 1));
     }
 
     #[test]
@@ -558,11 +536,13 @@ mod tests {
             7,
             wav::ReadConfig::new(path_a),
             wav::ReadConfig::new(path_b),
+            vec![(0, 0)],
             &tx,
         )
         .unwrap();
 
-        assert_eq!(diff.diff_buffer.nr_samples(), 1);
+        assert_eq!(diff.pairs.len(), 1);
+        assert_eq!(diff.pairs[0].diff_buffer.nr_samples(), 1);
         let progress: Vec<_> = rx
             .try_iter()
             .filter_map(|event| match event {

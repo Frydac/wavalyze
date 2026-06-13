@@ -31,20 +31,20 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
                 .spacing(egui::Vec2::splat(0.0))
                 .min_col_width(0.0)
                 .show(ui, |ui| {
-                ui.label("A\\B  ");
-                for ch_b in &pending.ch_ixs_b {
-                    ui.label(format!("{ch_b}"));
-                }
-                ui.end_row();
-                for (row, ch_a) in pending.ch_ixs_a.iter().enumerate() {
-                    ui.label(format!("{ch_a}"));
-                    for checked in &mut pending.checked[row] {
-                        ui.checkbox(checked, "");
-                        // ui.label("x");
+                    ui.label("A\\B  ");
+                    for ch_b in &pending.ch_ixs_b {
+                        ui.label(format!("{ch_b}"));
                     }
                     ui.end_row();
-                }
-            });
+                    for (row, ch_a) in pending.ch_ixs_a.iter().enumerate() {
+                        ui.label(format!("{ch_a}"));
+                        for checked in &mut pending.checked[row] {
+                            ui.checkbox(checked, "");
+                            // ui.label("x");
+                        }
+                        ui.end_row();
+                    }
+                });
             ui.separator();
             ui.horizontal(|ui| {
                 if ui

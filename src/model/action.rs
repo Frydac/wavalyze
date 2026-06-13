@@ -151,18 +151,27 @@ impl Action {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     // Fast path: both inputs resolve to a single channel, so the pairing is
-                    // unambiguous and the dialog is skipped.
-                    let single_channel = |config: &wav::ReadConfig| match config.ch_ixs.as_deref() {
-                        Some(ch_ixs) => ch_ixs.len() == 1,
-                        None => wav::read::peek_nr_channels(&config.filepath)
-                            .is_ok_and(|nr_channels| nr_channels == 1),
+                    // unambiguous and the dialog is skipped — the diff runs as a one-pair special
+                    // case of the multichannel path.
+                    let single_channel_ix = |config: &wav::ReadConfig| -> Option<wav::read::ChIx> {
+                        match config.ch_ixs.as_deref() {
+                            Some([ch_ix]) => Some(*ch_ix),
+                            Some(_) => None,
+                            None => wav::read::peek_nr_channels(&config.filepath)
+                                .ok()
+                                .filter(|nr_channels| *nr_channels == 1)
+                                .map(|_| 0),
+                        }
                     };
-                    if single_channel(&file_a) && single_channel(&file_b) {
-                        model.start_load_diff_paths_job(file_a, file_b);
-                    } else {
-                        model
-                            .open_diff_pairing_dialog(file_a, file_b)
-                            .context("Action::OpenDiffFilePaths failed")?;
+                    match (single_channel_ix(&file_a), single_channel_ix(&file_b)) {
+                        (Some(ch_a), Some(ch_b)) => {
+                            model.start_diff_pairs(file_a, file_b, vec![(ch_a, ch_b)]);
+                        }
+                        _ => {
+                            model
+                                .open_diff_pairing_dialog(file_a, file_b)
+                                .context("Action::OpenDiffFilePaths failed")?;
+                        }
                     }
                 }
                 #[cfg(target_arch = "wasm32")]

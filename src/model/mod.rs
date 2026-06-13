@@ -151,7 +151,15 @@ impl Model {
         track_id: TrackId,
     ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
         let track = self.tracks.get_track(track_id)?;
-        let buffer_id = track.single.buffer_id;
+        self.get_file_channel_for_buffer(track.single.buffer_id)
+    }
+
+    /// Resolve a buffer to the file/channel it belongs to. Used by diff tracks, whose own
+    /// `single.buffer_id` is the computed diff buffer (not in any file), to describe their sources.
+    pub fn get_file_channel_for_buffer(
+        &self,
+        buffer_id: audio::BufferId,
+    ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
         for file in self.files.values() {
             if let Some(channel) = file.get_channel(buffer_id) {
                 return Some((file, channel));
@@ -286,6 +294,21 @@ impl Model {
     }
 
     pub fn add_loaded_file(&mut self, loaded: wav::read::LoadedFile) -> Result<FileId> {
+        let file_id = self.register_loaded_file(loaded)?;
+        let file = self
+            .files
+            .get(file_id)
+            .ok_or_else(|| anyhow::anyhow!("File {:?} not found", file_id))?
+            .clone();
+        self.tracks
+            .add_tracks_from_file(&file, &self.user_config.track)?;
+        Ok(file_id)
+    }
+
+    /// Insert a loaded file's buffers, thumbnails, and metadata into the model without creating any
+    /// tracks. Callers that want the default one-track-per-channel layout use [`Self::add_loaded_file`];
+    /// the diff path uses this to control track order itself.
+    fn register_loaded_file(&mut self, loaded: wav::read::LoadedFile) -> Result<FileId> {
         let mut channels = std::collections::BTreeMap::new();
         let mut thumbnails = loaded.thumbnails;
         for (ch_ix, buffer) in loaded.channels {
@@ -315,46 +338,71 @@ impl Model {
             sample_ix_offset: loaded.sample_ix_offset,
         };
 
-        self.tracks
-            .add_tracks_from_file(&file, &self.user_config.track)?;
-        let file_id = self.insert_file(file);
-
-        Ok(file_id)
+        Ok(self.insert_file(file))
     }
 
     pub fn add_loaded_diff(&mut self, diff: jobs::LoadedDiff) -> Result<()> {
-        // The CLI diff job loads both source files and computes the diff on a worker. Integrate all
-        // three tracks together so the visible order is deterministic: A, B, Diff.
-        let file_a_id = self.add_loaded_file(diff.file_a)?;
-        let file_b_id = self.add_loaded_file(diff.file_b)?;
-        let buffer_id_a = self.single_channel_buffer_id(file_a_id)?;
-        let buffer_id_b = self.single_channel_buffer_id(file_b_id)?;
-        let sample_rate = self.audio.get_buffer(buffer_id_a)?.sample_rate();
-        anyhow::ensure!(
-            sample_rate == self.audio.get_buffer(buffer_id_b)?.sample_rate(),
-            "diff source sample rates differ"
-        );
+        // The diff job loads both source files (restricted to the channels referenced by the pairs)
+        // and computes one diff per pair on a worker. Register both files without auto-creating
+        // tracks, then walk the pairs in order appending `source_a, source_b, diff` per pair. A
+        // source track is created only on first appearance, so a channel reused across pairs shows
+        // its source once. Result order: a0, b0, diff0, a1, b1, diff1, ...
+        let file_a_id = self.register_loaded_file(diff.file_a)?;
+        let file_b_id = self.register_loaded_file(diff.file_b)?;
 
-        let buffer_id_diff = self
-            .audio
-            .buffers
-            .insert(std::sync::Arc::new(diff.diff_buffer));
-        self.audio
-            .thumbnails
-            .insert(buffer_id_diff, diff.diff_thumbnail);
-        self.tracks.add_diff_track_to_end(
-            track::diff::Diff {
-                buffer_id_diff,
-                buffer_id_a,
-                buffer_id_b,
-                sample_ix_offset_a: diff.sample_ix_offset_a,
-                sample_ix_offset_b: diff.sample_ix_offset_b,
-                sample_ix_offset_diff: diff.sample_ix_offset_diff,
-            },
-            sample_rate,
-            &self.user_config.track,
-        )?;
+        for pair in diff.pairs {
+            let buffer_id_a = self.channel_buffer_id(file_a_id, pair.ch_a)?;
+            let buffer_id_b = self.channel_buffer_id(file_b_id, pair.ch_b)?;
+            let sample_rate = self.audio.get_buffer(buffer_id_a)?.sample_rate();
+            anyhow::ensure!(
+                sample_rate == self.audio.get_buffer(buffer_id_b)?.sample_rate(),
+                "diff source sample rates differ"
+            );
 
+            self.ensure_source_track(buffer_id_a, sample_rate, diff.sample_ix_offset_a)?;
+            self.ensure_source_track(buffer_id_b, sample_rate, diff.sample_ix_offset_b)?;
+
+            let buffer_id_diff = self
+                .audio
+                .buffers
+                .insert(std::sync::Arc::new(pair.diff_buffer));
+            self.audio
+                .thumbnails
+                .insert(buffer_id_diff, pair.diff_thumbnail);
+            self.tracks.add_diff_track_to_end(
+                track::diff::Diff {
+                    buffer_id_diff,
+                    buffer_id_a,
+                    buffer_id_b,
+                    sample_ix_offset_a: diff.sample_ix_offset_a,
+                    sample_ix_offset_b: diff.sample_ix_offset_b,
+                    sample_ix_offset_diff: pair.sample_ix_offset_diff,
+                },
+                sample_rate,
+                &self.user_config.track,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Append a source track for `buffer_id` if one does not already exist (a channel may appear in
+    /// multiple diff pairs, but only one track per buffer is allowed).
+    fn ensure_source_track(
+        &mut self,
+        buffer_id: audio::BufferId,
+        sample_rate: u32,
+        sample_ix_offset: audio::sample::Ix,
+    ) -> Result<()> {
+        if self.tracks.find_track(buffer_id).is_some() {
+            return Ok(());
+        }
+        let track_id =
+            self.tracks
+                .add_track_to_end(buffer_id, sample_rate, &self.user_config.track)?;
+        if let Some(track) = self.tracks.tracks.get_mut(track_id) {
+            track.single.sample_ix_offset = sample_ix_offset as f64;
+        }
         Ok(())
     }
 
@@ -389,21 +437,19 @@ impl Model {
         Ok(())
     }
 
-    fn single_channel_buffer_id(&self, file_id: FileId) -> Result<audio::BufferId> {
+    fn channel_buffer_id(
+        &self,
+        file_id: FileId,
+        ch_ix: wav::read::ChIx,
+    ) -> Result<audio::BufferId> {
         let file = self
             .files
             .get(file_id)
             .ok_or_else(|| anyhow::anyhow!("File {:?} not found", file_id))?;
-        anyhow::ensure!(
-            file.channels.len() == 1,
-            "expected exactly one channel, got {}",
-            file.channels.len()
-        );
         file.channels
-            .values()
-            .next()
+            .get(&ch_ix)
             .map(|channel| channel.buffer_id)
-            .ok_or_else(|| anyhow::anyhow!("file has no channels"))
+            .ok_or_else(|| anyhow::anyhow!("file {:?} has no channel {ch_ix}", file_id))
     }
 
     pub fn drain_job_events(&mut self) -> bool {
@@ -484,38 +530,6 @@ impl Model {
         Ok(job_id)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn start_load_diff_paths_job(
-        &mut self,
-        file_a: wav::ReadConfig,
-        file_b: wav::ReadConfig,
-    ) -> jobs::JobId {
-        let label = format!(
-            "Diff {} - {}",
-            file_a
-                .filepath
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("A"),
-            file_b
-                .filepath
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("B")
-        );
-        let job_id = self.job_mgr.start_job(jobs::JobKind::Diff, label);
-        let generation = self.generation();
-        jobs::spawn_load_diff_paths_job(
-            job_id,
-            generation,
-            file_a,
-            file_b,
-            self.job_mgr.sender(),
-            self.actions_tx.clone(),
-        );
-        job_id
-    }
-
     /// Open the channel-pairing matrix dialog for diffing two files. Channel counts are peeked
     /// from the WAV headers without loading samples.
     #[cfg(not(target_arch = "wasm32"))]
@@ -539,22 +553,50 @@ impl Model {
         Ok(())
     }
 
-    /// Seam for multi-pair diffing. This iteration only logs; the follow-up will:
-    /// 1. load both files restricted to the union of selected ch_ixs (landing via
-    ///    `Action::IntegrateLoadedFile`),
-    /// 2. once buffer ids exist, push one `Action::DiffBuffers` per (ch_a, ch_b) pair (the
-    ///    existing per-buffer diff path already integrates via `Action::IntegrateDiffBuffer`).
+    /// Spawn a worker that loads both files (restricted to the channels referenced by `pairs`) and
+    /// computes one diff per pair, integrated together via `Action::IntegrateLoadedDiff`. A single
+    /// pair is the single-channel diff special case. No-op on an empty selection.
     pub fn start_diff_pairs(
         &mut self,
         file_a: wav::ReadConfig,
         file_b: wav::ReadConfig,
         pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
     ) {
-        info!(
-            "diff pairs requested: {} vs {}: {pairs:?}",
-            file_a.filepath.display(),
-            file_b.filepath.display()
-        );
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if pairs.is_empty() {
+                return;
+            }
+            let label = format!(
+                "Diff {} - {}",
+                file_a
+                    .filepath
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("A"),
+                file_b
+                    .filepath
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("B")
+            );
+            let job_id = self.job_mgr.start_job(jobs::JobKind::Diff, label);
+            let generation = self.generation();
+            jobs::spawn_load_diff_paths_job(
+                job_id,
+                generation,
+                file_a,
+                file_b,
+                pairs,
+                self.job_mgr.sender(),
+                self.actions_tx.clone(),
+            );
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (file_a, file_b, pairs);
+            tracing::warn!("start_diff_pairs ignored on wasm");
+        }
     }
 
     pub fn start_diff_buffers_job(
@@ -659,10 +701,21 @@ mod tests {
         buffer: audio::buffer::BufferE,
         sample_ix_offset: audio::sample::Ix,
     ) -> wav::read::LoadedFile {
+        loaded_file_with_buffers(std::slice::from_ref(&buffer), sample_ix_offset)
+    }
+
+    fn loaded_file_with_buffers(
+        buffers: &[audio::buffer::BufferE],
+        sample_ix_offset: audio::sample::Ix,
+    ) -> wav::read::LoadedFile {
         let mut channels = BTreeMap::new();
         let mut thumbnails = BTreeMap::new();
-        channels.insert(0, buffer.clone());
-        thumbnails.insert(0, ThumbnailE::from_buffer_e(&buffer, None));
+        let mut nr_samples = 0;
+        for (ch_ix, buffer) in buffers.iter().enumerate() {
+            channels.insert(ch_ix, buffer.clone());
+            thumbnails.insert(ch_ix, ThumbnailE::from_buffer_e(buffer, None));
+            nr_samples = buffer.nr_samples() as u64;
+        }
         wav::read::LoadedFile {
             load_id: 0,
             channels,
@@ -672,7 +725,7 @@ mod tests {
             sample_rate: 48_000,
             layout: None,
             path: None,
-            nr_samples: buffer.nr_samples() as u64,
+            nr_samples,
             sample_ix_offset,
         }
     }
@@ -723,9 +776,13 @@ mod tests {
                 file_b: loaded_file_with_one_buffer(buffer_b, 3),
                 sample_ix_offset_a: -2,
                 sample_ix_offset_b: 3,
-                sample_ix_offset_diff: 0,
-                diff_buffer,
-                diff_thumbnail,
+                pairs: vec![jobs::LoadedDiffPair {
+                    ch_a: 0,
+                    ch_b: 0,
+                    sample_ix_offset_diff: 0,
+                    diff_buffer,
+                    diff_thumbnail,
+                }],
             })
             .unwrap();
 
@@ -736,6 +793,54 @@ mod tests {
             .unwrap();
         assert!(diff_track.diff.is_some());
         assert_eq!(model.files_order.len(), 2);
+    }
+
+    #[test]
+    fn add_loaded_diff_interleaves_pairs_and_skips_unselected_channels() {
+        let mut model = Model::default();
+        let buf = || audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let diff_a = buf();
+        let diff_b = buf();
+
+        model
+            .add_loaded_diff(jobs::LoadedDiff {
+                // file_a has channels 0,1,2 loaded; file_b has 0,1,2 loaded.
+                file_a: loaded_file_with_buffers(&[buf(), buf(), buf()], 0),
+                file_b: loaded_file_with_buffers(&[buf(), buf(), buf()], 0),
+                sample_ix_offset_a: 0,
+                sample_ix_offset_b: 0,
+                pairs: vec![
+                    jobs::LoadedDiffPair {
+                        ch_a: 0,
+                        ch_b: 0,
+                        sample_ix_offset_diff: 0,
+                        diff_buffer: diff_a,
+                        diff_thumbnail: ThumbnailE::from_buffer_e(&buf(), None),
+                    },
+                    jobs::LoadedDiffPair {
+                        ch_a: 1,
+                        ch_b: 2,
+                        sample_ix_offset_diff: 0,
+                        diff_buffer: diff_b,
+                        diff_thumbnail: ThumbnailE::from_buffer_e(&buf(), None),
+                    },
+                ],
+            })
+            .unwrap();
+
+        // Order: a0, b0, diff0, a1, b2, diff1 — source channels not in any pair (a2, b1) get no
+        // track.
+        let order: Vec<bool> = model
+            .tracks
+            .tracks_order
+            .iter()
+            .map(|id| model.tracks.get_track(*id).unwrap().diff.is_some())
+            .collect();
+        assert_eq!(
+            order,
+            vec![false, false, true, false, false, true],
+            "expected a0, b0, diff, a1, b2, diff"
+        );
     }
 
     #[test]
@@ -939,9 +1044,13 @@ mod tests {
                 file_b: loaded_file_with_one_buffer(buffer_b, 0),
                 sample_ix_offset_a: 0,
                 sample_ix_offset_b: 0,
-                sample_ix_offset_diff: 0,
-                diff_buffer,
-                diff_thumbnail,
+                pairs: vec![jobs::LoadedDiffPair {
+                    ch_a: 0,
+                    ch_b: 0,
+                    sample_ix_offset_diff: 0,
+                    diff_buffer,
+                    diff_thumbnail,
+                }],
             },
         }
         .process(&mut model)
