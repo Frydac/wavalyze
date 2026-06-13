@@ -1,6 +1,7 @@
 pub mod config;
 pub mod db_ruler;
 pub mod diff_pairing;
+pub mod drop_choice;
 pub mod file;
 mod file_loader;
 pub mod fps;
@@ -109,6 +110,7 @@ impl View {
 
         self.ui_loading_modal(ctx);
         diff_pairing::ui_modal(ctx, &mut self.model);
+        drop_choice::ui_modal(ctx, &mut self.model);
         self.ui_tracing_window(ctx);
 
         let had_dropped_files = self.handle_drag_and_drop_into_app(ctx);
@@ -228,7 +230,15 @@ impl View {
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if !dropped_paths.is_empty() {
+        if let [path_a, path_b] = dropped_paths.as_slice() {
+            // Exactly two files dropped: ask whether to diff them or load both (diff is native-only).
+            self.model.pending_drop_choice =
+                Some(crate::model::pending_drop::PendingDropChoice {
+                    path_a: path_a.clone(),
+                    path_b: path_b.clone(),
+                });
+            ctx.request_repaint();
+        } else if !dropped_paths.is_empty() {
             self.picker_pending = self.picker_pending.saturating_add(1);
             file_loader::load_paths(dropped_paths, self.picker_tx.clone());
             ctx.request_repaint();

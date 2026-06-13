@@ -4,6 +4,7 @@ pub mod demo;
 pub mod diff_pairing;
 pub mod hover_info;
 pub mod jobs;
+pub mod pending_drop;
 pub mod ruler;
 pub mod selection_info;
 pub mod shortcuts;
@@ -58,6 +59,9 @@ pub struct Model {
     generation: u64,
     /// Diff request awaiting channel-pair selection; the view shows a matrix dialog while `Some`.
     pub pending_diff_pairing: Option<diff_pairing::PendingDiffPairing>,
+    /// Two dropped files awaiting a Diff/Load decision; the view shows a chooser dialog while
+    /// `Some`. Only ever set on native (diff is native-only).
+    pub pending_drop_choice: Option<pending_drop::PendingDropChoice>,
 }
 
 impl Default for Model {
@@ -75,6 +79,7 @@ impl Default for Model {
             job_mgr: JobManager::default(),
             generation: 0,
             pending_diff_pairing: None,
+            pending_drop_choice: None,
         }
     }
 }

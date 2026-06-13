@@ -35,6 +35,8 @@
   * add snap to block option?
 * option "auto fill screen height"
   * when enabling/disabling tracks, add action to fill screen height
+* option to invert zooming, scrolling
+* [x] option to close everything at once (like a fresh start)
 
 
 ## Diff functionality
