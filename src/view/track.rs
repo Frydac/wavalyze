@@ -17,7 +17,7 @@ mod waveform;
 /// The header itself is width-constrained and intentionally terse, while the popup can show the
 /// full file/channel context in a stable key/value layout.
 #[derive(Debug, Clone)]
-struct TrackHeaderHoverInfo {
+pub(crate) struct TrackHeaderHoverInfo {
     path: String,
     channel: String,
     nr_channels: String,
@@ -53,7 +53,7 @@ impl TrackHeaderHoverInfo {
 
 /// One side of a diff track: the file/channel of a source buffer being compared.
 #[derive(Debug, Clone)]
-struct DiffSourceInfo {
+pub(crate) struct DiffSourceInfo {
     path: String,
     channel: String,
     sample_rate: String,
@@ -73,7 +73,7 @@ impl DiffSourceInfo {
 
 /// Hover popup for a diff track: describes both source channels being diffed (A − B).
 #[derive(Debug, Clone)]
-struct DiffHeaderHoverInfo {
+pub(crate) struct DiffHeaderHoverInfo {
     a: DiffSourceInfo,
     b: DiffSourceInfo,
 }
@@ -93,9 +93,81 @@ impl DiffHeaderHoverInfo {
 }
 
 /// Either kind of track-header hover popup.
-enum HeaderHover {
+pub(crate) enum HeaderHover {
     Single(TrackHeaderHoverInfo),
     Diff(DiffHeaderHoverInfo),
+}
+
+impl HeaderHover {
+    pub(crate) fn show(&self, ui: &mut egui::Ui, track_id: TrackId) {
+        match self {
+            HeaderHover::Single(info) => info.ui(ui, track_id),
+            HeaderHover::Diff(info) => info.ui(ui, track_id),
+        }
+    }
+}
+
+/// Build the track-header hover popup data for a track, or `None` if the track is neither a
+/// known single channel nor a diff. Shared by the central-panel header and the left-panel
+/// Tracks list so both show identical metadata.
+pub(crate) fn header_hover_info(model: &Model, track_id: TrackId) -> Option<HeaderHover> {
+    if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
+        let path = file
+            .path
+            .as_ref()
+            .and_then(|p| p.to_str())
+            .unwrap_or("unknown");
+        Some(HeaderHover::Single(TrackHeaderHoverInfo {
+            path: path.to_string(),
+            channel: channel.ch_ix.to_string(),
+            nr_channels: file.channels.len().to_string(),
+            sample_type: format!("{:?}", file.sample_type),
+            bit_depth: file.bit_depth.to_string(),
+            sample_rate: format!("{} Hz", file.sample_rate),
+            nr_samples: file.nr_samples.to_string(),
+            duration: if file.sample_rate == 0 {
+                String::from("unknown")
+            } else {
+                format!("{:.3} s", file.nr_samples as f64 / file.sample_rate as f64)
+            },
+            layout: file
+                .layout
+                .as_ref()
+                .map(|layout| format!("{layout:?}"))
+                .unwrap_or_else(|| String::from("unknown")),
+        }))
+    } else {
+        let diff = model
+            .tracks
+            .get_track(track_id)
+            .and_then(|track| track.diff.clone())?;
+        Some(HeaderHover::Diff(DiffHeaderHoverInfo {
+            a: diff_source_info(model, diff.buffer_id_a),
+            b: diff_source_info(model, diff.buffer_id_b),
+        }))
+    }
+}
+
+/// One-line label for a track, matching the central-panel header text:
+/// `"<basename> - ch N"` for single tracks, `"Diff"` for diff tracks.
+pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
+    if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
+        let basename = file
+            .path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("Demo");
+        format!("{basename} - ch {}", channel.ch_ix)
+    } else if model
+        .tracks
+        .get_track(track_id)
+        .is_some_and(|track| track.diff.is_some())
+    {
+        String::from("Diff")
+    } else {
+        String::from("track")
+    }
 }
 
 /// Resolve a source buffer to a [`DiffSourceInfo`], falling back to "unknown" if the file/channel is
@@ -377,11 +449,13 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
         // .outer_margin(ui.style().spacing.window_margin / 6.0)
         .show(ui, |ui| {
             let mut text = String::from("track header");
-            let mut hover_info = None;
             let mut path_text = None;
             let mut channel_text = None;
 
-            // TODO: store hover text in model.. *smh*
+            // Build the hover data once per frame, while we still have both the file and the
+            // specific channel for this track. The popup renderer below only formats it.
+            let hover_info = header_hover_info(model, track_id);
+
             if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
                 let path = file
                     .path
@@ -391,38 +465,12 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                 path_text = Some(path.to_string());
                 channel_text = Some(format!(" - ch {}", channel.ch_ix));
                 text = format!("{} - ch {}", path, channel.ch_ix);
-                // Build the hover data once per frame here, while we still have both the file and
-                // the specific channel for this track. The popup renderer below only formats it.
-                hover_info = Some(HeaderHover::Single(TrackHeaderHoverInfo {
-                    path: path.to_string(),
-                    channel: channel.ch_ix.to_string(),
-                    nr_channels: file.channels.len().to_string(),
-                    sample_type: format!("{:?}", file.sample_type),
-                    bit_depth: file.bit_depth.to_string(),
-                    sample_rate: format!("{} Hz", file.sample_rate),
-                    nr_samples: file.nr_samples.to_string(),
-                    duration: if file.sample_rate == 0 {
-                        String::from("unknown")
-                    } else {
-                        format!("{:.3} s", file.nr_samples as f64 / file.sample_rate as f64)
-                    },
-                    layout: file
-                        .layout
-                        .as_ref()
-                        .map(|layout| format!("{layout:?}"))
-                        .unwrap_or_else(|| String::from("unknown")),
-                }));
-            } else if let Some(diff) = model
+            } else if model
                 .tracks
                 .get_track(track_id)
-                .and_then(|track| track.diff.clone())
+                .is_some_and(|track| track.diff.is_some())
             {
                 text = String::from("Diff");
-                // Resolve both source buffers so the popup can show what is being diffed.
-                hover_info = Some(HeaderHover::Diff(DiffHeaderHoverInfo {
-                    a: diff_source_info(model, diff.buffer_id_a),
-                    b: diff_source_info(model, diff.buffer_id_b),
-                }));
             }
 
             let rect = ui.max_rect();
@@ -488,14 +536,7 @@ pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Res
                     ui.id().with(("header_label", track_id)),
                     egui::Sense::hover(),
                 );
-                match hover_info {
-                    HeaderHover::Single(info) => {
-                        response.on_hover_ui(move |ui| info.ui(ui, track_id));
-                    }
-                    HeaderHover::Diff(info) => {
-                        response.on_hover_ui(move |ui| info.ui(ui, track_id));
-                    }
-                }
+                response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
             }
         });
     Ok(())

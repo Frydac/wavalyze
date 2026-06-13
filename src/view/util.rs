@@ -39,6 +39,16 @@ pub fn rp(ui: &egui::Ui, pos: egui::Pos2) -> egui::Pos2 {
     ui.painter().round_pos_to_pixels(pos)
 }
 
+/// Add a left-aligned, truncated label that fills the remaining horizontal space. Used for
+/// the left-panel list rows (Files / Tracks) so long names truncate instead of wrapping.
+pub fn add_row_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let size = egui::vec2(ui.available_width().max(0.0), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(egui::Align::Min), |ui| {
+        ui.add(egui::Label::new(text).truncate())
+    })
+    .inner
+}
+
 /// Convert egui's multiplicative zoom factor back into the wheel-like delta used by the app.
 pub fn zoom_delta_to_scroll_delta(zoom_delta: f32, scroll_zoom_speed: f32) -> f32 {
     if zoom_delta == 1.0 || scroll_zoom_speed == 0.0 {

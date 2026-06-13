@@ -9,6 +9,7 @@ pub mod jobs;
 pub mod ruler;
 pub mod selection_info;
 pub mod track;
+pub mod tracks_panel;
 pub mod util;
 pub mod value_ruler2;
 
@@ -20,6 +21,14 @@ use std::sync::mpsc::{Receiver, Sender};
 
 const TOP_TOOL_BAR_HEIGHT: f32 = 50.0;
 
+/// Which tab the left side panel currently shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum LeftPanelTab {
+    #[default]
+    Files,
+    Tracks,
+}
+
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
@@ -29,6 +38,7 @@ pub struct View {
     picker_pending: usize,
     show_tracing_window: bool,
     tracing_collector: TracingCollector,
+    left_panel_tab: LeftPanelTab,
 }
 
 impl View {
@@ -42,6 +52,7 @@ impl View {
             picker_pending: 0,
             show_tracing_window: false,
             tracing_collector,
+            left_panel_tab: LeftPanelTab::default(),
         }
     }
 
@@ -161,7 +172,16 @@ impl View {
             // .width_range(80.0..=ctx.available_rect().width())
             .width_range(100.0..=500.0)
             .show(ctx, |ui| {
-                file::ui(ui, &mut self.model);
+                ui.add_space(5.0);
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.left_panel_tab, LeftPanelTab::Files, "Files");
+                    ui.selectable_value(&mut self.left_panel_tab, LeftPanelTab::Tracks, "Tracks");
+                });
+                ui.separator();
+                match self.left_panel_tab {
+                    LeftPanelTab::Files => file::ui(ui, &mut self.model),
+                    LeftPanelTab::Tracks => tracks_panel::ui(ui, &mut self.model),
+                }
             });
     }
 

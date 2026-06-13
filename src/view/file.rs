@@ -1,5 +1,6 @@
 use crate::{
     model::{Action, FileVisibilityState, Model},
+    view::util::add_row_label,
     wav,
     wav::file2::FileId,
 };
@@ -152,12 +153,4 @@ fn channel_label(channel: &wav::file2::Channel) -> String {
         Some(channel_id) => format!("ch {} - {}", channel.ch_ix, channel_id.long_name()),
         None => format!("ch {}", channel.ch_ix),
     }
-}
-
-fn add_row_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
-    let size = egui::vec2(ui.available_width().max(0.0), ui.spacing().interact_size.y);
-    ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(egui::Align::Min), |ui| {
-        ui.add(egui::Label::new(text).truncate())
-    })
-    .inner
 }
