@@ -58,6 +58,9 @@ pub struct ComputedDiff {
     pub sample_ix_offset_diff: sample::Ix,
     pub diff_buffer: BufferE,
     pub diff_thumbnail: ThumbnailE,
+    /// If set, the integrated diff track is inserted directly after this track (resolved to a
+    /// position at integration time); otherwise it is appended to the end.
+    pub insert_after: Option<crate::model::track::TrackId>,
 }
 
 /// One computed diff between a channel of file A and a channel of file B.
@@ -88,6 +91,7 @@ pub struct DiffBuffersJobInput {
     pub buffer_b: Arc<BufferE>,
     pub sample_ix_offset_a: sample::Ix,
     pub sample_ix_offset_b: sample::Ix,
+    pub insert_after: Option<crate::model::track::TrackId>,
 }
 
 pub fn spawn_diff_buffers_job(
@@ -117,6 +121,7 @@ pub fn spawn_diff_buffers_job(
                 sample_ix_offset_diff: diff.sample_ix_offset_diff,
                 diff_buffer: diff.buffer,
                 diff_thumbnail,
+                insert_after: input.insert_after,
             }
         });
         finish_computed_diff_job(job_id, generation, result, &events_tx, &actions_tx);

@@ -1,5 +1,5 @@
 use crate::{
-    model::Model,
+    model::{Action, Model, track::TrackId},
     view::{track, util::add_row_label},
 };
 
@@ -32,9 +32,22 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                 if response.changed() {
                     model.tracks.set_track_visibility(track_id, checked);
                 }
-                let label_response = add_row_label(ui, label);
+                // The label doubles as a drag handle and a drop target: dragging one track's label
+                // onto another's starts a diff between them (`dragged - dropped_on`).
+                let dnd_id = egui::Id::new(("track_row_dnd", track_id));
+                let dragged_response =
+                    ui.dnd_drag_source(dnd_id, track_id, |ui| add_row_label(ui, label));
+                let label_response = dragged_response.inner;
                 if let Some(hover_info) = hover_info {
                     label_response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
+                }
+                if let Some(dragged) = dragged_response.response.dnd_release_payload::<TrackId>()
+                    && *dragged != track_id
+                {
+                    model.actions.push(Action::DiffTracks {
+                        dragged: *dragged,
+                        dropped_on: track_id,
+                    });
                 }
             });
             ui.add_space(2.0);

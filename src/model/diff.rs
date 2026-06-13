@@ -90,7 +90,13 @@ impl Model {
         self.audio
             .thumbnails
             .insert(buffer_id_diff, diff.diff_thumbnail);
-        self.tracks.add_diff_track_to_end(
+        // Insert directly after the dropped-on track if it still exists, else append to the end.
+        let insert_ix = diff
+            .insert_after
+            .and_then(|id| self.tracks.tracks_order.iter().position(|t| *t == id))
+            .map(|pos| pos + 1)
+            .unwrap_or(self.tracks.tracks_order.len());
+        self.tracks.insert_diff_track(
             track::diff::Diff {
                 buffer_id_diff,
                 buffer_id_a: diff.buffer_id_a,
@@ -100,6 +106,7 @@ impl Model {
                 sample_ix_offset_diff: diff.sample_ix_offset_diff,
             },
             sample_rate,
+            insert_ix,
             &self.user_config.track,
         )?;
 
@@ -196,6 +203,7 @@ impl Model {
         buffer_id_b: audio::BufferId,
         sample_ix_offset_a: audio::sample::Ix,
         sample_ix_offset_b: audio::sample::Ix,
+        insert_after: Option<track::TrackId>,
     ) -> Result<jobs::JobId> {
         let buffer_a = self.audio.buffer_arc(buffer_id_a)?;
         let buffer_b = self.audio.buffer_arc(buffer_id_b)?;
@@ -220,6 +228,7 @@ impl Model {
                 buffer_b,
                 sample_ix_offset_a,
                 sample_ix_offset_b,
+                insert_after,
             },
             self.job_mgr.sender(),
             self.actions_tx.clone(),
@@ -269,6 +278,46 @@ mod tests {
             .unwrap();
         assert!(diff_track.diff.is_some());
         assert_eq!(model.files_order.len(), 2);
+    }
+
+    #[test]
+    fn add_diff_buffer_inserts_after_target_track() {
+        let mut model = Model::default();
+        let buf = || audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(48_000, 32, 4));
+        let id0 = model.audio.buffers.insert(std::sync::Arc::new(buf()));
+        let id1 = model.audio.buffers.insert(std::sync::Arc::new(buf()));
+        let id2 = model.audio.buffers.insert(std::sync::Arc::new(buf()));
+        let cfg = model.user_config.track.clone();
+        let t0 = model.tracks.add_track_to_end(id0, 48_000, &cfg).unwrap();
+        let t1 = model.tracks.add_track_to_end(id1, 48_000, &cfg).unwrap();
+        let t2 = model.tracks.add_track_to_end(id2, 48_000, &cfg).unwrap();
+
+        let computed = |insert_after| {
+            let diff_buffer = buf();
+            let diff_thumbnail = ThumbnailE::from_buffer_e(&diff_buffer, None);
+            jobs::ComputedDiff {
+                buffer_id_a: id0,
+                buffer_id_b: id2,
+                sample_ix_offset_a: 0,
+                sample_ix_offset_b: 0,
+                sample_ix_offset_diff: 0,
+                diff_buffer,
+                diff_thumbnail,
+                insert_after,
+            }
+        };
+
+        // Insert directly after the middle track.
+        model.add_diff_buffer(computed(Some(t1))).unwrap();
+        let diff_id = model.tracks.tracks_order[2];
+        assert_eq!(model.tracks.tracks_order, vec![t0, t1, diff_id, t2]);
+        assert!(model.tracks.get_track(diff_id).unwrap().diff.is_some());
+
+        // `None` appends to the end.
+        model.add_diff_buffer(computed(None)).unwrap();
+        let last = *model.tracks.tracks_order.last().unwrap();
+        assert_eq!(model.tracks.tracks_order.len(), 5);
+        assert!(model.tracks.get_track(last).unwrap().diff.is_some());
     }
 
     #[test]

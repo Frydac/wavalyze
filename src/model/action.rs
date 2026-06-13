@@ -104,6 +104,12 @@ pub enum Action {
         sample_ix_offset_a: crate::audio::sample::Ix,
         sample_ix_offset_b: crate::audio::sample::Ix,
     },
+    /// Diff two tracks (dragged onto dropped-on in the tracks panel). The diff is
+    /// `dragged - dropped_on`, and the resulting diff track is inserted directly after `dropped_on`.
+    DiffTracks {
+        dragged: TrackId,
+        dropped_on: TrackId,
+    },
     IntegrateDiffBuffer {
         generation: u64,
         diff: jobs::ComputedDiff,
@@ -299,8 +305,34 @@ impl Action {
                         buffer_id_b,
                         sample_ix_offset_a,
                         sample_ix_offset_b,
+                        None,
                     )
                     .context("Action::DiffBuffers failed")?;
+            }
+            Action::DiffTracks {
+                dragged,
+                dropped_on,
+            } => {
+                if dragged != dropped_on
+                    && let (Some(track_a), Some(track_b)) = (
+                        model.tracks.get_track(dragged),
+                        model.tracks.get_track(dropped_on),
+                    )
+                {
+                    let buffer_id_a = track_a.single.buffer_id;
+                    let buffer_id_b = track_b.single.buffer_id;
+                    let sample_ix_offset_a = track_a.single.sample_ix_offset.round() as i64;
+                    let sample_ix_offset_b = track_b.single.sample_ix_offset.round() as i64;
+                    model
+                        .start_diff_buffers_job(
+                            buffer_id_a,
+                            buffer_id_b,
+                            sample_ix_offset_a,
+                            sample_ix_offset_b,
+                            Some(dropped_on),
+                        )
+                        .context("Action::DiffTracks failed")?;
+                }
             }
             Action::IntegrateDiffBuffer { generation, diff } => {
                 if model.is_current_generation(generation) {

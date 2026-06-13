@@ -76,9 +76,21 @@ impl Tracks {
         sample_rate: u32,
         track_config: &TrackConfig,
     ) -> Result<TrackId> {
+        self.insert_diff_track(diff, sample_rate, self.tracks_order.len(), track_config)
+    }
+
+    /// Insert a diff track at `insert_ix` in the render order (clamped to the end).
+    pub fn insert_diff_track(
+        &mut self,
+        diff: track::diff::Diff,
+        sample_rate: u32,
+        insert_ix: usize,
+        track_config: &TrackConfig,
+    ) -> Result<TrackId> {
         let track = Track::new_diff(diff, sample_rate, track_config)?;
         let track_id = self.tracks.insert(track);
-        self.tracks_order.push(track_id);
+        let insert_ix = insert_ix.min(self.tracks_order.len());
+        self.tracks_order.insert(insert_ix, track_id);
         Ok(track_id)
     }
 
