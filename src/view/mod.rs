@@ -252,6 +252,9 @@ impl View {
             egui::menu::bar(ui, |ui| {
                 let is_web = cfg!(target_arch = "wasm32");
                 ui.menu_button("File", |ui| {
+                    if ui.button("Open wav files...").clicked() {
+                        self.start_file_picker();
+                    }
                     if ui.button("Close All").clicked() {
                         self.model.actions.push(Action::CloseAll);
                         ui.close_menu();
@@ -325,9 +328,6 @@ impl View {
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
-            if ui.button("open wav files...").clicked() {
-                self.start_file_picker();
-            }
             if ui.button("reset x zoom").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
             }
