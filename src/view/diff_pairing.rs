@@ -9,6 +9,7 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
     let mut ok = false;
     let mut cancel = false;
     egui::Window::new("Pair channels for diff")
+        .id(egui::Id::new("diff_pairing_window_v3"))
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -16,16 +17,30 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
             ui.label(format!("A: {}", pending.file_a.filepath.display()));
             ui.label(format!("B: {}", pending.file_b.filepath.display()));
             ui.separator();
-            egui::Grid::new("diff_pairing_matrix").show(ui, |ui| {
-                ui.label("");
+            ui.horizontal(|ui| {
+                if ui.button("Clear").clicked() {
+                    pending.clear();
+                }
+                if ui.button("Reset").clicked() {
+                    pending.set_default_pairing();
+                }
+            });
+            ui.separator();
+            egui::Grid::new("diff_pairing_matrix")
+                .striped(true)
+                .spacing(egui::Vec2::splat(0.0))
+                .min_col_width(0.0)
+                .show(ui, |ui| {
+                ui.label("A\\B  ");
                 for ch_b in &pending.ch_ixs_b {
-                    ui.label(format!("B ch {ch_b}"));
+                    ui.label(format!("{ch_b}"));
                 }
                 ui.end_row();
                 for (row, ch_a) in pending.ch_ixs_a.iter().enumerate() {
-                    ui.label(format!("A ch {ch_a}"));
+                    ui.label(format!("{ch_a}"));
                     for checked in &mut pending.checked[row] {
                         ui.checkbox(checked, "");
+                        // ui.label("x");
                     }
                     ui.end_row();
                 }

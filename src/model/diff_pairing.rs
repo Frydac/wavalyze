@@ -27,9 +27,7 @@ impl PendingDiffPairing {
         ch_ixs_a: Vec<ChIx>,
         ch_ixs_b: Vec<ChIx>,
     ) -> Self {
-        let checked = (0..ch_ixs_a.len())
-            .map(|row| (0..ch_ixs_b.len()).map(|col| row == col).collect())
-            .collect();
+        let checked = Self::default_pairing(ch_ixs_a.len(), ch_ixs_b.len());
         Self {
             file_a,
             file_b,
@@ -54,6 +52,26 @@ impl PendingDiffPairing {
 
     pub fn any_checked(&self) -> bool {
         self.checked.iter().flatten().any(|checked| *checked)
+    }
+
+    pub fn set_default_pairing(&mut self) {
+        let a_len = self.ch_ixs_a.len();
+        let b_len = self.ch_ixs_b.len();
+        self.checked = Self::default_pairing(a_len, b_len);
+    }
+
+    fn default_pairing(a_len: usize, b_len: usize) -> Vec<Vec<bool>> {
+        (0..a_len)
+            .map(|row| (0..b_len).map(|col| row == col).collect())
+            .collect()
+    }
+
+    pub fn clear(&mut self) {
+        for row in &mut self.checked {
+            for cell in row {
+                *cell = false;
+            }
+        }
     }
 }
 
