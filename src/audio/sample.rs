@@ -43,6 +43,9 @@ pub trait Sample: Debug + Default + Copy + PartialOrd + PartialEq + Clone + ToPr
     fn distance(self, other: Self) -> f64;
     fn to_norm(self, bit_depth: u16) -> f64;
 
+    /// Per-sample diff. Integer types saturate at their storage bounds; floats subtract directly.
+    fn sub_sat(self, other: Self) -> Self;
+
     const MAX: Self;
     const MIN: Self;
     const ZERO: Self;
@@ -87,6 +90,10 @@ impl Sample for f32 {
         self as f64
     }
 
+    fn sub_sat(self, other: Self) -> Self {
+        self - other
+    }
+
     const MAX: Self = f32::INFINITY;
     const MIN: Self = f32::NEG_INFINITY;
     const ZERO: Self = 0.0;
@@ -125,6 +132,10 @@ impl Sample for i32 {
         self as f64 * crate::audio::sample::convert::pcm2float_factor(bit_depth)
     }
 
+    fn sub_sat(self, other: Self) -> Self {
+        self.saturating_sub(other)
+    }
+
     const MAX: Self = i32::MAX;
     const MIN: Self = i32::MIN;
     const ZERO: Self = 0;
@@ -160,6 +171,10 @@ impl Sample for i16 {
 
     fn to_norm(self, _bit_depth: u16) -> f64 {
         crate::audio::sample::convert::pcm162flt(self)
+    }
+
+    fn sub_sat(self, other: Self) -> Self {
+        self.saturating_sub(other)
     }
 
     const MAX: Self = i16::MAX;
@@ -205,6 +220,10 @@ impl Sample for f64 {
 
     fn to_norm(self, _bit_depth: u16) -> f64 {
         self
+    }
+
+    fn sub_sat(self, other: Self) -> Self {
+        self - other
     }
 
     const MAX: Self = f64::INFINITY;

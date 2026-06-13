@@ -361,6 +361,103 @@ fn compute_diff_buffer_impl(
     let start_n = (-sample_ix_offset_a).min(-sample_ix_offset_b);
     let end_n = (len_a - sample_ix_offset_a).max(len_b - sample_ix_offset_b);
     let len = (end_n - start_n).max(0) as usize;
+
+    // When both inputs are the same variant and bit depth, compute the diff natively in that type
+    // (saturating at the storage bounds) so the diff track keeps the source sample type. Mixed
+    // types or bit depths fall back to a normalized float diff.
+    let buffer = match (buffer_a, buffer_b) {
+        (BufferE::F32(a), BufferE::F32(b)) => BufferE::F32(diff_typed(
+            a,
+            b,
+            sample_ix_offset_a,
+            sample_ix_offset_b,
+            start_n,
+            len,
+            progress,
+        )),
+        (BufferE::I32(a), BufferE::I32(b)) if a.bit_depth == b.bit_depth => {
+            BufferE::I32(diff_typed(
+                a,
+                b,
+                sample_ix_offset_a,
+                sample_ix_offset_b,
+                start_n,
+                len,
+                progress,
+            ))
+        }
+        (BufferE::I16(a), BufferE::I16(b)) if a.bit_depth == b.bit_depth => {
+            BufferE::I16(diff_typed(
+                a,
+                b,
+                sample_ix_offset_a,
+                sample_ix_offset_b,
+                start_n,
+                len,
+                progress,
+            ))
+        }
+        _ => BufferE::F32(diff_normalized(
+            buffer_a,
+            buffer_b,
+            sample_ix_offset_a,
+            sample_ix_offset_b,
+            start_n,
+            len,
+            progress,
+        )),
+    };
+
+    Ok(DiffBufferResult {
+        buffer,
+        sample_ix_offset_diff: -start_n,
+    })
+}
+
+/// Native same-type diff: `a - b` (saturating for integers), zero-padding out-of-range indices.
+/// The output keeps the source sample rate and bit depth.
+fn diff_typed<T: Sample>(
+    a: &Buffer<T>,
+    b: &Buffer<T>,
+    sample_ix_offset_a: sample::Ix,
+    sample_ix_offset_b: sample::Ix,
+    start_n: sample::Ix,
+    len: usize,
+    progress: Option<(JobId, &Sender<JobEvent>, ProgressRange)>,
+) -> Buffer<T> {
+    let mut out = Buffer::with_capacity(a.sample_rate, a.bit_depth, len);
+
+    if let Some((job_id, tx, range)) = progress {
+        publish_progress(job_id, tx, "diff", 0, len as u64, range);
+    }
+
+    for base in (0..len).step_by(CHUNK) {
+        let chunk_end = (base + CHUNK).min(len);
+        for out_ix in base..chunk_end {
+            let n = start_n + out_ix as sample::Ix;
+            let va = sample_at(&a.data, n + sample_ix_offset_a);
+            let vb = sample_at(&b.data, n + sample_ix_offset_b);
+            out.data.push(va.sub_sat(vb));
+        }
+        if let Some((job_id, tx, range)) = progress {
+            publish_progress(job_id, tx, "diff", chunk_end as u64, len as u64, range);
+        }
+    }
+
+    out
+}
+
+/// Mixed-type fallback: normalize both inputs to float and subtract, producing a 32-bit float
+/// buffer.
+fn diff_normalized(
+    buffer_a: &BufferE,
+    buffer_b: &BufferE,
+    sample_ix_offset_a: sample::Ix,
+    sample_ix_offset_b: sample::Ix,
+    start_n: sample::Ix,
+    len: usize,
+    progress: Option<(JobId, &Sender<JobEvent>, ProgressRange)>,
+) -> Buffer<f32> {
     let mut out = Buffer::with_capacity(buffer_a.sample_rate(), 32, len);
 
     if let Some((job_id, tx, range)) = progress {
@@ -380,10 +477,15 @@ fn compute_diff_buffer_impl(
         }
     }
 
-    Ok(DiffBufferResult {
-        buffer: BufferE::F32(out),
-        sample_ix_offset_diff: -start_n,
-    })
+    out
+}
+
+/// Reads a sample by signed index, returning `T::ZERO` for negative or out-of-bounds indices.
+fn sample_at<T: Sample>(data: &[T], ix: sample::Ix) -> T {
+    if ix < 0 {
+        return T::ZERO;
+    }
+    data.get(ix as usize).copied().unwrap_or(T::ZERO)
 }
 
 fn sample_norm_at(buffer: &BufferE, ix: sample::Ix) -> f32 {
@@ -447,6 +549,22 @@ mod tests {
         })
     }
 
+    fn i16_buffer(data: &[i16], bit_depth: u16, sample_rate: u32) -> BufferE {
+        BufferE::I16(Buffer {
+            sample_rate,
+            bit_depth,
+            data: data.to_vec(),
+        })
+    }
+
+    fn i32_buffer(data: &[i32], bit_depth: u16, sample_rate: u32) -> BufferE {
+        BufferE::I32(Buffer {
+            sample_rate,
+            bit_depth,
+            data: data.to_vec(),
+        })
+    }
+
     fn diff_data(result: DiffBufferResult) -> Vec<f32> {
         match result.buffer {
             BufferE::F32(buffer) => buffer.data,
@@ -474,6 +592,83 @@ mod tests {
 
         assert_eq!(result.sample_ix_offset_diff, 1);
         assert_eq!(diff_data(result), vec![1.0, -8.0, -17.0, -30.0]);
+    }
+
+    #[test]
+    fn diff_same_i16_stays_i16() {
+        let a = i16_buffer(&[100, 200, 300], 16, 48_000);
+        let b = i16_buffer(&[10, 20, 30], 16, 48_000);
+
+        let result = compute_diff_buffer(&a, &b, 0, 0).unwrap();
+
+        match result.buffer {
+            BufferE::I16(buffer) => {
+                assert_eq!(buffer.bit_depth, 16);
+                assert_eq!(buffer.data, vec![90, 180, 270]);
+            }
+            other => panic!("expected I16 diff, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn diff_i16_saturates_at_storage_bounds() {
+        // i16 has no headroom beyond 16 bits, so an out-of-range diff clamps.
+        let a = i16_buffer(&[i16::MAX, i16::MIN], 16, 48_000);
+        let b = i16_buffer(&[i16::MIN, i16::MAX], 16, 48_000);
+
+        let result = compute_diff_buffer(&a, &b, 0, 0).unwrap();
+
+        match result.buffer {
+            BufferE::I16(buffer) => assert_eq!(buffer.data, vec![i16::MAX, i16::MIN]),
+            other => panic!("expected I16 diff, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn diff_same_i32_24bit_keeps_headroom() {
+        // 24-bit PCM stored in i32: a diff exceeding the 24-bit nominal range still fits in i32, so
+        // no clamping occurs and the output stays I32 at 24-bit.
+        let nominal_max = (1_i32 << 23) - 1;
+        let a = i32_buffer(&[nominal_max], 24, 48_000);
+        let b = i32_buffer(&[-(1_i32 << 23)], 24, 48_000);
+
+        let result = compute_diff_buffer(&a, &b, 0, 0).unwrap();
+
+        match result.buffer {
+            BufferE::I32(buffer) => {
+                assert_eq!(buffer.bit_depth, 24);
+                // Difference exceeds 24-bit range but is preserved in i32.
+                assert_eq!(buffer.data, vec![nominal_max + (1_i32 << 23)]);
+                assert!(buffer.data[0] > nominal_max);
+            }
+            other => panic!("expected I32 diff, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn diff_mixed_types_falls_back_to_float() {
+        let a = i16_buffer(&[16384], 16, 48_000); // 0.5 normalized
+        let b = f32_buffer(&[0.25], 48_000);
+
+        let result = compute_diff_buffer(&a, &b, 0, 0).unwrap();
+
+        match result.buffer {
+            BufferE::F32(buffer) => assert!((buffer.data[0] - 0.25).abs() < 1e-6),
+            other => panic!("expected F32 fallback diff, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn diff_same_variant_different_bit_depth_falls_back_to_float() {
+        let a = i32_buffer(&[1 << 23], 24, 48_000);
+        let b = i32_buffer(&[1 << 23], 32, 48_000);
+
+        let result = compute_diff_buffer(&a, &b, 0, 0).unwrap();
+
+        assert!(
+            matches!(result.buffer, BufferE::F32(_)),
+            "mismatched bit depths must use the float fallback"
+        );
     }
 
     #[test]
