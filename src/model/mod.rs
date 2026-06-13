@@ -1,6 +1,7 @@
 pub mod action;
 pub mod config;
 pub mod demo;
+pub mod diff_pairing;
 pub mod hover_info;
 pub mod jobs;
 pub mod ruler;
@@ -51,6 +52,8 @@ pub struct Model {
     /// were already running can finish without repopulating a cleared model; their integration
     /// actions are ignored when tagged with an older generation.
     generation: u64,
+    /// Diff request awaiting channel-pair selection; the view shows a matrix dialog while `Some`.
+    pub pending_diff_pairing: Option<diff_pairing::PendingDiffPairing>,
 }
 
 impl Default for Model {
@@ -67,6 +70,7 @@ impl Default for Model {
             actions_rx,
             job_mgr: JobManager::default(),
             generation: 0,
+            pending_diff_pairing: None,
         }
     }
 }
@@ -512,6 +516,47 @@ impl Model {
         job_id
     }
 
+    /// Open the channel-pairing matrix dialog for diffing two files. Channel counts are peeked
+    /// from the WAV headers without loading samples.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open_diff_pairing_dialog(
+        &mut self,
+        file_a: wav::ReadConfig,
+        file_b: wav::ReadConfig,
+    ) -> Result<()> {
+        use anyhow::Context;
+        let effective_ch_ixs = |config: &wav::ReadConfig| -> Result<Vec<wav::read::ChIx>> {
+            match &config.ch_ixs {
+                Some(ch_ixs) => Ok(ch_ixs.clone()),
+                None => Ok((0..wav::read::peek_nr_channels(&config.filepath)?).collect()),
+            }
+        };
+        let ch_ixs_a = effective_ch_ixs(&file_a).context("invalid first diff input")?;
+        let ch_ixs_b = effective_ch_ixs(&file_b).context("invalid second diff input")?;
+        self.pending_diff_pairing = Some(diff_pairing::PendingDiffPairing::new(
+            file_a, file_b, ch_ixs_a, ch_ixs_b,
+        ));
+        Ok(())
+    }
+
+    /// Seam for multi-pair diffing. This iteration only logs; the follow-up will:
+    /// 1. load both files restricted to the union of selected ch_ixs (landing via
+    ///    `Action::IntegrateLoadedFile`),
+    /// 2. once buffer ids exist, push one `Action::DiffBuffers` per (ch_a, ch_b) pair (the
+    ///    existing per-buffer diff path already integrates via `Action::IntegrateDiffBuffer`).
+    pub fn start_diff_pairs(
+        &mut self,
+        file_a: wav::ReadConfig,
+        file_b: wav::ReadConfig,
+        pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
+    ) {
+        info!(
+            "diff pairs requested: {} vs {}: {pairs:?}",
+            file_a.filepath.display(),
+            file_b.filepath.display()
+        );
+    }
+
     pub fn start_diff_buffers_job(
         &mut self,
         buffer_id_a: audio::BufferId,
@@ -905,5 +950,90 @@ mod tests {
         assert!(model.files.is_empty());
         assert!(model.tracks.tracks.is_empty());
         assert!(model.audio.buffers.is_empty());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn write_test_wav(name: &str, channels: u16) -> std::path::PathBuf {
+        let dir = std::path::PathBuf::from("target/test_output/diff_pairing");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        let spec = hound::WavSpec {
+            channels,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..channels {
+            writer.write_sample(0i16).unwrap();
+        }
+        writer.finalize().unwrap();
+        path
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open_diff_multichannel_files_opens_pairing_dialog() {
+        let path_a = write_test_wav("pairing_a_2ch.wav", 2);
+        let path_b = write_test_wav("pairing_b_3ch.wav", 3);
+        let mut model = Model::new();
+
+        crate::model::Action::OpenDiffFilePaths {
+            file_a: wav::ReadConfig::new(path_a),
+            file_b: wav::ReadConfig::new(path_b),
+        }
+        .process(&mut model)
+        .unwrap();
+
+        let pending = model.pending_diff_pairing.as_ref().unwrap();
+        assert_eq!(pending.ch_ixs_a, vec![0, 1]);
+        assert_eq!(pending.ch_ixs_b, vec![0, 1, 2]);
+        assert_eq!(pending.selected_pairs(), vec![(0, 0), (1, 1)]);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open_diff_single_channel_inputs_bypasses_pairing_dialog() {
+        let mono = write_test_wav("pairing_mono.wav", 1);
+        let stereo = write_test_wav("pairing_stereo.wav", 2);
+        let mut model = Model::new();
+
+        crate::model::Action::OpenDiffFilePaths {
+            file_a: wav::ReadConfig::new(mono),
+            file_b: wav::ReadConfig::new(stereo).with_ch_ixs([1]),
+        }
+        .process(&mut model)
+        .unwrap();
+
+        assert!(model.pending_diff_pairing.is_none());
+        assert_eq!(model.job_mgr.pending(), 1);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn confirm_and_cancel_clear_pending_diff_pairing() {
+        let path_a = write_test_wav("pairing_confirm_a.wav", 2);
+        let path_b = write_test_wav("pairing_confirm_b.wav", 2);
+        let mut model = Model::new();
+        model
+            .open_diff_pairing_dialog(
+                wav::ReadConfig::new(&path_a),
+                wav::ReadConfig::new(&path_b),
+            )
+            .unwrap();
+        assert!(model.pending_diff_pairing.is_some());
+
+        crate::model::Action::ConfirmDiffPairing
+            .process(&mut model)
+            .unwrap();
+        assert!(model.pending_diff_pairing.is_none());
+
+        model
+            .open_diff_pairing_dialog(wav::ReadConfig::new(&path_a), wav::ReadConfig::new(&path_b))
+            .unwrap();
+        crate::model::Action::CancelDiffPairing
+            .process(&mut model)
+            .unwrap();
+        assert!(model.pending_diff_pairing.is_none());
     }
 }

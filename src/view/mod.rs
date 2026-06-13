@@ -1,5 +1,6 @@
 pub mod config;
 pub mod db_ruler;
+pub mod diff_pairing;
 pub mod file;
 mod file_loader;
 pub mod fps;
@@ -96,6 +97,7 @@ impl View {
         }
 
         self.ui_loading_modal(ctx);
+        diff_pairing::ui_modal(ctx, &mut self.model);
         self.ui_tracing_window(ctx);
 
         let had_dropped_files = self.handle_drag_and_drop_into_app(ctx);

@@ -23,11 +23,17 @@ pub enum Action {
     OpenFilePath(wav::ReadConfig),
     /// Load a WAV from in-memory bytes (file picker, drag-drop, wasm).
     OpenFileBytes(wav::ReadConfigBytes),
-    /// Load two WAV files and compute a diff track from their selected channels.
+    /// Load two WAV files and compute a diff track from their selected channels. When the channel
+    /// pairing is ambiguous (multichannel input without an explicit selection), this opens the
+    /// channel-pairing matrix dialog instead.
     OpenDiffFilePaths {
         file_a: wav::ReadConfig,
         file_b: wav::ReadConfig,
     },
+    /// OK in the channel-pairing dialog: take the pending pairing and start the selected diffs.
+    ConfirmDiffPairing,
+    /// Cancel in the channel-pairing dialog: discard the pending pairing.
+    CancelDiffPairing,
     StartDemoJob(jobs::DemoTimedConfig),
     LoadDemo,
     /// Integrate a fully-loaded WAV file into the model. Pushed by background load jobs on success.
@@ -143,12 +149,36 @@ impl Action {
             }
             Action::OpenDiffFilePaths { file_a, file_b } => {
                 #[cfg(not(target_arch = "wasm32"))]
-                model.start_load_diff_paths_job(file_a, file_b);
+                {
+                    // Fast path: both inputs resolve to a single channel, so the pairing is
+                    // unambiguous and the dialog is skipped.
+                    let single_channel = |config: &wav::ReadConfig| match config.ch_ixs.as_deref() {
+                        Some(ch_ixs) => ch_ixs.len() == 1,
+                        None => wav::read::peek_nr_channels(&config.filepath)
+                            .is_ok_and(|nr_channels| nr_channels == 1),
+                    };
+                    if single_channel(&file_a) && single_channel(&file_b) {
+                        model.start_load_diff_paths_job(file_a, file_b);
+                    } else {
+                        model
+                            .open_diff_pairing_dialog(file_a, file_b)
+                            .context("Action::OpenDiffFilePaths failed")?;
+                    }
+                }
                 #[cfg(target_arch = "wasm32")]
                 {
                     let _ = (file_a, file_b);
                     tracing::warn!("Action::OpenDiffFilePaths ignored on wasm");
                 }
+            }
+            Action::ConfirmDiffPairing => {
+                if let Some(pending) = model.pending_diff_pairing.take() {
+                    let pairs = pending.selected_pairs();
+                    model.start_diff_pairs(pending.file_a, pending.file_b, pairs);
+                }
+            }
+            Action::CancelDiffPairing => {
+                model.pending_diff_pairing = None;
             }
             Action::StartDemoJob(config) => {
                 model.start_demo_job(config);

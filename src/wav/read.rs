@@ -163,6 +163,15 @@ impl ReadConfigBytes {
     }
 }
 
+/// Read the number of channels from a WAV header without loading any samples.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn peek_nr_channels(filepath: &std::path::Path) -> Result<usize> {
+    use anyhow::Context;
+    let reader = hound::WavReader::open(filepath)
+        .with_context(|| format!("failed to open wav file '{}'", filepath.display()))?;
+    Ok(reader.spec().channels as usize)
+}
+
 impl From<&ReadConfig> for ReadOptions {
     fn from(value: &ReadConfig) -> Self {
         Self {

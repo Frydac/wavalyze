@@ -241,10 +241,7 @@ fn normalize_cli_diff_read_config(mut config: wav::ReadConfig) -> Result<wav::Re
         Some([_]) => Ok(config),
         Some(_) => Err(anyhow!("diff inputs must select exactly one channel")),
         None => {
-            let reader = hound::WavReader::open(&config.filepath).with_context(|| {
-                format!("failed to open wav file '{}'", config.filepath.display())
-            })?;
-            let channels = reader.spec().channels;
+            let channels = wav::read::peek_nr_channels(&config.filepath)?;
             if channels == 1 {
                 config.ch_ixs = Some(vec![0]);
                 Ok(config)
