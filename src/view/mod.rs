@@ -232,11 +232,10 @@ impl View {
         #[cfg(not(target_arch = "wasm32"))]
         if let [path_a, path_b] = dropped_paths.as_slice() {
             // Exactly two files dropped: ask whether to diff them or load both (diff is native-only).
-            self.model.pending_drop_choice =
-                Some(crate::model::pending_drop::PendingDropChoice {
-                    path_a: path_a.clone(),
-                    path_b: path_b.clone(),
-                });
+            self.model.pending_drop_choice = Some(crate::model::pending_drop::PendingDropChoice {
+                path_a: path_a.clone(),
+                path_b: path_b.clone(),
+            });
             ctx.request_repaint();
         } else if !dropped_paths.is_empty() {
             self.picker_pending = self.picker_pending.saturating_add(1);

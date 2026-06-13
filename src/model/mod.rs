@@ -5,6 +5,7 @@ pub mod diff_pairing;
 pub mod hover_info;
 pub mod jobs;
 pub mod pending_drop;
+pub mod pending_track_diff;
 pub mod ruler;
 pub mod selection_info;
 pub mod shortcuts;
@@ -62,6 +63,9 @@ pub struct Model {
     /// Two dropped files awaiting a Diff/Load decision; the view shows a chooser dialog while
     /// `Some`. Only ever set on native (diff is native-only).
     pub pending_drop_choice: Option<pending_drop::PendingDropChoice>,
+    /// A track dropped onto another in the tracks panel, awaiting confirmation; the view shows a
+    /// context menu while `Some` so reorder drags don't trigger accidental diffs.
+    pub pending_track_diff: Option<pending_track_diff::PendingTrackDiff>,
 }
 
 impl Default for Model {
@@ -80,6 +84,7 @@ impl Default for Model {
             generation: 0,
             pending_diff_pairing: None,
             pending_drop_choice: None,
+            pending_track_diff: None,
         }
     }
 }

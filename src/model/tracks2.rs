@@ -99,6 +99,23 @@ impl Tracks {
         self.tracks_order.retain(|id| *id != track_id);
     }
 
+    /// Move `track_id` to `to_gap_ix`, a gap index (`0..=len`) in the *current* `tracks_order`.
+    /// No-op if the track is not present. Adjacent-gap moves resolve to no change.
+    pub fn move_track(&mut self, track_id: TrackId, to_gap_ix: usize) {
+        let Some(from) = self.tracks_order.iter().position(|id| *id == track_id) else {
+            return;
+        };
+        let id = self.tracks_order.remove(from);
+        // `to_gap_ix` was computed before the removal; gaps after `from` shift down by one.
+        let to = if to_gap_ix > from {
+            to_gap_ix - 1
+        } else {
+            to_gap_ix
+        };
+        self.tracks_order
+            .insert(to.min(self.tracks_order.len()), id);
+    }
+
     pub fn add_tracks_from_file(&mut self, file: &File, track_config: &TrackConfig) -> Result<()> {
         for (_ch_ix, channel) in file.channels.iter() {
             let track_id =
@@ -947,5 +964,44 @@ mod tests {
                 max: 1.0
             }
         );
+    }
+
+    #[test]
+    fn move_track_reorders_within_order() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let new_track = |tracks: &mut Tracks, audio: &mut audio::manager::AudioManager| {
+            tracks
+                .add_track_to_end(
+                    insert_buffer(audio, 64),
+                    TEST_SAMPLE_RATE,
+                    &TrackConfig::default(),
+                )
+                .unwrap()
+        };
+        let t0 = new_track(&mut tracks, &mut audio);
+        let t1 = new_track(&mut tracks, &mut audio);
+        let t2 = new_track(&mut tracks, &mut audio);
+        let t3 = new_track(&mut tracks, &mut audio);
+        assert_eq!(tracks.tracks_order, vec![t0, t1, t2, t3]);
+
+        // Move the first track to the very end.
+        tracks.move_track(t0, 4);
+        assert_eq!(tracks.tracks_order, vec![t1, t2, t3, t0]);
+
+        // Move the last track to the front.
+        tracks.move_track(t0, 0);
+        assert_eq!(tracks.tracks_order, vec![t0, t1, t2, t3]);
+
+        // Dropping into a gap adjacent to the track's own position is a no-op.
+        tracks.move_track(t1, 1);
+        assert_eq!(tracks.tracks_order, vec![t0, t1, t2, t3]);
+        tracks.move_track(t1, 2);
+        assert_eq!(tracks.tracks_order, vec![t0, t1, t2, t3]);
+
+        // Unknown track is ignored.
+        tracks.remove_track(t2);
+        tracks.move_track(t2, 0);
+        assert_eq!(tracks.tracks_order, vec![t0, t1, t3]);
     }
 }

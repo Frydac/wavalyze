@@ -110,6 +110,12 @@ pub enum Action {
         dragged: TrackId,
         dropped_on: TrackId,
     },
+    /// Reorder `dragged` to `to_gap_ix` (a gap index in the current track order). Pushed when a
+    /// track is dropped *between* two rows in the tracks panel.
+    ReorderTrack {
+        dragged: TrackId,
+        to_gap_ix: usize,
+    },
     IntegrateDiffBuffer {
         generation: u64,
         diff: jobs::ComputedDiff,
@@ -333,6 +339,9 @@ impl Action {
                         )
                         .context("Action::DiffTracks failed")?;
                 }
+            }
+            Action::ReorderTrack { dragged, to_gap_ix } => {
+                model.tracks.move_track(dragged, to_gap_ix);
             }
             Action::IntegrateDiffBuffer { generation, diff } => {
                 if model.is_current_generation(generation) {
