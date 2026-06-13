@@ -1016,10 +1016,7 @@ mod tests {
         let path_b = write_test_wav("pairing_confirm_b.wav", 2);
         let mut model = Model::new();
         model
-            .open_diff_pairing_dialog(
-                wav::ReadConfig::new(&path_a),
-                wav::ReadConfig::new(&path_b),
-            )
+            .open_diff_pairing_dialog(wav::ReadConfig::new(&path_a), wav::ReadConfig::new(&path_b))
             .unwrap();
         assert!(model.pending_diff_pairing.is_some());
 
