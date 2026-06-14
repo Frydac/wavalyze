@@ -24,7 +24,7 @@ new_key_type! { pub struct BufferId; }
 // lock is needed — readers (including workers) share read-only access.
 pub type Buffers = SlotMap<BufferId, Arc<BufferE>>;
 pub type Thumbnails = SecondaryMap<BufferId, ThumbnailE>;
-pub type BufferRmsDb = SecondaryMap<BufferId, f32>;
+pub type BufferStatsMap = SecondaryMap<BufferId, crate::model::stats::BufferStats>;
 
 /// Manages audio buffers and their associated thumbnails
 #[derive(Debug, Clone, Default)]
@@ -32,9 +32,9 @@ pub struct AudioManager {
     pub buffers: Buffers,
     pub thumbnails: Thumbnails,
 
-    /// Lazily populated by `Action::ComputeBufferRms` jobs. Missing entry means "not computed yet".
-    /// TODO: this shouldn't live in this abstraction!
-    pub rms_db: BufferRmsDb,
+    /// Lazily populated by `Action::ComputeBufferStats` jobs. Missing entry means "not computed
+    /// yet". TODO: this shouldn't live in this abstraction!
+    pub stats: BufferStatsMap,
 }
 
 impl AudioManager {
@@ -69,7 +69,7 @@ impl AudioManager {
     pub fn remove_buffer(&mut self, buffer_id: BufferId) {
         self.buffers.remove(buffer_id);
         self.thumbnails.remove(buffer_id);
-        self.rms_db.remove(buffer_id);
+        self.stats.remove(buffer_id);
     }
 
     pub fn remove_buffers_from_file(&mut self, file: &File) {
@@ -81,7 +81,7 @@ impl AudioManager {
     pub fn clear(&mut self) {
         self.buffers.clear();
         self.thumbnails.clear();
-        self.rms_db.clear();
+        self.stats.clear();
     }
 
     pub fn get_buffer(&self, buffer_id: BufferId) -> Result<&BufferE> {

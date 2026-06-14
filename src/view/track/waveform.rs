@@ -45,12 +45,12 @@ pub fn ui_waveform_canvas(
     let waveform_response = ui.interact(
         rect,
         ui.id().with(("waveform_interaction", track_id)),
-        egui::Sense::drag(),
+        egui::Sense::click_and_drag(),
     );
     handle_pan_drag(ui, model, track_id, &waveform_response);
     ui_waveform(ui, model, track_id, rect, theme_colors)?;
     hover::ui_hover(ui, model, track_id, theme_colors);
-    selection::ui_selection(ui, model, &waveform_response, theme_colors);
+    selection::ui_selection(ui, model, track_id, &waveform_response, theme_colors);
 
     Ok(())
 }

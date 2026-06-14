@@ -9,6 +9,7 @@ pub mod pending_track_diff;
 pub mod ruler;
 pub mod selection_info;
 pub mod shortcuts;
+pub mod stats;
 pub mod time_camera;
 pub mod track;
 pub mod tracks2;
@@ -164,15 +165,24 @@ impl Model {
         job_id
     }
 
-    pub fn start_compute_rms_job(&mut self, buffer_id: audio::BufferId) -> Result<jobs::JobId> {
+    pub fn start_compute_stats_job(
+        &mut self,
+        buffer_id: audio::BufferId,
+        global_range: audio::sample::IxRange,
+        offset: audio::sample::Ix,
+        options: stats::StatsOptions,
+    ) -> Result<jobs::JobId> {
         let buffer = self.audio.buffer_arc(buffer_id)?;
         let job_id = self
             .job_mgr
-            .start_job(jobs::JobKind::ComputeRms, format!("RMS {buffer_id:?}"));
-        jobs::spawn_compute_rms_job(
+            .start_job(jobs::JobKind::ComputeStats, format!("stats {buffer_id:?}"));
+        jobs::spawn_compute_stats_job(
             job_id,
             buffer_id,
             buffer,
+            global_range,
+            offset,
+            options,
             self.job_mgr.sender(),
             self.actions_tx.clone(),
         );
@@ -204,7 +214,14 @@ mod tests {
         let thumbnail =
             ThumbnailE::from_buffer_e(model.audio.get_buffer(buffers[0]).unwrap(), None);
         model.audio.thumbnails.insert(buffers[0], thumbnail);
-        model.audio.rms_db.insert(buffers[1], -12.0);
+        model.audio.stats.insert(
+            buffers[1],
+            crate::model::stats::BufferStats {
+                range: Default::default(),
+                rms_db: Some(-12.0),
+                peak: None,
+            },
+        );
         model.tracks.hover_info =
             crate::model::hover_info::HoverInfoE::IsHovered(Default::default());
         model.tracks.selection_info =
@@ -232,6 +249,6 @@ mod tests {
         );
         assert!(model.audio.buffers.is_empty());
         assert!(model.audio.thumbnails.is_empty());
-        assert!(model.audio.rms_db.is_empty());
+        assert!(model.audio.stats.is_empty());
     }
 }

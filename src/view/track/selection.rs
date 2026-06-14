@@ -4,6 +4,7 @@ use crate::{
         Action, Model,
         config::ThemeColors,
         selection_info::{SelectionInfo, SelectionInfoE},
+        track::TrackId,
     },
 };
 
@@ -106,7 +107,57 @@ fn set_selection_from_drag(
     model.actions.push(Action::SetSelection(selection_info));
 }
 
-fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::Response) {
+fn whole_track_selection_range(
+    nr_samples: usize,
+    sample_ix_offset: f64,
+) -> Option<sample::IxRange> {
+    if nr_samples == 0 {
+        return None;
+    }
+
+    let offset = sample_ix_offset.round() as sample::Ix;
+    let end = (nr_samples as sample::Ix).checked_sub(offset)?;
+    Some((offset.checked_neg()?..end).into())
+}
+
+fn set_selection_to_whole_track(model: &mut Model, track_id: TrackId) {
+    let Some(track) = model.tracks.get_track(track_id) else {
+        return;
+    };
+    let Ok(buffer) = model.audio.get_buffer(track.single.buffer_id) else {
+        return;
+    };
+    let Some(ix_rng) =
+        whole_track_selection_range(buffer.nr_samples(), track.single.sample_ix_offset)
+    else {
+        return;
+    };
+
+    let screen_x_start = model
+        .tracks
+        .sample_ix_to_screen_x((ix_rng.start as f64) - 0.1)
+        .unwrap_or(0.0);
+    let screen_x_end = model
+        .tracks
+        .sample_ix_to_screen_x((ix_rng.end as f64) - 0.1)
+        .unwrap_or(screen_x_start);
+    model
+        .actions
+        .push(Action::SetSelection(SelectionInfoE::IsSelected(
+            SelectionInfo {
+                ix_rng,
+                screen_x_start,
+                screen_x_end,
+            },
+        )));
+}
+
+fn ui_selection_interaction(
+    ui: &egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    response: &egui::Response,
+) {
     let selection_resize_state_id = response.id.with("selection_resize_state");
     let modifiers = ui.input(|i| i.modifiers);
     let hover_pos = ui
@@ -121,6 +172,14 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
 
     if hover_edge.is_some() {
         ui.ctx().set_cursor_icon(SELECTION_RESIZE_CURSOR);
+    }
+
+    if response.double_clicked() {
+        ui.data_mut(|data| {
+            data.remove_temp::<SelectionResizeState>(selection_resize_state_id);
+        });
+        set_selection_to_whole_track(model, track_id);
+        return;
     }
 
     let primary_down = ui.input(|i| i.pointer.primary_down());
@@ -220,10 +279,11 @@ fn ui_selection_interaction(ui: &egui::Ui, model: &mut Model, response: &egui::R
 pub fn ui_selection(
     ui: &mut egui::Ui,
     model: &mut Model,
+    track_id: TrackId,
     response: &egui::Response,
     theme_colors: &ThemeColors,
 ) {
-    ui_selection_interaction(ui, model, response);
+    ui_selection_interaction(ui, model, track_id, response);
 
     let Some((_sel_ix_rng, screen_x_rng)) = selection_screen_x_range(model) else {
         return;
@@ -246,7 +306,7 @@ pub fn ui_selection(
 
 #[cfg(test)]
 mod tests {
-    use super::{SelectionResizeEdge, hovered_selection_edge};
+    use super::{SelectionResizeEdge, hovered_selection_edge, whole_track_selection_range};
 
     #[test]
     fn hovered_selection_edge_keeps_visible_left_edge_draggable() {
@@ -282,5 +342,25 @@ mod tests {
         let edge = hovered_selection_edge((10..20).into(), -9.0..=40.0, rect, 0.0);
 
         assert_eq!(edge, None);
+    }
+
+    #[test]
+    fn whole_track_selection_range_uses_zero_offset() {
+        assert_eq!(whole_track_selection_range(12, 0.0), Some((0..12).into()));
+    }
+
+    #[test]
+    fn whole_track_selection_range_shifts_left_for_positive_offset() {
+        assert_eq!(whole_track_selection_range(12, 3.0), Some((-3..9).into()));
+    }
+
+    #[test]
+    fn whole_track_selection_range_shifts_right_for_negative_offset() {
+        assert_eq!(whole_track_selection_range(12, -3.0), Some((3..15).into()));
+    }
+
+    #[test]
+    fn whole_track_selection_range_rejects_empty_buffers() {
+        assert_eq!(whole_track_selection_range(0, 0.0), None);
     }
 }

@@ -95,9 +95,14 @@ pub enum Action {
     // SetSelection
     SetSelection(SelectionInfoE),
 
-    /// Start a background job to compute the RMS (in dB) of a single buffer. Result lands via
-    /// `Action::SetBufferRms` once the worker finishes.
-    ComputeBufferRms(BufferId),
+    /// Start a background job to gather statistics (dB-RMS, peak) over a buffer. The range is
+    /// derived from the current selection (whole buffer when nothing is selected) and the track's
+    /// sample offset. Result lands via `Action::SetBufferStats` once the worker finishes.
+    ComputeBufferStats {
+        buffer_id: BufferId,
+        track_id: TrackId,
+        options: crate::model::stats::StatsOptions,
+    },
     DiffBuffers {
         buffer_id_a: BufferId,
         buffer_id_b: BufferId,
@@ -120,11 +125,11 @@ pub enum Action {
         generation: u64,
         diff: jobs::ComputedDiff,
     },
-    /// Integrate a freshly computed RMS value. Pushed by the compute-rms worker via `actions_tx`.
-    /// Silently dropped if the buffer no longer exists (e.g., file closed mid-flight).
-    SetBufferRms {
+    /// Integrate freshly gathered buffer statistics. Pushed by the compute-stats worker via
+    /// `actions_tx`. Silently dropped if the buffer no longer exists (e.g., file closed mid-flight).
+    SetBufferStats {
         buffer_id: BufferId,
-        rms_db: f32,
+        stats: crate::model::stats::BufferStats,
     },
 }
 
@@ -294,10 +299,31 @@ impl Action {
             Action::SetSelection(selection_info) => {
                 model.tracks.selection_info = selection_info;
             }
-            Action::ComputeBufferRms(buffer_id) => {
+            Action::ComputeBufferStats {
+                buffer_id,
+                track_id,
+                options,
+            } => {
+                let offset = model
+                    .tracks
+                    .get_track(track_id)
+                    .map(|track| track.single.sample_ix_offset.round() as i64)
+                    .unwrap_or(0);
+                let buffer_len = model.audio.get_buffer(buffer_id)?.nr_samples() as i64;
+                // Global-timeline range: the selection if any, else the whole buffer mapped to
+                // global space (local `0..len` shifted by `-offset`, since local = global + offset).
+                let global_range = match model.tracks.selection_info {
+                    crate::model::selection_info::SelectionInfoE::IsSelected(sel) => sel.ix_rng,
+                    crate::model::selection_info::SelectionInfoE::NotSelected => {
+                        crate::audio::sample::IxRange {
+                            start: -offset,
+                            end: buffer_len - offset,
+                        }
+                    }
+                };
                 model
-                    .start_compute_rms_job(buffer_id)
-                    .context("Action::ComputeBufferRms failed")?;
+                    .start_compute_stats_job(buffer_id, global_range, offset, options)
+                    .context("Action::ComputeBufferStats failed")?;
             }
             Action::DiffBuffers {
                 buffer_id_a,
@@ -352,9 +378,9 @@ impl Action {
                     model.actions.push(Action::FillScreenHeight);
                 }
             }
-            Action::SetBufferRms { buffer_id, rms_db } => {
+            Action::SetBufferStats { buffer_id, stats } => {
                 if model.audio.buffers.contains_key(buffer_id) {
-                    model.audio.rms_db.insert(buffer_id, rms_db);
+                    model.audio.stats.insert(buffer_id, stats);
                 }
             }
         }

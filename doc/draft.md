@@ -27,6 +27,7 @@
 
 * peak value
   * show peak value with marker/highlight and sample value
+* normalize sample value zoom to peak value of track/selection
 * blocks
   * gui element for block size
   * use existing offset as start of first block?

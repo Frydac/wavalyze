@@ -333,21 +333,7 @@ pub fn ui_side(
             if response.changed() {
                 track.single.mark_dirty();
             }
-
-            match model.audio.rms_db.get(buffer_id) {
-                Some(&rms_db) => {
-                    ui.label(format!("RMS: {rms_db:.2} dB"));
-                }
-                None => {
-                    if ui
-                        .button("RMS")
-                        .on_hover_text("Compute dB-RMS of this buffer in the background")
-                        .clicked()
-                    {
-                        model.actions.push(Action::ComputeBufferRms(buffer_id));
-                    }
-                }
-            }
+            let _ = buffer_id;
         });
 
         // Compute ruler slots from right edge leftward. Amplitude sits on the right (next to the
@@ -386,6 +372,64 @@ pub fn ui_side(
                     model.actions.push(Action::RecenterY { track_id });
                 }
             });
+        }
+
+        // Stats panel: scrollable column below the offset row, left of the rulers. Holds the
+        // (re)calculate button and the latest gathered stats (RMS, peak).
+        let stats_left = info_rect.left();
+        let stats_right = db_rect
+            .map(|r| r.left())
+            .or(amp_rect.map(|r| r.left()))
+            .unwrap_or(info_rect.right());
+        let stats_rect = egui::Rect::from_min_max(
+            egui::pos2(stats_left, info_rect.top() + track::HEADER_HEIGHT),
+            egui::pos2(stats_right, info_rect.bottom()),
+        );
+        if stats_rect.width() > 0.0 && stats_rect.height() > 0.0 {
+            let buffer_id = model.tracks.get_track(track_id).map(|t| t.single.buffer_id);
+            if let Some(buffer_id) = buffer_id {
+                let ui_builder = egui::UiBuilder::new().max_rect(stats_rect);
+                ui.allocate_new_ui(ui_builder, |ui| {
+                    ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt(("track_stats", track_id))
+                        .show(ui, |ui| {
+                            let stats = model.audio.stats.get(buffer_id).copied();
+                            let label = if stats.is_some() { "recalc" } else { "stats" };
+                            if ui
+                                .button(label)
+                                .on_hover_text("Gather stats (RMS, peak) over the selection, or the whole buffer when nothing is selected")
+                                .clicked()
+                            {
+                                model.actions.push(Action::ComputeBufferStats {
+                                    buffer_id,
+                                    track_id,
+                                    options: crate::model::stats::StatsOptions::default(),
+                                });
+                            }
+                            if let Some(stats) = stats {
+                                ui.label(format!(
+                                    "range: {}..{}",
+                                    stats.range.start, stats.range.end
+                                ));
+                                if let Some(rms_db) = stats.rms_db {
+                                    ui.label(format!("RMS: {rms_db:.2} dB"));
+                                }
+                                if let Some(peak) = stats.peak {
+                                    let mut peak_text = format!(
+                                        "Peak: {:.2} dB | {:.3}",
+                                        peak.magnitude_db, peak.magnitude_norm
+                                    );
+                                    if let Some(int_val) = peak.raw.as_int() {
+                                        peak_text.push_str(&format!(" | {int_val}"));
+                                    }
+                                    ui.label(peak_text);
+                                    ui.label(format!("  @ {}", peak.global_ix));
+                                }
+                            }
+                        });
+                });
+            }
         }
 
         if let Some(track) = model.tracks.get_track(track_id) {
