@@ -97,6 +97,7 @@ fn ui_waveform(
     let hover_info = model.tracks.hover_info;
     let display_scale = model.user_config.value_display_scale;
     let round_minmax_to_pixel_center = model.user_config.round_minmax_waveform_to_pixel_center;
+    let zero_sample_x = model.tracks.sample_ix_to_screen_x(0.0);
     let track = model
         .tracks
         .get_track_mut(track_id)
@@ -136,6 +137,7 @@ fn ui_waveform(
     );
 
     draw_value_grid(ui, sample_rect, screen_rect, display_scale);
+    draw_zero_sample_grid_line(ui, screen_rect, zero_sample_x);
 
     Ok(())
 }
@@ -316,6 +318,21 @@ fn draw_value_grid(
         };
         ui.painter().line_segment([left, right], stroke);
     }
+}
+
+fn draw_zero_sample_grid_line(ui: &mut egui::Ui, screen_rect: Rect, zero_sample_x: Option<f32>) {
+    let Some(x) = zero_sample_x else {
+        return;
+    };
+    if !screen_rect.contains_x(x) {
+        return;
+    }
+
+    let top = rpc(ui, egui::pos2(x, screen_rect.top()));
+    let bottom = rpc(ui, egui::pos2(x, screen_rect.bottom()));
+    let color = ui.style().visuals.text_color().gamma_multiply(0.45);
+    ui.painter()
+        .line_segment([top, bottom], egui::Stroke::new(1.0, color));
 }
 
 #[cfg(test)]
