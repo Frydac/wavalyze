@@ -392,22 +392,13 @@ impl View {
                 // Split this row at the same boundary used by every track: shared track controls
                 // on the left, and the overview/time ruler over the waveform area on the right.
                 let row_rect = ui.min_rect();
-                let sidebar_width = self
-                    .model
-                    .user_config
-                    .effective_tracks_width_info()
-                    .min(row_rect.width());
-                let sidebar_rect = egui::Rect::from_min_size(
-                    row_rect.min,
-                    egui::vec2(sidebar_width, row_rect.height()),
-                );
-                let ruler_rect = egui::Rect::from_min_max(
-                    egui::pos2(sidebar_rect.right(), row_rect.top()),
-                    row_rect.right_bottom(),
+                let columns = track::layout::TrackColumns::new(
+                    row_rect,
+                    self.model.user_config.effective_tracks_width_info(),
                 );
 
-                track_sidebar_header::ui(ui, &mut self.model, sidebar_rect);
-                let _ = ruler::ui(ui, &mut self.model, ruler_rect);
+                track_sidebar_header::ui(ui, &mut self.model, columns.sidebar);
+                let _ = ruler::ui(ui, &mut self.model, columns.content);
             });
             // self.ui_top_panel_tool_bar(ui, ctx);
 

@@ -156,6 +156,7 @@ fn ui_selection_interaction(
     ui: &egui::Ui,
     model: &mut Model,
     track_id: TrackId,
+    waveform_rect: egui::Rect,
     response: &egui::Response,
 ) {
     let selection_resize_state_id = response.id.with("selection_resize_state");
@@ -163,9 +164,9 @@ fn ui_selection_interaction(
     let hover_pos = ui
         .ctx()
         .pointer_hover_pos()
-        .filter(|&pos| ui.min_rect().contains(pos));
+        .filter(|&pos| waveform_rect.contains(pos));
     let hover_edge = if modifiers.shift {
-        hover_pos.and_then(|pos| hovered_selection_edge_for_model(model, ui.min_rect(), pos.x))
+        hover_pos.and_then(|pos| hovered_selection_edge_for_model(model, waveform_rect, pos.x))
     } else {
         None
     };
@@ -197,7 +198,7 @@ fn ui_selection_interaction(
             ui.input(|i| i.pointer.press_origin())
                 .and_then(|press_origin| {
                     modifiers.shift.then_some(press_origin).and_then(|origin| {
-                        hovered_selection_edge_for_model(model, ui.min_rect(), origin.x)
+                        hovered_selection_edge_for_model(model, waveform_rect, origin.x)
                     })
                 })
         {
@@ -280,21 +281,22 @@ pub fn ui_selection(
     ui: &mut egui::Ui,
     model: &mut Model,
     track_id: TrackId,
+    waveform_rect: egui::Rect,
     response: &egui::Response,
     theme_colors: &ThemeColors,
 ) {
-    ui_selection_interaction(ui, model, track_id, response);
+    ui_selection_interaction(ui, model, track_id, waveform_rect, response);
 
     let Some((_sel_ix_rng, screen_x_rng)) = selection_screen_x_range(model) else {
         return;
     };
 
-    let rect = ui.min_rect();
+    let fill_top = (waveform_rect.top() + 1.0).min(waveform_rect.bottom());
     let rect = egui::Rect::from_x_y_ranges(
         *screen_x_rng.start()..=(*screen_x_rng.end()).max(*screen_x_rng.start() + 1.0),
-        (rect.top() + 1.0)..=rect.bottom(),
+        fill_top..=waveform_rect.bottom(),
     );
-    let rect = rect.intersect(ui.min_rect());
+    let rect = rect.intersect(waveform_rect);
     ui.painter().rect(
         rect,
         0.0,
@@ -315,6 +317,39 @@ mod tests {
         let edge = hovered_selection_edge((10..20).into(), 4.0..=40.0, rect, 5.0);
 
         assert_eq!(edge, Some((SelectionResizeEdge::Left, 19)));
+    }
+
+    #[test]
+    fn hovered_selection_edges_are_draggable_on_waveform_boundaries() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let left = hovered_selection_edge((10..20).into(), 0.0..=40.0, rect, 0.0);
+        let right = hovered_selection_edge((10..20).into(), 20.0..=100.0, rect, 100.0);
+
+        assert_eq!(left, Some((SelectionResizeEdge::Left, 19)));
+        assert_eq!(right, Some((SelectionResizeEdge::Right, 10)));
+    }
+
+    #[test]
+    fn hovered_selection_edges_accept_the_exact_outside_hit_radius() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let left = hovered_selection_edge((10..20).into(), -8.0..=40.0, rect, 0.0);
+        let right = hovered_selection_edge((10..20).into(), 20.0..=108.0, rect, 100.0);
+
+        assert_eq!(left, Some((SelectionResizeEdge::Left, 19)));
+        assert_eq!(right, Some((SelectionResizeEdge::Right, 10)));
+    }
+
+    #[test]
+    fn hovered_selection_edges_reject_just_beyond_outside_hit_radius() {
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 20.0));
+
+        let left = hovered_selection_edge((10..20).into(), -8.01..=40.0, rect, 0.0);
+        let right = hovered_selection_edge((10..20).into(), 20.0..=108.01, rect, 100.0);
+
+        assert_eq!(left, None);
+        assert_eq!(right, None);
     }
 
     #[test]

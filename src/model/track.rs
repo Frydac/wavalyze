@@ -122,6 +122,19 @@ mod tests {
     }
 
     #[test]
+    fn set_screen_rect_keeps_track_and_single_geometry_in_sync() {
+        let mut audio = AudioManager::default();
+        let buffer_id = insert_buffer(&mut audio, 32);
+        let mut track = Track::new2(buffer_id, 48_000, &TrackConfig::default()).unwrap();
+        let waveform_rect = Rect::new(12.0, 34.0, 212.0, 134.0);
+
+        track.set_screen_rect(waveform_rect);
+
+        assert_eq!(track.screen_rect, Some(waveform_rect));
+        assert_eq!(track.single.screen_rect(), Some(waveform_rect));
+    }
+
+    #[test]
     fn update_sample_view_replaces_stale_waveform_with_empty_view() {
         let mut audio = AudioManager::default();
         let buffer_id = insert_buffer(&mut audio, 32);

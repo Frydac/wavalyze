@@ -16,18 +16,23 @@ enum TrackScrollAction {
     ZoomY { nr_pixels: f32, center_y: f32 },
 }
 
+fn waveform_contains_pointer(waveform_rect: egui::Rect, pointer: egui::Pos2) -> bool {
+    waveform_rect.contains(pointer)
+}
+
 pub fn ui_hover(
     ui: &mut egui::Ui,
     model: &mut Model,
     track_id: TrackId,
+    waveform_rect: egui::Rect,
     theme_colors: &ThemeColors,
 ) {
     match &model.tracks.hover_info {
         HoverInfoE::NotHovered => {}
         HoverInfoE::IsHovered(hover_info) => {
             {
-                let pos_y_min = ui.min_rect().top();
-                let pos_y_max = ui.min_rect().bottom();
+                let pos_y_min = waveform_rect.top();
+                let pos_y_max = waveform_rect.bottom();
                 let pos_x = hover_info.screen_pos.x;
                 let pos_min = rpc(ui, egui::pos2(pos_x, pos_y_min));
                 let pos_max = rpc(ui, egui::pos2(pos_x, pos_y_max));
@@ -38,10 +43,9 @@ pub fn ui_hover(
             }
 
             {
-                let rect = ui.min_rect();
-                if rect.contains((&hover_info.screen_pos).into()) {
-                    let pos_x_min = rect.left();
-                    let pos_x_max = rect.right();
+                if waveform_contains_pointer(waveform_rect, (&hover_info.screen_pos).into()) {
+                    let pos_x_min = waveform_rect.left();
+                    let pos_x_max = waveform_rect.right();
                     let pos_y = hover_info.screen_pos.y;
                     let pos_min = rpc(ui, egui::pos2(pos_x_min, pos_y));
                     let pos_max = rpc(ui, egui::pos2(pos_x_max, pos_y));
@@ -54,13 +58,12 @@ pub fn ui_hover(
         }
     }
 
-    let rect = ui.min_rect();
     let _hover_response = ui
-        .interact(rect, egui::Id::new(track_id), egui::Sense::hover())
+        .interact(waveform_rect, egui::Id::new(track_id), egui::Sense::hover())
         .on_hover_cursor(egui::CursorIcon::None);
 
     if let Some(pos) = ui.ctx().pointer_hover_pos()
-        && rect.contains(pos)
+        && waveform_contains_pointer(waveform_rect, pos)
     {
         let sample_ix = model.tracks.screen_x_to_sample_ix(pos.x).unwrap_or(0.0);
         let sample_pos_x = model
@@ -172,9 +175,38 @@ fn effective_zoom_delta(scroll_y: f32, zoom_scroll_delta: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{TrackScrollAction, track_scroll_action};
+    use super::{TrackScrollAction, track_scroll_action, waveform_contains_pointer};
     use crate::model::config::NavigationConfig;
     use egui::{Modifiers, Pos2, Vec2};
+
+    #[test]
+    fn hover_containment_includes_waveform_boundaries() {
+        let rect = egui::Rect::from_min_max(Pos2::new(10.0, 20.0), Pos2::new(110.0, 70.0));
+
+        for pointer in [
+            rect.left_top(),
+            rect.right_top(),
+            rect.left_bottom(),
+            rect.right_bottom(),
+            rect.center(),
+        ] {
+            assert!(waveform_contains_pointer(rect, pointer));
+        }
+    }
+
+    #[test]
+    fn hover_containment_rejects_points_just_outside_waveform() {
+        let rect = egui::Rect::from_min_max(Pos2::new(10.0, 20.0), Pos2::new(110.0, 70.0));
+
+        for pointer in [
+            Pos2::new(rect.left() - 0.01, rect.center().y),
+            Pos2::new(rect.right() + 0.01, rect.center().y),
+            Pos2::new(rect.center().x, rect.top() - 0.01),
+            Pos2::new(rect.center().x, rect.bottom() + 0.01),
+        ] {
+            assert!(!waveform_contains_pointer(rect, pointer));
+        }
+    }
 
     #[test]
     fn ctrl_vertical_scroll_zooms_x() {

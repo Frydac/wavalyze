@@ -1,7 +1,6 @@
 use crate::{
     model::{
         Action, Model,
-        config::RULER_SLOT_WIDTH,
         track::{self, TrackId},
     },
     view::{db_ruler, grid::KeyValueGrid, value_ruler2},
@@ -9,8 +8,13 @@ use crate::{
 use anyhow::Result;
 
 mod hover;
+// The geometry types are introduced separately from their rendering integration.
+#[allow(dead_code)]
+pub(super) mod layout;
 mod selection;
 mod waveform;
+
+use layout::TrackLayout;
 
 /// Preformatted metadata for the track-header hover popup.
 ///
@@ -202,7 +206,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     let theme_colors = model.user_config.active_theme_colors(ui.visuals()).clone();
     let min_height = track::min_total_height(&model.user_config.track);
     let width = ui.available_width().max(0.0);
-    let width_info = model.user_config.effective_tracks_width_info().min(width);
+    let sidebar_width = model.user_config.effective_tracks_width_info();
     let height = model
         .tracks
         .get_track_height(track_id)
@@ -215,268 +219,285 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
 
     // crate::view::util::debug_rect_text(ui, track_rect, egui::Color32::RED, "track_rect");
 
-    // create a new child ui with its own cursor of the given size
+    let layout = TrackLayout::new(
+        track_rect,
+        sidebar_width,
+        model.user_config.show_amplitude_ruler,
+        model.user_config.show_db_ruler,
+    );
+
+    // Components render into geometry derived from `track_rect`; their intrinsic sizes no longer
+    // participate in positioning their siblings.
     let mut track_ui = ui.new_child(
         egui::UiBuilder::new()
-            .max_rect(track_rect)
-            .layout(egui::Layout::top_down(egui::Align::Min)),
+            .id_salt(("track", track_id))
+            .max_rect(layout.track),
     );
-    // A track has a model-owned fixed height. Keep an accidentally oversized child widget from
-    // painting into the next track even if its internal layout requests more room.
-    track_ui.set_clip_rect(ui.clip_rect().intersect(track_rect));
+    track_ui.set_clip_rect(ui.clip_rect().intersect(layout.track));
 
-    track_ui.horizontal(|ui| {
-        ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
+    let mut sidebar_ui = component_ui(
+        &mut track_ui,
+        track_id,
+        "sidebar",
+        layout.columns.sidebar,
+        egui::Layout::top_down(egui::Align::Min),
+    );
+    ui_side(&mut sidebar_ui, model, track_id, &layout);
 
-        // Draw track info left of waveform
-        let info_size = [width_info.max(0.0), height.max(0.0)].into();
-        ui_side(ui, model, track_id, info_size, height);
+    let mut header_ui = component_ui(
+        &mut track_ui,
+        track_id,
+        "waveform_header",
+        layout.waveform_header,
+        egui::Layout::top_down(egui::Align::Min),
+    );
+    let _ = ui_header(&mut header_ui, model, track_id, layout.waveform_header);
 
-        // Draw track waveform + header
-        ui.vertical(|ui| {
-            ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
+    let mut waveform_ui = component_ui(
+        &mut track_ui,
+        track_id,
+        "waveform_canvas",
+        layout.waveform_canvas,
+        egui::Layout::top_down(egui::Align::Min),
+    );
+    let _ = waveform::ui_waveform_canvas(
+        &mut waveform_ui,
+        model,
+        track_id,
+        layout.waveform_canvas,
+        &theme_colors,
+    );
 
-            let size = ui.available_size();
-            let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
-            ui.set_max_size(size);
-            ui.set_min_size(size);
-            let rect_wf_group = ui.min_rect();
+    let mut resize_ui = component_ui(
+        &mut track_ui,
+        track_id,
+        "resize_handle",
+        layout.resize_handle,
+        egui::Layout::top_down(egui::Align::Min),
+    );
+    let min_height = track::min_total_height(&model.user_config.track);
+    let resize_id = resize_ui.id().with("interaction");
+    let response = resize_handle(&mut resize_ui, resize_id, layout.resize_handle);
+    if response.dragged() {
+        let modifiers = resize_ui.input(|i| i.modifiers);
+        let track = model
+            .tracks
+            .get_track_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
 
-            ui.allocate_ui([size.x.max(0.0), track::HEADER_HEIGHT].into(), |ui| {
-                let size = ui.available_size();
-                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
-                ui.set_max_size(size);
-                ui.set_min_size(size);
-                let _ = ui_header(ui, model, track_id);
-            });
-
-            let waveform_height = (size.y - track::HEADER_HEIGHT).max(0.0);
-            ui.allocate_ui([size.x.max(0.0), waveform_height].into(), |ui| {
-                let size = ui.available_size();
-                let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
-                ui.set_max_size(size);
-                ui.set_min_size(size);
-                let waveform_rect = ui.min_rect();
-                let _ =
-                    waveform::ui_waveform_canvas(ui, model, track_id, waveform_rect, &theme_colors);
-            });
-        });
-    });
-
-    // -- Resize handle across full track width --
-    {
-        const RESIZE_HANDLE_HEIGHT: f32 = 3.0;
-        let min_height = track::min_total_height(&model.user_config.track);
-        let resize_handle_rect = egui::Rect::from_min_size(
-            egui::pos2(
-                track_rect.left(),
-                track_rect.bottom() - RESIZE_HANDLE_HEIGHT,
-            ),
-            egui::vec2(track_rect.width(), RESIZE_HANDLE_HEIGHT),
-        );
-        let resize_id = track_ui.id().with(track_id);
-        let response = resize_handle(&mut track_ui, resize_id, resize_handle_rect);
-        if response.dragged() {
-            let modifiers = track_ui.input(|i| i.modifiers);
-            let track = model
-                .tracks
-                .get_track_mut(track_id)
-                .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-            if !modifiers.ctrl && !modifiers.shift && !modifiers.alt {
-                track.height = (track.height + response.drag_delta().y).max(min_height);
-            } else if modifiers.shift {
-                let new_height = (track.height + response.drag_delta().y).max(min_height);
-                model.tracks.set_tracks_height(new_height);
-            }
+        if !modifiers.ctrl && !modifiers.shift && !modifiers.alt {
+            track.height = (track.height + response.drag_delta().y).max(min_height);
+        } else if modifiers.shift {
+            let new_height = (track.height + response.drag_delta().y).max(min_height);
+            model.tracks.set_tracks_height(new_height);
         }
     }
 
     Ok(())
 }
 
+fn component_ui(
+    parent: &mut egui::Ui,
+    track_id: TrackId,
+    component: &'static str,
+    rect: egui::Rect,
+    layout: egui::Layout,
+) -> egui::Ui {
+    let clip_rect = parent.clip_rect().intersect(rect);
+    let mut child = parent.new_child(
+        egui::UiBuilder::new()
+            .id_salt((component, track_id))
+            .max_rect(rect)
+            .layout(layout),
+    );
+    child.set_clip_rect(clip_rect);
+    child
+}
+
 // UI part on the left side of each track
 // contains:
 // - track info
 // - sample value ruler
-pub fn ui_side(
+fn ui_side(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, layout: &TrackLayout) {
+    let info_rect = layout.columns.sidebar;
+    let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
+    ui.painter().rect(
+        info_rect,
+        0.0,
+        egui::Color32::TRANSPARENT,
+        stroke,
+        egui::epaint::StrokeKind::Inside,
+    );
+
+    ui_offset_controls(ui, model, track_id, layout.sidebar_header_controls);
+
+    if let Some(rect) = layout.reset_y_button {
+        ui_reset_y_button(ui, model, track_id, rect);
+    }
+
+    ui_stats_viewport(ui, model, track_id, layout.stats_viewport);
+
+    ui_rulers(ui, model, track_id, layout.db_ruler, layout.amplitude_ruler);
+}
+
+fn ui_offset_controls(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
+    let mut controls_ui = component_ui(
+        ui,
+        track_id,
+        "sidebar_header_controls",
+        rect,
+        egui::Layout::left_to_right(egui::Align::Center),
+    );
+    controls_ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 3.0);
+
+    if let Some(track) = model.tracks.get_track_mut(track_id) {
+        let sample_ix_offset = &mut track.single.sample_ix_offset;
+        controls_ui.label("offset:");
+        let response = controls_ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
+        if response.changed() {
+            track.single.mark_dirty();
+        }
+    }
+}
+
+fn ui_reset_y_button(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
+    let mut reset_ui = component_ui(
+        ui,
+        track_id,
+        "reset_y_button",
+        rect,
+        egui::Layout::left_to_right(egui::Align::Center),
+    );
+    if reset_ui
+        .button("r")
+        .on_hover_text("Reset Y-axiz zoom and pan")
+        .clicked()
+    {
+        model.actions.push(Action::RecenterY { track_id });
+    }
+}
+
+fn ui_stats_viewport(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
+    if rect.width() <= 0.0 || rect.height() <= 0.0 {
+        return;
+    }
+    let Some(buffer_id) = model
+        .tracks
+        .get_track(track_id)
+        .map(|track| track.single.buffer_id)
+    else {
+        return;
+    };
+
+    let mut stats_ui = component_ui(
+        ui,
+        track_id,
+        "stats_viewport",
+        rect,
+        egui::Layout::top_down(egui::Align::Min),
+    );
+    stats_ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+    egui::ScrollArea::vertical()
+        .id_salt(("track_stats", track_id))
+        .max_height(rect.height())
+        // egui defaults this to 64 points. Compact tracks must scroll inside their fixed,
+        // clipped viewport instead of increasing the track's height.
+        .min_scrolled_height(0.0)
+        .show(&mut stats_ui, |ui| {
+            let stats = model.audio.stats.get(buffer_id).copied();
+            let label = if stats.is_some() { "recalc" } else { "stats" };
+            if ui
+                .button(label)
+                .on_hover_text("Gather stats (RMS, peak) over the selection, or the whole buffer when nothing is selected")
+                .clicked()
+            {
+                model.actions.push(Action::ComputeBufferStats {
+                    buffer_id,
+                    track_id,
+                    options: crate::model::stats::StatsOptions::default(),
+                });
+            }
+            if let Some(stats) = stats
+                && let Some(track) = model.tracks.get_track_mut(track_id)
+            {
+                ui_stats_grid(ui, track_id, stats, &mut track.show_peak_marker);
+            }
+        });
+}
+
+fn ui_rulers(
     ui: &mut egui::Ui,
     model: &mut Model,
     track_id: TrackId,
-    info_size: egui::Vec2,
-    height: f32,
+    db_rect: Option<egui::Rect>,
+    amplitude_rect: Option<egui::Rect>,
 ) {
-    ui.allocate_ui_with_layout(info_size, egui::Layout::top_down(egui::Align::Min), |ui| {
-        ui.set_max_size(info_size);
-        ui.set_min_size(info_size);
+    let Some(track) = model.tracks.get_track(track_id) else {
+        return;
+    };
+    let hover_info = model.tracks.hover_info;
+    let theme_colors = model.user_config.active_theme_colors(ui.visuals());
+    let pan_y_mult = model.user_config.navigation.pan_y_mult();
+    let zoom_y_mult = model.user_config.navigation.zoom_y_mult();
+    let display_scale = model.user_config.value_display_scale;
 
-        // paint a rect around the whole side area
-        {
-            let stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
-            ui.painter().rect(
-                ui.min_rect(),
-                0.0,
-                egui::Color32::TRANSPARENT,
-                stroke,
-                egui::epaint::StrokeKind::Inside,
-            );
-        }
-
-        let info_rect = ui.min_rect();
-
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 3.0);
-            let Some(track) = model.tracks.get_track_mut(track_id) else {
-                return;
-            };
-            let buffer_id = track.single.buffer_id;
-            let sample_ix_offset = &mut track.single.sample_ix_offset;
-            ui.label("offset:");
-            let response = ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
-            if response.changed() {
-                track.single.mark_dirty();
-            }
-            let _ = buffer_id;
-        });
-
-        // Compute ruler slots from right edge leftward. Amplitude sits on the right (next to the
-        // waveform) and the dB ruler, when enabled, sits just to its left. Both rulers map the
-        // same axis, so this places the shared 0-line tick on the right edge of each.
-        let ruler_height = (height - track::HEADER_HEIGHT).max(0.0);
-        let amp_rect = model.user_config.show_amplitude_ruler.then(|| {
-            let min = info_rect.max - egui::vec2(RULER_SLOT_WIDTH, ruler_height);
-            egui::Rect::from_min_size(min, egui::vec2(RULER_SLOT_WIDTH, ruler_height))
-        });
-        let db_rect = model.user_config.show_db_ruler.then(|| {
-            let right_offset = if model.user_config.show_amplitude_ruler {
-                RULER_SLOT_WIDTH * 2.0
-            } else {
-                RULER_SLOT_WIDTH
-            };
-            let min = info_rect.max - egui::vec2(right_offset, ruler_height);
-            egui::Rect::from_min_size(min, egui::vec2(RULER_SLOT_WIDTH, ruler_height))
-        });
-
-        // Reset-Y button sits above the right-most enabled ruler. If neither is enabled, skip.
-        if let Some(rightmost) = amp_rect.or(db_rect) {
-            let above_rect = egui::Rect::from_min_size(
-                egui::pos2(rightmost.left(), info_rect.top()),
-                egui::vec2(rightmost.width(), track::HEADER_HEIGHT),
-            );
-            let ui_builder = egui::UiBuilder::new()
-                .max_rect(above_rect)
-                .layout(egui::Layout::left_to_right(egui::Align::Center));
-            ui.allocate_new_ui(ui_builder, |ui| {
-                if ui
-                    .button("r")
-                    .on_hover_text("Reset Y-axiz zoom and pan")
-                    .clicked()
-                {
-                    model.actions.push(Action::RecenterY { track_id });
-                }
-            });
-        }
-
-        // Stats panel: scrollable column below the offset row, left of the rulers. Holds the
-        // (re)calculate button and the latest gathered stats (RMS, peak).
-        let stats_left = info_rect.left();
-        let stats_right = db_rect
-            .map(|r| r.left())
-            .or(amp_rect.map(|r| r.left()))
-            .unwrap_or(info_rect.right());
-        let stats_rect = egui::Rect::from_min_max(
-            egui::pos2(stats_left, info_rect.top() + track::HEADER_HEIGHT),
-            egui::pos2(stats_right, info_rect.bottom()),
+    if let Some(rect) = db_rect {
+        let mut ruler_ui = component_ui(
+            ui,
+            track_id,
+            "db_ruler",
+            rect,
+            egui::Layout::top_down(egui::Align::Min),
         );
-        if stats_rect.width() > 0.0 && stats_rect.height() > 0.0 {
-            let buffer_id = model.tracks.get_track(track_id).map(|t| t.single.buffer_id);
-            if let Some(buffer_id) = buffer_id {
-                // This is an explicitly positioned region, so isolate it from the surrounding
-                // layout instead of letting its content increase `ui_side`'s reported height.
-                let mut stats_ui = ui.new_child(egui::UiBuilder::new().max_rect(stats_rect));
-                stats_ui.set_clip_rect(ui.clip_rect().intersect(stats_rect));
-                stats_ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
-                egui::ScrollArea::vertical()
-                    .id_salt(("track_stats", track_id))
-                    .max_height(stats_rect.height())
-                    // egui defaults this to 64 points. Compact tracks can have a much smaller
-                    // viewport and should scroll inside it rather than enlarging the track.
-                    .min_scrolled_height(0.0)
-                    .show(&mut stats_ui, |ui| {
-                        let stats = model.audio.stats.get(buffer_id).copied();
-                        let label = if stats.is_some() { "recalc" } else { "stats" };
-                        if ui
-                            .button(label)
-                            .on_hover_text("Gather stats (RMS, peak) over the selection, or the whole buffer when nothing is selected")
-                            .clicked()
-                        {
-                            model.actions.push(Action::ComputeBufferStats {
-                                buffer_id,
-                                track_id,
-                                options: crate::model::stats::StatsOptions::default(),
-                            });
-                        }
-                        if let Some(stats) = stats
-                            && let Some(track) = model.tracks.get_track_mut(track_id)
-                        {
-                            ui_stats_grid(ui, track_id, stats, &mut track.show_peak_marker);
-                        }
-                    });
-            }
-        }
+        let mut ctx = db_ruler::DbRulerContext {
+            actions: &mut model.actions,
+            hover_info: &hover_info,
+            audio: &model.audio,
+            pan_y_mult,
+            zoom_y_mult,
+            display_scale,
+        };
+        db_ruler::ui(
+            &mut ruler_ui,
+            track,
+            track_id,
+            rect,
+            db_ruler::DbRulerConfig {
+                show_hover_tick: false,
+            },
+            theme_colors,
+            &mut ctx,
+        );
+    }
 
-        if let Some(track) = model.tracks.get_track(track_id) {
-            let hover_info = model.tracks.hover_info;
-            let theme_colors = model.user_config.active_theme_colors(ui.visuals());
-            let pan_y_mult = model.user_config.navigation.pan_y_mult();
-            let zoom_y_mult = model.user_config.navigation.zoom_y_mult();
-            let display_scale = model.user_config.value_display_scale;
-
-            if let Some(rect) = db_rect {
-                let mut ctx = db_ruler::DbRulerContext {
-                    actions: &mut model.actions,
-                    hover_info: &hover_info,
-                    audio: &model.audio,
-                    pan_y_mult,
-                    zoom_y_mult,
-                    display_scale,
-                };
-                db_ruler::ui(
-                    ui,
-                    track,
-                    track_id,
-                    rect,
-                    db_ruler::DbRulerConfig {
-                        show_hover_tick: false,
-                    },
-                    theme_colors,
-                    &mut ctx,
-                );
-            }
-
-            if let Some(rect) = amp_rect {
-                let mut ctx = value_ruler2::ValueRulerContext {
-                    actions: &mut model.actions,
-                    hover_info: &hover_info,
-                    audio: &model.audio,
-                    pan_y_mult,
-                    zoom_y_mult,
-                    display_scale,
-                };
-                value_ruler2::ui(
-                    ui,
-                    track,
-                    track_id,
-                    rect,
-                    value_ruler2::ValueRulerConfig {
-                        show_hover_tick: false,
-                    },
-                    theme_colors,
-                    &mut ctx,
-                );
-            }
-        }
-    });
+    if let Some(rect) = amplitude_rect {
+        let mut ruler_ui = component_ui(
+            ui,
+            track_id,
+            "amplitude_ruler",
+            rect,
+            egui::Layout::top_down(egui::Align::Min),
+        );
+        let mut ctx = value_ruler2::ValueRulerContext {
+            actions: &mut model.actions,
+            hover_info: &hover_info,
+            audio: &model.audio,
+            pan_y_mult,
+            zoom_y_mult,
+            display_scale,
+        };
+        value_ruler2::ui(
+            &mut ruler_ui,
+            track,
+            track_id,
+            rect,
+            value_ruler2::ValueRulerConfig {
+                show_hover_tick: false,
+            },
+            theme_colors,
+            &mut ctx,
+        );
+    }
 }
 
 fn ui_stats_grid(
@@ -525,103 +546,106 @@ fn ui_stats_grid(
         });
 }
 
-pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {
-    let resp = egui::Frame::default()
-        .stroke(ui.style().visuals.window_stroke())
-        // .inner_margin(ui.style().spacing.window_margin / 6.0)
-        // .outer_margin(ui.style().spacing.window_margin / 6.0)
-        .show(ui, |ui| {
-            let mut text = String::from("track header");
-            let mut path_text = None;
-            let mut channel_text = None;
+pub fn ui_header(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    header_rect: egui::Rect,
+) -> Result<()> {
+    ui.set_clip_rect(ui.clip_rect().intersect(header_rect));
+    ui.painter().rect(
+        header_rect,
+        0.0,
+        egui::Color32::TRANSPARENT,
+        ui.style().visuals.window_stroke(),
+        egui::epaint::StrokeKind::Inside,
+    );
+    if header_rect.width() <= 0.0 || header_rect.height() <= 0.0 {
+        return Ok(());
+    }
 
-            // Build the hover data once per frame, while we still have both the file and the
-            // specific channel for this track. The popup renderer below only formats it.
-            let hover_info = header_hover_info(model, track_id);
+    let mut text = String::from("track header");
+    let mut path_text = None;
+    let mut channel_text = None;
 
-            if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
-                let path = file
-                    .path
-                    .as_ref()
-                    .and_then(|p| p.to_str())
-                    .unwrap_or("unknown");
-                path_text = Some(path.to_string());
-                channel_text = Some(format!(" - ch {}", channel.ch_ix));
-                text = format!("{} - ch {}", path, channel.ch_ix);
-            } else if model
-                .tracks
-                .get_track(track_id)
-                .is_some_and(|track| track.diff.is_some())
-            {
-                text = String::from("Diff");
-            }
+    // Build the hover data once per frame, while we still have both the file and the specific
+    // channel for this track. The popup renderer below only formats it.
+    let hover_info = header_hover_info(model, track_id);
 
-            let rect = ui.max_rect();
-            let rect = egui::Rect::from_min_size(
-                rect.min,
-                egui::vec2(rect.width().max(0.0), track::HEADER_HEIGHT),
-            );
-            ui.set_clip_rect(rect);
+    if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
+        let path = file
+            .path
+            .as_ref()
+            .and_then(|p| p.to_str())
+            .unwrap_or("unknown");
+        path_text = Some(path.to_string());
+        channel_text = Some(format!(" - ch {}", channel.ch_ix));
+        text = format!("{} - ch {}", path, channel.ch_ix);
+    } else if model
+        .tracks
+        .get_track(track_id)
+        .is_some_and(|track| track.diff.is_some())
+    {
+        text = String::from("Diff");
+    }
 
-            let font_id = ui
-                .style()
-                .text_styles
-                .get(&egui::TextStyle::Body)
-                .cloned()
-                .unwrap_or_else(|| egui::FontId::proportional(8.0));
-            let color = ui.style().visuals.text_color();
-            let padding = ui.spacing().button_padding;
-            let item_spacing = ui.spacing().item_spacing.x.max(2.0);
+    let font_id = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .cloned()
+        .unwrap_or_else(|| egui::FontId::proportional(8.0));
+    let color = ui.style().visuals.text_color();
+    let padding = ui.spacing().button_padding;
+    let item_spacing = ui.spacing().item_spacing.x.max(2.0);
+    let text_size = ui
+        .painter()
+        .layout_no_wrap("x".to_owned(), font_id.clone(), color)
+        .size();
+    let button_size = egui::vec2(
+        (text_size.x + padding.x * 2.0).min(header_rect.width()),
+        (text_size.y + padding.y * 2.0).min(header_rect.height()),
+    );
+    let right_margin = 10.0_f32.min((header_rect.width() - button_size.x).max(0.0));
+    let button_right = header_rect.right() - right_margin;
+    let button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            button_right - button_size.x,
+            header_rect.center().y - button_size.y / 2.0,
+        ),
+        button_size,
+    );
 
-            let button_size = |label: &str| {
-                let text_size = ui
-                    .painter()
-                    .layout_no_wrap(label.to_string(), font_id.clone(), color)
-                    .size();
-                egui::vec2(
-                    text_size.x + padding.x * 2.0,
-                    (text_size.y + padding.y * 2.0).min(track::HEADER_HEIGHT),
-                )
-            };
+    if ui.put(button_rect, egui::Button::new("x")).clicked() {
+        model.actions.push(Action::RemoveTrack(track_id));
+    }
 
-            let mut right = rect.right();
-            let button_x_size = button_size("x");
-            let button_x_rect = egui::Rect::from_min_size(
-                egui::pos2(
-                    right - button_x_size.x - 10.0,
-                    rect.center().y - button_x_size.y / 2.0,
-                ),
-                button_x_size,
-            );
-            right = button_x_rect.left() - item_spacing;
+    let label_right = (button_rect.left() - item_spacing).max(header_rect.left());
+    let label_rect = egui::Rect::from_min_max(
+        header_rect.left_top(),
+        egui::pos2(label_right, header_rect.bottom()),
+    );
+    let display_text = if let (Some(path), Some(suffix)) = (path_text, channel_text) {
+        truncate_path_keep_basename_to_width(ui, &path, &suffix, label_rect.width())
+    } else {
+        text
+    };
+    let galley = ui.painter().layout_no_wrap(display_text, font_id, color);
+    let text_pos = egui::pos2(
+        label_rect.left() + 2.0,
+        header_rect.center().y - galley.size().y / 2.0,
+    );
+    ui.painter().galley(text_pos, galley, color);
 
-            if ui.put(button_x_rect, egui::Button::new("x")).clicked() {
-                model.actions.push(Action::RemoveTrack(track_id));
-            }
+    if let Some(hover_info) = hover_info {
+        let response = ui.interact(
+            label_rect,
+            ui.id().with(("header_label", track_id)),
+            egui::Sense::hover(),
+        );
+        response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
+    }
 
-            let label_rect =
-                egui::Rect::from_min_max(rect.left_top(), egui::pos2(right, rect.bottom()));
-            let max_width = label_rect.width().max(0.0);
-            let display_text = if let (Some(path), Some(suffix)) = (path_text, channel_text) {
-                truncate_path_keep_basename_to_width(ui, &path, &suffix, max_width)
-            } else {
-                text
-            };
-            let galley = ui.painter().layout_no_wrap(display_text, font_id, color);
-            let text_pos = egui::pos2(
-                label_rect.left() + 2.0,
-                rect.center().y - galley.size().y / 2.0,
-            );
-            ui.painter().galley(text_pos, galley, color);
-            if let Some(hover_info) = hover_info {
-                let response = ui.interact(
-                    label_rect,
-                    ui.id().with(("header_label", track_id)),
-                    egui::Sense::hover(),
-                );
-                response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
-            }
-        });
     Ok(())
 }
 

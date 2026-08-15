@@ -29,10 +29,6 @@ pub fn ui_waveform_canvas(
     rect: egui::Rect,
     theme_colors: &ThemeColors,
 ) -> Result<()> {
-    let size = ui.available_size();
-    ui.set_max_size(size);
-    ui.set_min_size(size);
-
     let bg_color = ui.visuals().extreme_bg_color;
     let stroke = ui.visuals().window_stroke();
     ui.painter().rect(
@@ -49,8 +45,8 @@ pub fn ui_waveform_canvas(
     );
     handle_pan_drag(ui, model, track_id, &waveform_response);
     ui_waveform(ui, model, track_id, rect, theme_colors)?;
-    hover::ui_hover(ui, model, track_id, theme_colors);
-    selection::ui_selection(ui, model, track_id, &waveform_response, theme_colors);
+    hover::ui_hover(ui, model, track_id, rect, theme_colors);
+    selection::ui_selection(ui, model, track_id, rect, &waveform_response, theme_colors);
 
     Ok(())
 }
@@ -91,6 +87,9 @@ fn ui_waveform(
     rect: egui::Rect,
     theme_colors: &ThemeColors,
 ) -> Result<()> {
+    // Keep waveform generation and all sample-to-screen mapping anchored to the exact canvas
+    // rectangle computed by `TrackLayout`.
+    let waveform_screen_rect: Rect = rect.into();
     let screen_width = model.tracks.ruler.screen_rect().width() as f64;
     anyhow::ensure!(screen_width > 0.0, "Ruler screen rect width is zero");
     let time_range = model.tracks.time_camera.time_range(screen_width);
@@ -114,11 +113,17 @@ fn ui_waveform(
         end: crate::model::time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
     };
     let peak_marker_x = peak_marker_ix.map(|sample_ix| {
-        crate::model::ruler::sample_ix_to_screen_x(sample_ix as f64, sample_ix_range, rect.into())
+        crate::model::ruler::sample_ix_to_screen_x(
+            sample_ix as f64,
+            sample_ix_range,
+            waveform_screen_rect,
+        )
     });
 
     track.single.set_ix_range(sample_ix_range, &model.audio)?;
-    track.set_screen_rect(rect.into());
+    // `Track::set_screen_rect` propagates the same rectangle to `Single`, which marks the cached
+    // waveform view dirty whenever the canvas geometry changes.
+    track.set_screen_rect(waveform_screen_rect);
     track.single.set_display_scale(display_scale);
     track.update(&mut model.audio)?;
     let sample_view = track.single.get_sample_view()?;
@@ -362,7 +367,7 @@ fn draw_peak_sample_grid_line(
     let top = rpc(ui, egui::pos2(x, screen_rect.top()));
     let bottom = rpc(ui, egui::pos2(x, screen_rect.bottom()));
     ui.painter()
-        .line_segment([top, bottom], egui::Stroke::new(1.5, color));
+        .line_segment([top, bottom], egui::Stroke::new(1.0, color));
 }
 
 #[cfg(test)]
