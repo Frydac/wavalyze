@@ -1065,7 +1065,7 @@ dependencies = [
 [[package]]
 name = "egui_custom_widgets"
 version = "0.1.0"
-source = "git+https://github.com/Frydac/egui_custom_widgets#abd8c1c39e1d614dc6bbf3a2b10879e197c7cd1c"
+source = "git+https://github.com/Frydac/egui_custom_widgets#13d627053de0cc9917e7ea2a127937dda4ac7e8e"
 dependencies = [
  "egui",
 ]
