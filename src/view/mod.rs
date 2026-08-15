@@ -10,6 +10,7 @@ pub mod jobs;
 pub mod ruler;
 pub mod selection_info;
 pub mod track;
+pub mod track_sidebar_header;
 pub mod tracks_panel;
 pub mod util;
 pub mod value_ruler2;
@@ -382,12 +383,31 @@ impl View {
                 // ui.separator();
             });
 
-            let ruler_width = ui.available_width().max(0.0);
-            ui.allocate_ui([ruler_width, ruler::HEIGHT].into(), |ui| {
+            let ruler_row_width = ui.available_width().max(0.0);
+            ui.allocate_ui([ruler_row_width, ruler::HEIGHT].into(), |ui| {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), size.y.max(0.0));
                 ui.set_min_size(size);
-                let _ = ruler::ui(ui, &mut self.model);
+
+                // Split this row at the same boundary used by every track: shared track controls
+                // on the left, and the overview/time ruler over the waveform area on the right.
+                let row_rect = ui.min_rect();
+                let sidebar_width = self
+                    .model
+                    .user_config
+                    .effective_tracks_width_info()
+                    .min(row_rect.width());
+                let sidebar_rect = egui::Rect::from_min_size(
+                    row_rect.min,
+                    egui::vec2(sidebar_width, row_rect.height()),
+                );
+                let ruler_rect = egui::Rect::from_min_max(
+                    egui::pos2(sidebar_rect.right(), row_rect.top()),
+                    row_rect.right_bottom(),
+                );
+
+                track_sidebar_header::ui(ui, &mut self.model, sidebar_rect);
+                let _ = ruler::ui(ui, &mut self.model, ruler_rect);
             });
             // self.ui_top_panel_tool_bar(ui, ctx);
 
