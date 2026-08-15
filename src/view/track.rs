@@ -221,6 +221,9 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
             .max_rect(track_rect)
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
+    // A track has a model-owned fixed height. Keep an accidentally oversized child widget from
+    // painting into the next track even if its internal layout requests more room.
+    track_ui.set_clip_rect(ui.clip_rect().intersect(track_rect));
 
     track_ui.horizontal(|ui| {
         ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
@@ -388,47 +391,37 @@ pub fn ui_side(
         if stats_rect.width() > 0.0 && stats_rect.height() > 0.0 {
             let buffer_id = model.tracks.get_track(track_id).map(|t| t.single.buffer_id);
             if let Some(buffer_id) = buffer_id {
-                let ui_builder = egui::UiBuilder::new().max_rect(stats_rect);
-                ui.allocate_new_ui(ui_builder, |ui| {
-                    ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
-                    egui::ScrollArea::vertical()
-                        .id_salt(("track_stats", track_id))
-                        .show(ui, |ui| {
-                            let stats = model.audio.stats.get(buffer_id).copied();
-                            let label = if stats.is_some() { "recalc" } else { "stats" };
-                            if ui
-                                .button(label)
-                                .on_hover_text("Gather stats (RMS, peak) over the selection, or the whole buffer when nothing is selected")
-                                .clicked()
-                            {
-                                model.actions.push(Action::ComputeBufferStats {
-                                    buffer_id,
-                                    track_id,
-                                    options: crate::model::stats::StatsOptions::default(),
-                                });
-                            }
-                            if let Some(stats) = stats {
-                                ui.label(format!(
-                                    "range: {}..{}",
-                                    stats.range.start, stats.range.end
-                                ));
-                                if let Some(rms_db) = stats.rms_db {
-                                    ui.label(format!("RMS: {rms_db:.2} dB"));
-                                }
-                                if let Some(peak) = stats.peak {
-                                    let mut peak_text = format!(
-                                        "Peak: {:.2} dB | {:.3}",
-                                        peak.magnitude_db, peak.magnitude_norm
-                                    );
-                                    if let Some(int_val) = peak.raw.as_int() {
-                                        peak_text.push_str(&format!(" | {int_val}"));
-                                    }
-                                    ui.label(peak_text);
-                                    ui.label(format!("  @ {}", peak.global_ix));
-                                }
-                            }
-                        });
-                });
+                // This is an explicitly positioned region, so isolate it from the surrounding
+                // layout instead of letting its content increase `ui_side`'s reported height.
+                let mut stats_ui = ui.new_child(egui::UiBuilder::new().max_rect(stats_rect));
+                stats_ui.set_clip_rect(ui.clip_rect().intersect(stats_rect));
+                stats_ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+                egui::ScrollArea::vertical()
+                    .id_salt(("track_stats", track_id))
+                    .max_height(stats_rect.height())
+                    // egui defaults this to 64 points. Compact tracks can have a much smaller
+                    // viewport and should scroll inside it rather than enlarging the track.
+                    .min_scrolled_height(0.0)
+                    .show(&mut stats_ui, |ui| {
+                        let stats = model.audio.stats.get(buffer_id).copied();
+                        let label = if stats.is_some() { "recalc" } else { "stats" };
+                        if ui
+                            .button(label)
+                            .on_hover_text("Gather stats (RMS, peak) over the selection, or the whole buffer when nothing is selected")
+                            .clicked()
+                        {
+                            model.actions.push(Action::ComputeBufferStats {
+                                buffer_id,
+                                track_id,
+                                options: crate::model::stats::StatsOptions::default(),
+                            });
+                        }
+                        if let Some(stats) = stats
+                            && let Some(track) = model.tracks.get_track_mut(track_id)
+                        {
+                            ui_stats_grid(ui, track_id, stats, &mut track.show_peak_marker);
+                        }
+                    });
             }
         }
 
@@ -484,6 +477,52 @@ pub fn ui_side(
             }
         }
     });
+}
+
+fn ui_stats_grid(
+    ui: &mut egui::Ui,
+    track_id: TrackId,
+    stats: crate::model::stats::BufferStats,
+    show_peak_marker: &mut bool,
+) {
+    egui::Grid::new(ui.id().with(("stats_grid", track_id)))
+        .num_columns(2)
+        .spacing([6.0, 3.0])
+        .striped(true)
+        .show(ui, |ui| {
+            ui.label("Range");
+            ui.label(format!("{}..{}", stats.range.start, stats.range.end));
+            ui.end_row();
+
+            if let Some(rms_db) = stats.rms_db {
+                ui.label("RMS");
+                ui.label(format!("{rms_db:.2} dB"));
+                ui.end_row();
+            }
+
+            if let Some(peak) = stats.peak {
+                ui.label("Peak dB");
+                ui.label(format!("{:.2} dB", peak.magnitude_db));
+                ui.end_row();
+
+                ui.label("Peak norm");
+                ui.label(format!("{:.6}", peak.magnitude_norm));
+                ui.end_row();
+
+                ui.label("Peak raw");
+                ui.label(peak.raw.to_string());
+                ui.end_row();
+
+                ui.label("Peak index");
+                ui.horizontal(|ui| {
+                    ui.checkbox(show_peak_marker, "").on_hover_text(
+                        "Show a vertical guide at the peak sample index in this track",
+                    );
+                    ui.label(peak.global_ix.to_string());
+                });
+                ui.end_row();
+            }
+        });
 }
 
 pub fn ui_header(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()> {

@@ -98,6 +98,13 @@ fn ui_waveform(
     let display_scale = model.user_config.value_display_scale;
     let round_minmax_to_pixel_center = model.user_config.round_minmax_waveform_to_pixel_center;
     let zero_sample_x = model.tracks.sample_ix_to_screen_x(0.0);
+    let peak_marker_ix = model
+        .tracks
+        .get_track(track_id)
+        .filter(|track| track.show_peak_marker)
+        .and_then(|track| model.audio.stats.get(track.single.buffer_id))
+        .and_then(|stats| stats.peak)
+        .map(|peak| peak.global_ix);
     let track = model
         .tracks
         .get_track_mut(track_id)
@@ -106,6 +113,9 @@ fn ui_waveform(
         start: crate::model::time_camera::time_to_sample_ix(time_range.start, track.sample_rate),
         end: crate::model::time_camera::time_to_sample_ix(time_range.end, track.sample_rate),
     };
+    let peak_marker_x = peak_marker_ix.map(|sample_ix| {
+        crate::model::ruler::sample_ix_to_screen_x(sample_ix as f64, sample_ix_range, rect.into())
+    });
 
     track.single.set_ix_range(sample_ix_range, &model.audio)?;
     track.set_screen_rect(rect.into());
@@ -138,6 +148,7 @@ fn ui_waveform(
 
     draw_value_grid(ui, sample_rect, screen_rect, display_scale);
     draw_zero_sample_grid_line(ui, screen_rect, zero_sample_x);
+    draw_peak_sample_grid_line(ui, screen_rect, peak_marker_x, theme_colors.accent);
 
     Ok(())
 }
@@ -333,6 +344,25 @@ fn draw_zero_sample_grid_line(ui: &mut egui::Ui, screen_rect: Rect, zero_sample_
     let color = ui.style().visuals.text_color().gamma_multiply(0.45);
     ui.painter()
         .line_segment([top, bottom], egui::Stroke::new(1.0, color));
+}
+
+fn draw_peak_sample_grid_line(
+    ui: &mut egui::Ui,
+    screen_rect: Rect,
+    peak_sample_x: Option<f32>,
+    color: egui::Color32,
+) {
+    let Some(x) = peak_sample_x else {
+        return;
+    };
+    if !screen_rect.contains_x(x) {
+        return;
+    }
+
+    let top = rpc(ui, egui::pos2(x, screen_rect.top()));
+    let bottom = rpc(ui, egui::pos2(x, screen_rect.bottom()));
+    ui.painter()
+        .line_segment([top, bottom], egui::Stroke::new(1.5, color));
 }
 
 #[cfg(test)]

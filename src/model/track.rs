@@ -51,6 +51,8 @@ pub struct Track {
     pub height: f32,
     // track visibility in gui
     pub visible: bool,
+    /// Draw a vertical guide at the peak index from the most recently computed statistics.
+    pub show_peak_marker: bool,
 }
 
 impl Track {
@@ -65,6 +67,7 @@ impl Track {
             track_md: TrackMetaData::None,
             height: min_total_height(track_config),
             visible: true,
+            show_peak_marker: false,
         })
     }
 

@@ -31,13 +31,12 @@ pub enum SampleValueE {
     I16(i16),
 }
 
-impl SampleValueE {
-    /// The raw integer value, when the buffer is integer-typed. `None` for float buffers.
-    pub fn as_int(&self) -> Option<i64> {
+impl std::fmt::Display for SampleValueE {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SampleValueE::F32(_) => None,
-            SampleValueE::I32(v) => Some(*v as i64),
-            SampleValueE::I16(v) => Some(*v as i64),
+            SampleValueE::F32(value) => write!(formatter, "{value:.6}"),
+            SampleValueE::I32(value) => value.fmt(formatter),
+            SampleValueE::I16(value) => value.fmt(formatter),
         }
     }
 }
