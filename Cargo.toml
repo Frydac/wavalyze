@@ -46,7 +46,7 @@ num-traits = "0.2.19"
 rayon = "1.11.0"
 web-time = "1.1.0"
 rfd = "0.17.2"
-egui_tracing = { git = "https://github.com/grievouz/egui_tracing", tag = "egui_tracing-v0.3.0" }
+egui_tracing = { git = "https://github.com/grievouz/egui_tracing", tag = "egui_tracing-v0.3.0", features = ["wasmbind"] }
 
 
 # native:
