@@ -172,6 +172,7 @@ fn draw_waveform(ui: &mut egui::Ui, params: WaveformDrawParams<'_>) {
     match params.sample_view.data {
         ViewData::Single(ref single_view) => {
             if params.sample_view.samples_per_pixel < SINGLE_SAMPLE_DRAW_MAX_SPP {
+                // Draw single samples
                 single_view.samples.iter().for_each(|pos| {
                     let Some(val_rng) = params.sample_rect.val_rng() else {
                         return;
@@ -234,16 +235,16 @@ fn draw_waveform(ui: &mut egui::Ui, params: WaveformDrawParams<'_>) {
                     );
                 });
             } else {
+                // Draw the waveform as a line graph
                 single_view.line_segments.iter().for_each(|segment| {
                     let positions = segment.iter().map(|pos| rpc(ui, pos.into())).collect();
                     let color = params.theme_colors.waveform;
-                    let line_color = color.linear_multiply(0.7);
-                    ui.painter()
-                        .line(positions, egui::Stroke::new(1.0, line_color));
+                    ui.painter().line(positions, egui::Stroke::new(1.0, color));
                 });
             }
         }
         ViewData::MinMax(ref mix_max_positions) => {
+            // Draw min/max values on pixel columns
             let stroke_width = minmax_column_stroke_width(ui.ctx().pixels_per_point());
             mix_max_positions.iter().for_each(|pos| {
                 let min = minmax_column_pos(ui, &pos.min, params.round_minmax_to_pixel_center);
