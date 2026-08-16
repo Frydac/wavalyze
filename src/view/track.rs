@@ -331,8 +331,8 @@ fn ui_side(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, layout: &Tra
 
     ui_offset_controls(ui, model, track_id, layout.sidebar_header_controls);
 
-    if let Some(rect) = layout.reset_y_button {
-        ui_reset_y_button(ui, model, track_id, rect);
+    if let Some(rect) = layout.y_zoom_controls {
+        ui_y_zoom_controls(ui, model, track_id, rect);
     }
 
     ui_stats_viewport(ui, model, track_id, layout.stats_viewport);
@@ -360,20 +360,31 @@ fn ui_offset_controls(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, r
     }
 }
 
-fn ui_reset_y_button(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
-    let mut reset_ui = component_ui(
+fn ui_y_zoom_controls(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
+    let mut controls_ui = component_ui(
         ui,
         track_id,
-        "reset_y_button",
+        "y_zoom_controls",
         rect,
         egui::Layout::left_to_right(egui::Align::Center),
     );
-    if reset_ui
+    controls_ui.spacing_mut().item_spacing.x = 2.0;
+
+    if controls_ui
         .button("r")
-        .on_hover_text("Reset Y-axiz zoom and pan")
+        .on_hover_text("Reset Y-axis zoom and pan")
         .clicked()
     {
         model.actions.push(Action::RecenterY { track_id });
+    }
+    if controls_ui
+        .button("a")
+        .on_hover_text(
+            "Auto-fit Y to the selection peak; uses the visible time range when there is no selection",
+        )
+        .clicked()
+    {
+        model.actions.push(Action::AutoFitY { track_id });
     }
 }
 

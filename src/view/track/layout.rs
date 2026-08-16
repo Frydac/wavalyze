@@ -36,7 +36,8 @@ pub(super) struct TrackLayout {
     pub track: egui::Rect,
     pub columns: TrackColumns,
     pub sidebar_header_controls: egui::Rect,
-    pub reset_y_button: Option<egui::Rect>,
+    /// Ruler-aligned header slot shared by the reset and auto-fit Y buttons.
+    pub y_zoom_controls: Option<egui::Rect>,
     pub stats_viewport: egui::Rect,
     pub db_ruler: Option<egui::Rect>,
     pub amplitude_ruler: Option<egui::Rect>,
@@ -82,13 +83,13 @@ impl TrackLayout {
         );
 
         let rightmost_ruler = amplitude_ruler.or(db_ruler);
-        let reset_y_button = rightmost_ruler.map(|ruler| {
+        let y_zoom_controls = rightmost_ruler.map(|ruler| {
             egui::Rect::from_min_max(
                 egui::pos2(ruler.left(), sidebar_header.top()),
                 egui::pos2(ruler.right(), sidebar_header.bottom()),
             )
         });
-        let controls_right = reset_y_button
+        let controls_right = y_zoom_controls
             .map(|rect| rect.left())
             .unwrap_or(sidebar_header.right());
         let sidebar_header_controls = egui::Rect::from_min_max(
@@ -115,7 +116,7 @@ impl TrackLayout {
             track,
             columns,
             sidebar_header_controls,
-            reset_y_button,
+            y_zoom_controls,
             stats_viewport,
             db_ruler,
             amplitude_ruler,
@@ -180,8 +181,13 @@ mod tests {
         assert_eq!(db.right(), amplitude.left());
         assert_eq!(layout.stats_viewport.right(), db.left());
         assert_eq!(
-            layout.reset_y_button.unwrap().x_range(),
+            layout.y_zoom_controls.unwrap().x_range(),
             amplitude.x_range()
+        );
+        assert_eq!(layout.y_zoom_controls.unwrap().width(), RULER_SLOT_WIDTH);
+        assert_eq!(
+            layout.sidebar_header_controls.right(),
+            layout.y_zoom_controls.unwrap().left()
         );
     }
 
@@ -194,7 +200,7 @@ mod tests {
             assert_eq!(ruler.width(), RULER_SLOT_WIDTH);
             assert_eq!(ruler.right(), layout.columns.sidebar.right());
             assert_eq!(layout.stats_viewport.right(), ruler.left());
-            assert_eq!(layout.reset_y_button.unwrap().x_range(), ruler.x_range());
+            assert_eq!(layout.y_zoom_controls.unwrap().x_range(), ruler.x_range());
             assert_eq!(layout.amplitude_ruler.is_some(), show_amplitude);
             assert_eq!(layout.db_ruler.is_some(), show_db);
         }
@@ -210,7 +216,7 @@ mod tests {
             layout.columns.sidebar.right()
         );
         assert_eq!(layout.sidebar_header_controls.width(), 250.0);
-        assert!(layout.reset_y_button.is_none());
+        assert!(layout.y_zoom_controls.is_none());
     }
 
     #[test]
@@ -220,7 +226,7 @@ mod tests {
 
         for component in [
             layout.sidebar_header_controls,
-            layout.reset_y_button.unwrap(),
+            layout.y_zoom_controls.unwrap(),
             layout.stats_viewport,
             layout.amplitude_ruler.unwrap(),
             layout.waveform_header,
@@ -254,7 +260,7 @@ mod tests {
 
         assert_eq!(layout.sidebar_header_controls.top(), layout.track.top());
         assert_eq!(layout.sidebar_header_controls.bottom(), body_top);
-        assert_eq!(layout.reset_y_button.unwrap().bottom(), body_top);
+        assert_eq!(layout.y_zoom_controls.unwrap().bottom(), body_top);
         assert_eq!(layout.stats_viewport.top(), body_top);
         assert_eq!(layout.amplitude_ruler.unwrap().top(), body_top);
         assert_eq!(layout.db_ruler.unwrap().top(), body_top);
@@ -270,6 +276,11 @@ mod tests {
         assert_eq!(layout.amplitude_ruler.unwrap().width(), 50.0);
         assert!(layout.db_ruler.is_none());
         assert_eq!(layout.stats_viewport.width(), 0.0);
+        assert_eq!(layout.y_zoom_controls.unwrap().width(), 50.0);
+        assert_eq!(
+            layout.sidebar_header_controls.right(),
+            layout.y_zoom_controls.unwrap().left()
+        );
     }
 
     #[test]
@@ -315,7 +326,7 @@ mod tests {
                 layout.waveform_canvas,
                 layout.resize_handle,
             ];
-            regions.extend(layout.reset_y_button);
+            regions.extend(layout.y_zoom_controls);
             regions.extend(layout.db_ruler);
             regions.extend(layout.amplitude_ruler);
 

@@ -12,7 +12,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut model::Model, rect: egui::Rect) {
     );
     header_ui.set_min_size(rect.size());
 
-    // Align the skew control with the right-most per-track ruler slot and its reset-Y button.
+    // Align the skew control with the right-most per-track ruler slot and its Y zoom controls.
     let slot_width = RULER_SLOT_WIDTH.min(rect.width());
     let skew_rect = egui::Rect::from_min_size(
         egui::pos2(rect.right() - slot_width, rect.top()),

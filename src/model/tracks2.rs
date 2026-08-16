@@ -32,6 +32,7 @@ pub struct Tracks {
 
 impl Tracks {
     const SELECTION_EDGE_ZOOM_SAMPLES_PER_PIXEL: f64 = 0.1;
+    const AUTO_FIT_PEAK_SCREEN_FRACTION: f64 = 0.95;
 
     pub fn visible_tracks_len(&self) -> usize {
         self.tracks.values().filter(|track| track.visible).count()
@@ -204,6 +205,109 @@ impl Tracks {
         sample_rect.set_val_rng(shifted);
         track.single.set_sample_rect(sample_rect);
         Ok(())
+    }
+
+    /// Resolve the buffer-local, half-open sample range used by a per-track Y auto-fit request.
+    /// A valid global selection takes precedence; otherwise the track's visible sample range is
+    /// used. Selection indices use the reference track's sample rate, so they are projected through
+    /// time before being mapped to the target track.
+    pub fn auto_fit_local_ix_range(
+        &self,
+        track_id: TrackId,
+        audio: &audio::manager::AudioManager,
+    ) -> Result<Option<audio::sample::IxRange>> {
+        let track = self
+            .tracks
+            .get(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+        let buffer_len = i64::try_from(audio.get_buffer(track.single.buffer_id)?.nr_samples())
+            .map_err(|_| anyhow::anyhow!("Buffer is too large to address with sample indices"))?;
+
+        let global_range = match self.selection_info {
+            SelectionInfoE::IsSelected(selection)
+                if selection.ix_rng.end > selection.ix_rng.start =>
+            {
+                let reference_rate = self
+                    .reference_sample_rate()
+                    .ok_or_else(|| anyhow::anyhow!("No reference sample rate"))?;
+                let start_time =
+                    time_camera::sample_ix_to_time(selection.ix_rng.start as f64, reference_rate);
+                let end_time =
+                    time_camera::sample_ix_to_time(selection.ix_rng.end as f64, reference_rate);
+                audio::sample::FracIxRange {
+                    start: time_camera::time_to_sample_ix(start_time, track.sample_rate),
+                    end: time_camera::time_to_sample_ix(end_time, track.sample_rate),
+                }
+            }
+            _ => {
+                let sample_rect = track
+                    .single
+                    .sample_rect_raw()
+                    .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+                sample_rect.ix_rng()
+            }
+        };
+
+        let local_start = global_range.start + track.single.sample_ix_offset;
+        let local_end = global_range.end + track.single.sample_ix_offset;
+        if !local_start.is_finite() || !local_end.is_finite() || local_end <= local_start {
+            return Ok(None);
+        }
+
+        // Integer sample n is in the fractional half-open interval [start, end) when
+        // ceil(start) <= n < ceil(end). Clamp after applying the track offset so jobs can index
+        // directly into the buffer.
+        let start = (local_start.ceil() as i64).clamp(0, buffer_len);
+        let end = (local_end.ceil() as i64).clamp(0, buffer_len);
+        if end <= start {
+            return Ok(None);
+        }
+
+        Ok(Some(audio::sample::IxRange { start, end }))
+    }
+
+    /// Apply a detected peak to a track's value camera while keeping sample zero centered.
+    ///
+    /// Returns `false` without changing the track when the asynchronous result is stale, the peak
+    /// is absent/invalid/silent, or the track has no initialized sample rectangle.
+    pub fn apply_auto_fit_peak(
+        &mut self,
+        track_id: TrackId,
+        expected_buffer_id: BufferId,
+        peak_norm: Option<f64>,
+        display_scale: ruler::ValueDisplayScale,
+    ) -> bool {
+        let Some(track) = self.tracks.get_mut(track_id) else {
+            return false;
+        };
+        if track.single.buffer_id != expected_buffer_id {
+            return false;
+        }
+        let Some(peak) = peak_norm
+            .map(f64::abs)
+            .filter(|peak| peak.is_finite() && *peak > 0.0)
+        else {
+            return false;
+        };
+        let Some(mut sample_rect) = track.single.sample_rect_raw() else {
+            return false;
+        };
+
+        // ValueDisplayScale transforms each unit interval independently. Convert the magnitude to
+        // the corresponding piecewise display coordinate, then leave 5% of each canvas half free.
+        let whole = peak.floor();
+        let display_peak = whole + display_scale.sample_to_display(peak - whole);
+        let extent = display_peak / Self::AUTO_FIT_PEAK_SCREEN_FRACTION;
+        if !extent.is_finite() || extent <= 0.0 {
+            return false;
+        }
+
+        sample_rect.set_val_rng(audio::sample::ValRange {
+            min: -extent,
+            max: extent,
+        });
+        track.single.set_sample_rect(sample_rect);
+        true
     }
 
     /// Reset the value range to full scale (pan/zoom reset) for a single track.
@@ -596,12 +700,41 @@ mod tests {
         audio: &mut audio::manager::AudioManager,
         nr_samples: usize,
     ) -> audio::BufferId {
+        insert_buffer_at_rate(audio, nr_samples, TEST_SAMPLE_RATE)
+    }
+
+    fn insert_buffer_at_rate(
+        audio: &mut audio::manager::AudioManager,
+        nr_samples: usize,
+        sample_rate: u32,
+    ) -> audio::BufferId {
         let buffer = audio::buffer::BufferE::F32(audio::buffer::Buffer::with_size(
-            TEST_SAMPLE_RATE,
+            sample_rate,
             32,
             nr_samples,
         ));
         audio.buffers.insert(std::sync::Arc::new(buffer))
+    }
+
+    fn track_with_visible_range(
+        tracks: &mut Tracks,
+        audio: &mut audio::manager::AudioManager,
+        sample_rate: u32,
+        nr_samples: usize,
+        visible_range: std::ops::Range<f64>,
+    ) -> crate::model::track::TrackId {
+        let buffer_id = insert_buffer_at_rate(audio, nr_samples, sample_rate);
+        let track_id = tracks
+            .add_track_to_end(buffer_id, sample_rate, &TrackConfig::default())
+            .unwrap();
+        let mut sample_rect = audio::SampleRect::from_buffere(audio.get_buffer(buffer_id).unwrap());
+        sample_rect.set_ix_rng(visible_range.into());
+        tracks
+            .get_track_mut(track_id)
+            .unwrap()
+            .single
+            .set_sample_rect(sample_rect);
+        track_id
     }
 
     /// Most tests need at least one track so `reference_sample_rate()` resolves and
@@ -636,6 +769,319 @@ mod tests {
         sample_rect.set_val_rng(val_rng);
         track.single.set_sample_rect(sample_rect);
         track_id
+    }
+
+    #[test]
+    fn auto_fit_range_prefers_valid_selection_over_visible_range() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id =
+            track_with_visible_range(&mut tracks, &mut audio, TEST_SAMPLE_RATE, 100, 2.0..8.0);
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (20..30).into(),
+            screen_x_start: 0.0,
+            screen_x_end: 0.0,
+        });
+
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(track_id, &audio).unwrap(),
+            Some((20..30).into())
+        );
+    }
+
+    #[test]
+    fn auto_fit_range_uses_fractional_visible_range_without_selection() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id =
+            track_with_visible_range(&mut tracks, &mut audio, TEST_SAMPLE_RATE, 100, 10.2..19.1);
+
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(track_id, &audio).unwrap(),
+            Some((11..20).into())
+        );
+    }
+
+    #[test]
+    fn auto_fit_range_converts_selection_to_target_sample_rate() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        // The wider sample rect establishes 48 kHz as the reference selection rate.
+        track_with_visible_range(&mut tracks, &mut audio, 48_000, 2_000, 0.0..1_000.0);
+        let target = track_with_visible_range(&mut tracks, &mut audio, 96_000, 1_000, 0.0..100.0);
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (10..20).into(),
+            screen_x_start: 0.0,
+            screen_x_end: 0.0,
+        });
+
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(target, &audio).unwrap(),
+            Some((20..40).into())
+        );
+    }
+
+    #[test]
+    fn auto_fit_range_applies_track_offset() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let target =
+            track_with_visible_range(&mut tracks, &mut audio, TEST_SAMPLE_RATE, 100, 0.0..10.0);
+        tracks
+            .get_track_mut(target)
+            .unwrap()
+            .single
+            .sample_ix_offset = 5.0;
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (10..20).into(),
+            screen_x_start: 0.0,
+            screen_x_end: 0.0,
+        });
+
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(target, &audio).unwrap(),
+            Some((15..25).into())
+        );
+    }
+
+    #[test]
+    fn auto_fit_range_clamps_partial_overlap_to_buffer() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let target =
+            track_with_visible_range(&mut tracks, &mut audio, TEST_SAMPLE_RATE, 100, 0.0..10.0);
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (-5..5).into(),
+            screen_x_start: 0.0,
+            screen_x_end: 0.0,
+        });
+
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(target, &audio).unwrap(),
+            Some((0..5).into())
+        );
+    }
+
+    #[test]
+    fn auto_fit_range_returns_none_when_chosen_range_misses_buffer() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let target =
+            track_with_visible_range(&mut tracks, &mut audio, TEST_SAMPLE_RATE, 100, 0.0..10.0);
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (200..210).into(),
+            screen_x_start: 0.0,
+            screen_x_end: 0.0,
+        });
+
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(target, &audio).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn auto_fit_range_falls_back_for_invalid_selection_and_rejects_empty_view() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let target =
+            track_with_visible_range(&mut tracks, &mut audio, TEST_SAMPLE_RATE, 100, 7.0..9.0);
+        tracks.selection_info = SelectionInfoE::IsSelected(SelectionInfo {
+            ix_rng: (10..10).into(),
+            screen_x_start: 0.0,
+            screen_x_end: 0.0,
+        });
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(target, &audio).unwrap(),
+            Some((7..9).into())
+        );
+
+        let mut sample_rect = tracks
+            .get_track(target)
+            .unwrap()
+            .single
+            .sample_rect_raw()
+            .unwrap();
+        sample_rect.set_ix_rng((12.0..12.0).into());
+        tracks
+            .get_track_mut(target)
+            .unwrap()
+            .single
+            .set_sample_rect(sample_rect);
+        assert_eq!(
+            tracks.auto_fit_local_ix_range(target, &audio).unwrap(),
+            None
+        );
+    }
+
+    fn assert_peak_has_expected_headroom(
+        tracks: &Tracks,
+        track_id: crate::model::track::TrackId,
+        peak: f64,
+        display_scale: ValueDisplayScale,
+    ) {
+        let track = tracks.get_track(track_id).unwrap();
+        let screen_rect = track.screen_rect.unwrap();
+        let val_range = track.single.sample_rect_raw().unwrap().val_rng().unwrap();
+        let peak_y = crate::model::ruler::sample_value_to_screen_y(
+            peak,
+            val_range,
+            screen_rect,
+            display_scale,
+        )
+        .unwrap();
+        let used_half =
+            (screen_rect.center().y - peak_y) as f64 / (screen_rect.height() as f64 / 2.0);
+
+        assert!((used_half - 0.95).abs() < 1e-5);
+    }
+
+    #[test]
+    fn auto_fit_peak_centers_zero_and_leaves_linear_headroom() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+        let buffer_id = tracks.get_track(track_id).unwrap().single.buffer_id;
+
+        assert!(tracks.apply_auto_fit_peak(
+            track_id,
+            buffer_id,
+            Some(0.5),
+            ValueDisplayScale::default(),
+        ));
+
+        let val_range = tracks
+            .get_track(track_id)
+            .unwrap()
+            .single
+            .sample_rect_raw()
+            .unwrap()
+            .val_rng()
+            .unwrap();
+        assert_eq!(val_range.min, -val_range.max);
+        assert_peak_has_expected_headroom(&tracks, track_id, 0.5, ValueDisplayScale::default());
+    }
+
+    #[test]
+    fn auto_fit_peak_respects_skewed_visual_headroom() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+        let buffer_id = tracks.get_track(track_id).unwrap().single.buffer_id;
+        let display_scale = ValueDisplayScale { skew_factor: 1.0 };
+
+        assert!(tracks.apply_auto_fit_peak(track_id, buffer_id, Some(0.5), display_scale));
+        assert_peak_has_expected_headroom(&tracks, track_id, 0.5, display_scale);
+    }
+
+    #[test]
+    fn auto_fit_peak_treats_negative_peak_symmetrically() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+        let buffer_id = tracks.get_track(track_id).unwrap().single.buffer_id;
+
+        assert!(tracks.apply_auto_fit_peak(
+            track_id,
+            buffer_id,
+            Some(-0.8),
+            ValueDisplayScale::default(),
+        ));
+        let val_range = tracks
+            .get_track(track_id)
+            .unwrap()
+            .single
+            .sample_rect_raw()
+            .unwrap()
+            .val_rng()
+            .unwrap();
+        assert_eq!(val_range.min, -val_range.max);
+        assert_peak_has_expected_headroom(&tracks, track_id, 0.8, ValueDisplayScale::default());
+    }
+
+    #[test]
+    fn auto_fit_peak_ignores_stale_and_removed_tracks() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+        let stale_buffer_id = insert_buffer(&mut audio, 64);
+        let original_rect = tracks.get_track(track_id).unwrap().single.sample_rect_raw();
+
+        assert!(!tracks.apply_auto_fit_peak(
+            track_id,
+            stale_buffer_id,
+            Some(0.5),
+            ValueDisplayScale::default(),
+        ));
+        assert_eq!(
+            tracks.get_track(track_id).unwrap().single.sample_rect_raw(),
+            original_rect
+        );
+
+        tracks.remove_track(track_id);
+        assert!(!tracks.apply_auto_fit_peak(
+            track_id,
+            stale_buffer_id,
+            Some(0.5),
+            ValueDisplayScale::default(),
+        ));
+    }
+
+    #[test]
+    fn auto_fit_peak_ignores_silence_and_invalid_results() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+        let buffer_id = tracks.get_track(track_id).unwrap().single.buffer_id;
+        let original_rect = tracks.get_track(track_id).unwrap().single.sample_rect_raw();
+
+        for peak in [None, Some(0.0), Some(f64::NAN), Some(f64::INFINITY)] {
+            assert!(!tracks.apply_auto_fit_peak(
+                track_id,
+                buffer_id,
+                peak,
+                ValueDisplayScale::default(),
+            ));
+            assert_eq!(
+                tracks.get_track(track_id).unwrap().single.sample_rect_raw(),
+                original_rect
+            );
+        }
     }
 
     #[test]

@@ -165,6 +165,28 @@ impl Model {
         job_id
     }
 
+    pub fn start_detect_peak_job(
+        &mut self,
+        track_id: track::TrackId,
+        buffer_id: audio::BufferId,
+        local_range: audio::sample::IxRange,
+    ) -> Result<jobs::JobId> {
+        let buffer = self.audio.buffer_arc(buffer_id)?;
+        let job_id = self
+            .job_mgr
+            .start_job(jobs::JobKind::DetectPeak, format!("peak {buffer_id:?}"));
+        jobs::spawn_detect_peak_job(
+            job_id,
+            track_id,
+            buffer_id,
+            buffer,
+            local_range,
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
+        Ok(job_id)
+    }
+
     pub fn start_compute_stats_job(
         &mut self,
         buffer_id: audio::BufferId,

@@ -19,10 +19,12 @@ use std::sync::mpsc::{Receiver, Sender};
 
 pub mod compute_stats;
 pub mod demo;
+pub mod detect_peak;
 pub mod diff;
 pub mod load_wav;
 pub use compute_stats::spawn_compute_stats_job;
 pub use demo::{DemoTimedConfig, spawn_demo_timed_job};
+pub use detect_peak::{AutoFitPeakResult, spawn_detect_peak_job};
 #[cfg(not(target_arch = "wasm32"))]
 pub use diff::spawn_load_diff_paths_job;
 pub use diff::{ComputedDiff, LoadedDiff, LoadedDiffPair, spawn_diff_buffers_job};
@@ -43,6 +45,7 @@ pub enum JobKind {
     DemoTimed,
     LoadWav,
     ComputeStats,
+    DetectPeak,
     Diff,
 }
 

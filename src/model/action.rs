@@ -75,6 +75,11 @@ pub enum Action {
         track_id: TrackId,
         nr_pixels: PixelCoord,
     },
+    /// Detect the peak in the selected range, or the visible range when there is no valid
+    /// selection, then auto-fit one track's value range.
+    AutoFitY {
+        track_id: TrackId,
+    },
     /// Reset the sample value range to full-scale for a single track.
     RecenterY {
         track_id: TrackId,
@@ -131,6 +136,8 @@ pub enum Action {
         buffer_id: BufferId,
         stats: crate::model::stats::BufferStats,
     },
+    /// Result of asynchronously scanning a track range for its normalized absolute peak.
+    AutoFitPeakDetected(jobs::AutoFitPeakResult),
 }
 
 impl Action {
@@ -275,6 +282,20 @@ impl Action {
                     model.user_config.value_display_scale,
                 )?;
             }
+            Action::AutoFitY { track_id } => {
+                let local_range = model
+                    .tracks
+                    .auto_fit_local_ix_range(track_id, &model.audio)?;
+                if let Some(local_range) = local_range {
+                    let buffer_id = model
+                        .tracks
+                        .get_track(track_id)
+                        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?
+                        .single
+                        .buffer_id;
+                    model.start_detect_peak_job(track_id, buffer_id, local_range)?;
+                }
+            }
             Action::RecenterY { track_id } => {
                 model.tracks.recenter_track_value_range(track_id)?;
             }
@@ -382,6 +403,14 @@ impl Action {
                 if model.audio.buffers.contains_key(buffer_id) {
                     model.audio.stats.insert(buffer_id, stats);
                 }
+            }
+            Action::AutoFitPeakDetected(result) => {
+                model.tracks.apply_auto_fit_peak(
+                    result.track_id,
+                    result.buffer_id,
+                    result.magnitude_norm,
+                    model.user_config.value_display_scale,
+                );
             }
         }
 

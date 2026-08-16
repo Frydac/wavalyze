@@ -25,9 +25,9 @@
 * watch file for changes and reload, maybe reload option to always reload or ask user?
   * update diff when one of 2 source files changes?
 
-* peak value
+* [x] peak value
   * show peak value with marker/highlight and sample value
-* normalize sample value zoom to peak value of track/selection
+* [x] normalize sample value zoom to peak value of track/selection
 * blocks
   * gui element for block size
   * use existing offset as start of first block?
