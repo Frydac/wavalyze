@@ -2,6 +2,7 @@
 use crate::model::{ruler::ValueDisplayScale, shortcuts::ShortcutConfig};
 use egui::{Color32, Visuals};
 
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::{error, info, trace, warn};
 
 pub const APP_NAME: &str = "wavalyze";
@@ -258,11 +259,17 @@ impl Config {
     /// Load config from file or use default
     /// Creates the config file if it doesn't exist.
     pub fn load_from_storage_or_default() -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
         let mut user_config: Self = confy::load(APP_NAME, None).unwrap_or_else(|e| {
             warn!(error = %e, "Failed to load config, using defaults");
             Default::default()
         });
+        #[cfg(target_arch = "wasm32")]
+        let mut user_config = Self::default();
+
         user_config.shortcuts.normalize();
+
+        #[cfg(not(target_arch = "wasm32"))]
         info!(
             "Config loaded from {}: {user_config:#?}",
             confy::get_configuration_file_path("wavalyze", None)
@@ -270,10 +277,12 @@ impl Config {
                 .map(|p| format!("{p:?}"))
                 .unwrap_or("<failed to get path>".into())
         );
+
         user_config
     }
 
     pub fn save_to_storage(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
         if let Err(e) = confy::store(APP_NAME, None, self) {
             error!(error = %e, "Failed to save config");
         } else {

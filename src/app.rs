@@ -33,10 +33,7 @@ impl eframe::App for App {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.view.model().user_config.save_to_storage();
-        }
+        self.view.model().user_config.save_to_storage();
         // self.save_user_config();
         // self.model.save_to_storage(storage);
     }

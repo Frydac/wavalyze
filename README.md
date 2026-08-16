@@ -46,6 +46,10 @@ cargo +1.93.0 install --locked trunk
 
 Open `http://127.0.0.1:8080/index.html#dev` to bypass the service worker cache during development.
 
+### Browser settings
+
+Configuration persistence is currently native-only. In the browser, setting changes apply to the current app session but are not saved and reset when the page is reloaded.
+
 ## CI
 
 The main workflows are:

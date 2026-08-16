@@ -92,7 +92,6 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
             }
             if ui.button("Reset shortcuts").clicked() {
                 config.reset_shortcuts_to_default();
-                #[cfg(not(target_arch = "wasm32"))]
                 config.save_to_storage();
             }
         });
@@ -120,7 +119,6 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
         ui.separator();
         if ui.button("Reset all settings").clicked() {
             config.reset_to_default();
-            #[cfg(not(target_arch = "wasm32"))]
             config.save_to_storage();
         }
     });
