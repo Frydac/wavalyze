@@ -280,16 +280,22 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
     let response = resize_handle(&mut resize_ui, resize_id, layout.resize_handle);
     if response.dragged() {
         let modifiers = resize_ui.input(|i| i.modifiers);
-        let track = model
+        let height = model
             .tracks
-            .get_track_mut(track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+            .get_track(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?
+            .height;
+        let new_height = (height + response.drag_delta().y).max(min_height);
 
         if !modifiers.ctrl && !modifiers.shift && !modifiers.alt {
-            track.height = (track.height + response.drag_delta().y).max(min_height);
+            model.actions.push(Action::SetTrackHeight {
+                track_id,
+                height: new_height,
+            });
         } else if modifiers.shift {
-            let new_height = (track.height + response.drag_delta().y).max(min_height);
-            model.tracks.set_tracks_height(new_height);
+            model
+                .actions
+                .push(Action::SetTracksHeight { height: new_height });
         }
     }
 

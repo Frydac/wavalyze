@@ -108,6 +108,10 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                             .prefix(""),
                     );
                 });
+                ui.checkbox(
+                    &mut config.track.equal_height_layout_by_default,
+                    "Start with even track heights",
+                );
                 ui.checkbox(&mut config.show_amplitude_ruler, "Show amplitude ruler");
                 ui.checkbox(&mut config.show_db_ruler, "Show dB ruler");
                 ui.checkbox(

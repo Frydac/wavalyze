@@ -13,7 +13,7 @@ use crate::{
     wav::file2::File,
 };
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Tracks {
     pub ruler: ruler::Time,
     /// Shared X-axis camera (seconds → pixels). Drives both the ruler ticks and each
@@ -27,7 +27,27 @@ pub struct Tracks {
     pub selection_info: SelectionInfoE,
     // zoom
     pub available_height: f32,
+    /// When enabled, visible tracks continuously share `available_height` equally instead of
+    /// retaining their individually stored heights. This is runtime layout state and is not part
+    /// of the persisted user configuration.
+    pub equal_height_layout: bool,
     pub width_info: f32,
+}
+
+impl Default for Tracks {
+    fn default() -> Self {
+        Self {
+            ruler: ruler::Time::default(),
+            time_camera: TimeCamera::default(),
+            tracks: SlotMap::default(),
+            tracks_order: Vec::new(),
+            hover_info: HoverInfoE::default(),
+            selection_info: SelectionInfoE::default(),
+            available_height: 0.0,
+            equal_height_layout: true,
+            width_info: 0.0,
+        }
+    }
 }
 
 impl Tracks {
@@ -1252,12 +1272,17 @@ mod tests {
     }
 
     #[test]
+    fn equal_height_layout_is_enabled_by_default() {
+        assert!(Tracks::default().equal_height_layout);
+    }
+
+    #[test]
     fn fill_screen_height_only_updates_visible_tracks() {
         let mut tracks = Tracks {
             available_height: 120.0,
             ..Tracks::default()
         };
-        let config = TrackConfig { min_height: 10.0 };
+        let config = TrackConfig::default();
         let mut audio = audio::manager::AudioManager::default();
         let visible_a = insert_buffer(&mut audio, 64);
         let visible_b = insert_buffer(&mut audio, 64);
@@ -1286,9 +1311,97 @@ mod tests {
     }
 
     #[test]
+    fn fill_screen_height_respects_minimum_total_height() {
+        let mut tracks = Tracks {
+            available_height: 20.0,
+            ..Tracks::default()
+        };
+        let config = TrackConfig::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let buffer_id = insert_buffer(&mut audio, 64);
+        let track_id = tracks
+            .add_track_to_end(buffer_id, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+
+        tracks.fill_screen_height(config.min_height).unwrap();
+
+        assert_eq!(
+            tracks.get_track_height(track_id),
+            Some(config.min_height + crate::model::track::HEADER_HEIGHT)
+        );
+    }
+
+    #[test]
+    fn fill_screen_height_with_no_visible_tracks_is_a_noop() {
+        let mut tracks = Tracks {
+            available_height: 120.0,
+            ..Tracks::default()
+        };
+        let config = TrackConfig::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let buffer_id = insert_buffer(&mut audio, 64);
+        let track_id = tracks
+            .add_track_to_end(buffer_id, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+        tracks.set_track_height(track_id, 47.0);
+        tracks.set_track_visibility(track_id, false);
+
+        tracks.fill_screen_height(config.min_height).unwrap();
+
+        assert_eq!(tracks.get_track_height(track_id), Some(47.0));
+    }
+
+    #[test]
+    fn equal_height_recalculation_tracks_viewport_and_visible_membership_changes() {
+        let mut tracks = Tracks {
+            available_height: 120.0,
+            ..Tracks::default()
+        };
+        let config = TrackConfig::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let buffer_a = insert_buffer(&mut audio, 64);
+        let buffer_b = insert_buffer(&mut audio, 64);
+        let track_a = tracks
+            .add_track_to_end(buffer_a, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+        let track_b = tracks
+            .add_track_to_end(buffer_b, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+
+        tracks.fill_screen_height(config.min_height).unwrap();
+        assert_eq!(tracks.get_track_height(track_a), Some(60.0));
+        assert_eq!(tracks.get_track_height(track_b), Some(60.0));
+
+        tracks.available_height = 180.0;
+        tracks.fill_screen_height(config.min_height).unwrap();
+        assert_eq!(tracks.get_track_height(track_a), Some(90.0));
+        assert_eq!(tracks.get_track_height(track_b), Some(90.0));
+
+        let buffer_c = insert_buffer(&mut audio, 64);
+        let track_c = tracks
+            .add_track_to_end(buffer_c, TEST_SAMPLE_RATE, &config)
+            .unwrap();
+        tracks.fill_screen_height(config.min_height).unwrap();
+        assert_eq!(tracks.get_track_height(track_a), Some(60.0));
+        assert_eq!(tracks.get_track_height(track_b), Some(60.0));
+        assert_eq!(tracks.get_track_height(track_c), Some(60.0));
+
+        tracks.set_track_visibility(track_c, false);
+        tracks.fill_screen_height(config.min_height).unwrap();
+        assert_eq!(tracks.get_track_height(track_a), Some(90.0));
+        assert_eq!(tracks.get_track_height(track_b), Some(90.0));
+        assert_eq!(tracks.get_track_height(track_c), Some(60.0));
+
+        tracks.remove_track(track_b);
+        tracks.fill_screen_height(config.min_height).unwrap();
+        assert_eq!(tracks.get_track_height(track_a), Some(180.0));
+        assert_eq!(tracks.get_track_height(track_c), Some(60.0));
+    }
+
+    #[test]
     fn zoom_to_full_uses_only_visible_tracks() {
         let mut tracks = Tracks::default();
-        let config = TrackConfig { min_height: 10.0 };
+        let config = TrackConfig::default();
         let mut audio = audio::manager::AudioManager::default();
         let short = insert_buffer(&mut audio, 64);
         let long_hidden = insert_buffer(&mut audio, 640);

@@ -92,8 +92,14 @@ impl Default for Model {
 
 impl Model {
     pub fn new() -> Self {
+        Self::with_user_config(Config::default())
+    }
+
+    pub fn with_user_config(user_config: Config) -> Self {
         let mut res = Self::default();
-        res.tracks.width_info = res.user_config.tracks_width_info;
+        res.tracks.width_info = user_config.tracks_width_info;
+        res.tracks.equal_height_layout = user_config.track.equal_height_layout_by_default;
+        res.user_config = user_config;
         res
     }
 
@@ -228,6 +234,16 @@ mod tests {
     use super::Model;
     use crate::audio::thumbnail::ThumbnailE;
     use crate::model::test_support::{add_buffer, make_file};
+
+    #[test]
+    fn equal_height_layout_uses_configured_startup_default() {
+        let mut config = crate::model::Config::default();
+        config.track.equal_height_layout_by_default = false;
+
+        let model = Model::with_user_config(config);
+
+        assert!(!model.tracks.equal_height_layout);
+    }
 
     #[test]
     fn close_all_clears_files_tracks_and_audio() {

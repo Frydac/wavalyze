@@ -62,6 +62,9 @@ pub struct SelectionConfig {
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TrackConfig {
     pub min_height: f32,
+    /// Whether a new app session starts with visible tracks sharing the viewport height equally.
+    #[serde(default = "default_true")]
+    pub equal_height_layout_by_default: bool,
 }
 
 /// Scroll-wheel navigation sensitivity and direction for the waveform, per axis.
@@ -166,7 +169,10 @@ impl Default for SelectionConfig {
 
 impl Default for TrackConfig {
     fn default() -> Self {
-        Self { min_height: 10.0 }
+        Self {
+            min_height: 10.0,
+            equal_height_layout_by_default: true,
+        }
     }
 }
 
@@ -315,6 +321,18 @@ mod tests {
             config.shortcuts.bindings.len(),
             ShortcutAction::ALL.len() * ShortcutScope::ALL.len()
         );
+    }
+
+    #[test]
+    fn equal_height_layout_is_enabled_by_default() {
+        assert!(Config::default().track.equal_height_layout_by_default);
+    }
+
+    #[test]
+    fn old_track_config_without_equal_height_default_enables_it() {
+        let config: Config = toml::from_str("[track]\nmin_height = 25.0\n").unwrap();
+
+        assert!(config.track.equal_height_layout_by_default);
     }
 
     #[test]

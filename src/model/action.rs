@@ -56,8 +56,17 @@ pub enum Action {
     /// Set x-zoom to sample-level detail, centered on the right edge of the current selection.
     ZoomToSelectionRightEdge,
 
-    /// Adjust height of tracks to fit the screen, keeping in mind the min_height for each track
-    FillScreenHeight,
+    /// Enable or disable continuous equal-height layout. Enabling immediately fits visible tracks.
+    SetEqualHeightLayout(bool),
+    /// Manually set one track's height, disabling continuous equal-height layout.
+    SetTrackHeight {
+        track_id: TrackId,
+        height: f32,
+    },
+    /// Manually set every track's height, disabling continuous equal-height layout.
+    SetTracksHeight {
+        height: f32,
+    },
 
     /// Move the _view_ of all the tracks to the lef (negative value) or right (positive value)
     PanX {
@@ -221,7 +230,9 @@ impl Action {
                     .load_demo_waveform()
                     .context("Action::LoadDemo failed")?;
                 model.actions.push(Action::ZoomToFull);
-                model.actions.push(Action::FillScreenHeight);
+                if model.tracks.equal_height_layout {
+                    model.actions.push(Action::SetEqualHeightLayout(true));
+                }
             }
             Action::IntegrateLoadedFile { generation, loaded } => {
                 if model.is_current_generation(generation) {
@@ -229,7 +240,9 @@ impl Action {
                         .add_loaded_file(loaded)
                         .context("Action::IntegrateLoadedFile failed")?;
                     model.actions.push(Action::ZoomToFull);
-                    model.actions.push(Action::FillScreenHeight);
+                    if model.tracks.equal_height_layout {
+                        model.actions.push(Action::SetEqualHeightLayout(true));
+                    }
                 }
             }
             Action::IntegrateLoadedDiff { generation, diff } => {
@@ -238,7 +251,9 @@ impl Action {
                         .add_loaded_diff(diff)
                         .context("Action::IntegrateLoadedDiff failed")?;
                     model.actions.push(Action::ZoomToFull);
-                    model.actions.push(Action::FillScreenHeight);
+                    if model.tracks.equal_height_layout {
+                        model.actions.push(Action::SetEqualHeightLayout(true));
+                    }
                 }
             }
             Action::ZoomToFull => {
@@ -257,9 +272,21 @@ impl Action {
                     .tracks
                     .zoom_to_selection_edge(&model.audio, SelectionEdge::Right)?;
             }
-            Action::FillScreenHeight => {
+            Action::SetEqualHeightLayout(true) => {
+                model.tracks.equal_height_layout = true;
                 let min_height = model.user_config.track.min_height;
                 model.tracks.fill_screen_height(min_height)?;
+            }
+            Action::SetEqualHeightLayout(false) => {
+                model.tracks.equal_height_layout = false;
+            }
+            Action::SetTrackHeight { track_id, height } => {
+                model.tracks.equal_height_layout = false;
+                model.tracks.set_track_height(track_id, height);
+            }
+            Action::SetTracksHeight { height } => {
+                model.tracks.equal_height_layout = false;
+                model.tracks.set_tracks_height(height);
             }
             Action::PanX { nr_pixels } => {
                 model.tracks.pan_x(nr_pixels);
@@ -396,7 +423,9 @@ impl Action {
                         .add_diff_buffer(diff)
                         .context("Action::IntegrateDiffBuffer failed")?;
                     model.actions.push(Action::ZoomToFull);
-                    model.actions.push(Action::FillScreenHeight);
+                    if model.tracks.equal_height_layout {
+                        model.actions.push(Action::SetEqualHeightLayout(true));
+                    }
                 }
             }
             Action::SetBufferStats { buffer_id, stats } => {
@@ -422,4 +451,94 @@ impl Action {
 pub enum SelectionEdge {
     Left,
     Right,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+    use crate::model::{Model, config::TrackConfig, test_support::add_buffer};
+
+    #[test]
+    fn equal_height_actions_enable_and_disable_the_layout_mode() {
+        let mut model = Model::default();
+        model.tracks.available_height = 120.0;
+        let config = TrackConfig::default();
+        let buffer_a = add_buffer(&mut model);
+        let buffer_b = add_buffer(&mut model);
+        let track_a = model
+            .tracks
+            .add_track_to_end(buffer_a, 48_000, &config)
+            .unwrap();
+        let track_b = model
+            .tracks
+            .add_track_to_end(buffer_b, 48_000, &config)
+            .unwrap();
+        model.tracks.equal_height_layout = false;
+
+        Action::SetEqualHeightLayout(true)
+            .process(&mut model)
+            .unwrap();
+
+        assert!(model.tracks.equal_height_layout);
+        assert_eq!(model.tracks.get_track_height(track_a), Some(60.0));
+        assert_eq!(model.tracks.get_track_height(track_b), Some(60.0));
+
+        Action::SetEqualHeightLayout(false)
+            .process(&mut model)
+            .unwrap();
+        assert!(!model.tracks.equal_height_layout);
+    }
+
+    #[test]
+    fn enabling_equal_height_layout_fits_tracks_for_shortcut_activation() {
+        let mut model = Model::default();
+        model.tracks.equal_height_layout = false;
+        model.tracks.available_height = 80.0;
+        let config = TrackConfig::default();
+        let buffer = add_buffer(&mut model);
+        let track_id = model
+            .tracks
+            .add_track_to_end(buffer, 48_000, &config)
+            .unwrap();
+
+        Action::SetEqualHeightLayout(true)
+            .process(&mut model)
+            .unwrap();
+
+        assert!(model.tracks.equal_height_layout);
+        assert_eq!(model.tracks.get_track_height(track_id), Some(80.0));
+    }
+
+    #[test]
+    fn manual_height_actions_disable_equal_height_layout() {
+        let mut model = Model::default();
+        let config = TrackConfig::default();
+        let buffer_a = add_buffer(&mut model);
+        let buffer_b = add_buffer(&mut model);
+        let track_a = model
+            .tracks
+            .add_track_to_end(buffer_a, 48_000, &config)
+            .unwrap();
+        let track_b = model
+            .tracks
+            .add_track_to_end(buffer_b, 48_000, &config)
+            .unwrap();
+
+        Action::SetTrackHeight {
+            track_id: track_a,
+            height: 80.0,
+        }
+        .process(&mut model)
+        .unwrap();
+        assert!(!model.tracks.equal_height_layout);
+        assert_eq!(model.tracks.get_track_height(track_a), Some(80.0));
+
+        model.tracks.equal_height_layout = true;
+        Action::SetTracksHeight { height: 90.0 }
+            .process(&mut model)
+            .unwrap();
+        assert!(!model.tracks.equal_height_layout);
+        assert_eq!(model.tracks.get_track_height(track_a), Some(90.0));
+        assert_eq!(model.tracks.get_track_height(track_b), Some(90.0));
+    }
 }

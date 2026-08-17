@@ -365,8 +365,14 @@ impl View {
             if ui.button("reset x zoom").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
             }
-            if ui.button("fill screen height").clicked() {
-                self.model.actions.push(Action::FillScreenHeight);
+            let mut equal_height_layout = self.model.tracks.equal_height_layout;
+            if ui
+                .checkbox(&mut equal_height_layout, "even track heights")
+                .changed()
+            {
+                self.model
+                    .actions
+                    .push(Action::SetEqualHeightLayout(equal_height_layout));
             }
             if ui.button("recenter y").clicked() {
                 self.model.actions.push(Action::RecenterYAll);
@@ -441,6 +447,12 @@ impl View {
                 let size = ui.available_size();
                 let size = egui::vec2(size.x.max(0.0), (size.y - 1.0).max(0.0));
                 self.model.tracks.available_height = size.y;
+                if self.model.tracks.equal_height_layout {
+                    let min_height = self.model.user_config.track.min_height;
+                    if let Err(error) = self.model.tracks.fill_screen_height(min_height) {
+                        tracing::warn!(?error, "failed to update equal track heights");
+                    }
+                }
                 ui.allocate_ui(size, |ui| {
                     ui.set_min_width(size.x.max(0.0));
 

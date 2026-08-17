@@ -45,7 +45,7 @@ impl ShortcutAction {
             Self::ZoomToSelectionLeftEdge => Action::ZoomToSelectionLeftEdge,
             Self::ZoomToSelectionRightEdge => Action::ZoomToSelectionRightEdge,
             Self::ZoomToFull => Action::ZoomToFull,
-            Self::FillScreenHeight => Action::FillScreenHeight,
+            Self::FillScreenHeight => Action::SetEqualHeightLayout(true),
             Self::RecenterYAll => Action::RecenterYAll,
         }
     }

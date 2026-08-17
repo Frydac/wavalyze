@@ -75,8 +75,7 @@ impl App {
         user_config: model::Config,
         tracing_collector: TracingCollector,
     ) -> Self {
-        let mut model = model::Model::default();
-        model.user_config = user_config;
+        let mut model = model::Model::with_user_config(user_config);
 
         handle_cli_arguments(&mut model, &args);
 
@@ -90,7 +89,7 @@ impl App {
         let mut model = model::Model::new();
         model.actions.push(Action::LoadDemo);
         model.actions.push(Action::ZoomToFull);
-        model.actions.push(Action::FillScreenHeight);
+        model.actions.push(Action::SetEqualHeightLayout(true));
 
         Self {
             view: view::View::new(model, tracing_collector),
