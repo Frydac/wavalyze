@@ -7,6 +7,7 @@ mod file_loader;
 pub mod fps;
 pub mod grid;
 pub mod jobs;
+pub mod perf;
 pub mod ruler;
 pub mod selection_info;
 pub mod track;
@@ -31,16 +32,27 @@ enum LeftPanelTab {
     Tracks,
 }
 
+/// Which tab the right side panel currently shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum RightPanelTab {
+    #[default]
+    Settings,
+    Info,
+    Profile,
+}
+
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
     fps: fps::Fps,
+    perf_capture: perf::PerfCapture,
     picker_tx: Sender<file_loader::PickerMessage>,
     picker_rx: Receiver<file_loader::PickerMessage>,
     picker_pending: usize,
     show_tracing_window: bool,
     tracing_collector: TracingCollector,
     left_panel_tab: LeftPanelTab,
+    right_panel_tab: RightPanelTab,
 }
 
 impl View {
@@ -49,12 +61,14 @@ impl View {
         Self {
             model,
             fps: fps::Fps::new(100),
+            perf_capture: perf::PerfCapture::default(),
             picker_tx,
             picker_rx,
             picker_pending: 0,
             show_tracing_window: false,
             tracing_collector,
             left_panel_tab: LeftPanelTab::default(),
+            right_panel_tab: RightPanelTab::default(),
         }
     }
 
@@ -151,20 +165,39 @@ impl View {
             .width_range(80.0..=ctx.available_rect().width() / 1.5)
             .show(ctx, |ui| {
                 ui.add_space(5.0);
-                config::show_config(ui, &mut self.model.user_config);
-                ui.add_space(5.0);
-                self.fps.ui(ui);
-                ui.add_space(5.0);
-                jobs::ui_panel(ui, &mut self.model);
-                ui.add_space(5.0);
-                ruler::ui_ruler_info_panel(ui, &self.model.tracks);
-                ui.add_space(5.0);
-                // ruler::ui_hover_info_panel(ui, self.model.tracks2.ruler.hover_info.as_ref());
-                ruler::ui_hover_info_panel2(ui, &self.model.tracks.hover_info);
-                selection_info::ui_selection_info_side_panel(
-                    ui,
-                    &mut self.model.tracks.selection_info,
-                );
+                ui.horizontal(|ui| {
+                    ui.selectable_value(
+                        &mut self.right_panel_tab,
+                        RightPanelTab::Settings,
+                        "Settings",
+                    );
+                    ui.selectable_value(&mut self.right_panel_tab, RightPanelTab::Info, "Info");
+                    ui.selectable_value(
+                        &mut self.right_panel_tab,
+                        RightPanelTab::Profile,
+                        "Profile",
+                    );
+                });
+                ui.separator();
+                egui::ScrollArea::vertical().show(ui, |ui| match self.right_panel_tab {
+                    RightPanelTab::Settings => {
+                        config::show_config(ui, &mut self.model.user_config);
+                    }
+                    RightPanelTab::Info => {
+                        self.fps.ui(ui);
+                        ui.add_space(5.0);
+                        jobs::ui_panel(ui, &mut self.model);
+                        ui.add_space(5.0);
+                        ruler::ui_ruler_info_panel(ui, &self.model.tracks);
+                        ui.add_space(5.0);
+                        ruler::ui_hover_info_panel2(ui, &self.model.tracks.hover_info);
+                        selection_info::ui_selection_info_side_panel(
+                            ui,
+                            &mut self.model.tracks.selection_info,
+                        );
+                    }
+                    RightPanelTab::Profile => self.perf_capture.ui(ui),
+                });
             });
     }
 
