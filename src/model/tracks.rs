@@ -21,10 +21,11 @@ pub struct Tracks {
     pub time_camera: TimeCamera,
     pub tracks: SlotMap<TrackId, Track>,
     pub tracks_order: Vec<TrackId>,
-    // hover
+
     pub hover_info: HoverInfoE,
-    // selection
+
     pub selection_info: SelectionInfoE,
+
     // zoom
     pub available_height: f32,
     /// When enabled, visible tracks continuously share `available_height` equally instead of

@@ -1,6 +1,6 @@
 use crate::rect::Rect;
 
-/// Camera over the time axis.
+/// Camera/View over the time axis.
 ///
 /// Maps a window of **seconds** to a window of pixels along the X axis. Sample-rate
 /// independent: per-track sample-index conversion happens at the boundary using each
