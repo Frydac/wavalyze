@@ -85,6 +85,7 @@ impl App {
         }
     }
 
+    /// Called by the JavaScript `startWebApp` export through `web::start_web_app`
     pub fn new_web(_cc: &eframe::CreationContext<'_>, tracing_collector: TracingCollector) -> Self {
         let mut model = model::Model::new();
         model.actions.push(Action::LoadDemo);

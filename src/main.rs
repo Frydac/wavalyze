@@ -7,14 +7,9 @@ fn main() -> anyhow::Result<()> {
     use clap::Parser;
     use wavalyze::{self, log, model};
 
-    // fn main() -> eframe::Result {
-    let args2 = wavalyze::args::Args::parse();
-
-    let tracing_collector = log::init_tracing(args2.log_level.as_deref())?;
-
-    // let args = wavalyze::AppCliConfig::parse();
+    let args = wavalyze::args::Args::parse();
+    let tracing_collector = log::init_tracing(args.log_level.as_deref())?;
     let user_config = model::Config::load_from_storage_or_default();
-
     let eframe_native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 720.0])
@@ -34,13 +29,13 @@ fn main() -> anyhow::Result<()> {
         Box::new(move |cc| {
             Ok(Box::new(wavalyze::App::new_native(
                 cc,
-                args2,
+                args,
                 user_config,
                 tracing_collector,
             )))
         }),
     ) {
-        tracing::error!("Error: {}", err);
+        tracing::error!("Error (eframe::run_native): {}", err);
         std::process::exit(1);
     }
 

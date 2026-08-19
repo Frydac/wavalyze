@@ -1,5 +1,7 @@
 use eframe::wasm_bindgen::JsCast as _;
 
+// Function exposed to javascript as "startWebApp"
+// used in index.html to start the web app
 #[wasm_bindgen::prelude::wasm_bindgen(js_name = startWebApp)]
 pub fn start_web_app() {
     console_error_panic_hook::set_once();
