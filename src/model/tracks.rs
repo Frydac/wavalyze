@@ -144,6 +144,7 @@ impl Tracks {
                 self.add_track_to_end(channel.buffer_id, file.sample_rate, track_config)?;
             if let Some(track) = self.tracks.get_mut(track_id) {
                 track.single.sample_ix_offset = file.sample_ix_offset as f64;
+                track.use_file_offset = true;
             }
         }
         Ok(())

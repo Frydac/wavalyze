@@ -45,6 +45,10 @@ pub struct Track {
     /// time-axis camera (seconds) and this track's sample indices.
     pub sample_rate: u32,
 
+    /// Whether this file-backed track follows its source file's sample offset.
+    /// `single.sample_ix_offset` remains the effective absolute offset used for rendering.
+    pub use_file_offset: bool,
+
     track_md: TrackMetaData,
 
     // track height in gui
@@ -64,6 +68,7 @@ impl Track {
             single,
             diff: None,
             sample_rate,
+            use_file_offset: false,
             track_md: TrackMetaData::None,
             height: min_total_height(track_config),
             visible: true,

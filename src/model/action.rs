@@ -64,6 +64,22 @@ pub enum Action {
     /// Set x-zoom to sample-level detail, centered on the right edge of the current selection.
     ZoomToSelectionRightEdge,
 
+    /// Set a file's absolute sample offset and update channel tracks inheriting it.
+    SetFileSampleIxOffset {
+        file_id: FileId,
+        sample_ix_offset: crate::audio::sample::Ix,
+    },
+    /// Enable or disable file-offset inheritance for a file-backed track.
+    SetTrackUseFileOffset {
+        track_id: TrackId,
+        use_file_offset: bool,
+    },
+    /// Set a detached or standalone track's absolute sample offset.
+    SetTrackSampleIxOffset {
+        track_id: TrackId,
+        sample_ix_offset: f64,
+    },
+
     /// Enable or disable continuous equal-height layout. Enabling immediately fits visible tracks.
     SetEqualHeightLayout(bool),
     /// Manually set one track's height, disabling continuous equal-height layout.
@@ -279,6 +295,24 @@ impl Action {
                 model
                     .tracks
                     .zoom_to_selection_edge(&model.audio, SelectionEdge::Right)?;
+            }
+            Action::SetFileSampleIxOffset {
+                file_id,
+                sample_ix_offset,
+            } => {
+                model.set_file_sample_ix_offset(file_id, sample_ix_offset);
+            }
+            Action::SetTrackUseFileOffset {
+                track_id,
+                use_file_offset,
+            } => {
+                model.set_track_use_file_offset(track_id, use_file_offset);
+            }
+            Action::SetTrackSampleIxOffset {
+                track_id,
+                sample_ix_offset,
+            } => {
+                model.set_track_sample_ix_offset(track_id, sample_ix_offset);
             }
             Action::SetEqualHeightLayout(true) => {
                 model.tracks.equal_height_layout = true;

@@ -356,13 +356,37 @@ fn ui_offset_controls(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, r
     );
     controls_ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 3.0);
 
-    if let Some(track) = model.tracks.get_track_mut(track_id) {
-        let sample_ix_offset = &mut track.single.sample_ix_offset;
-        controls_ui.label("offset:");
-        let response = controls_ui.add(egui::DragValue::new(sample_ix_offset).speed(1.0));
-        if response.changed() {
-            track.single.mark_dirty();
-        }
+    let Some(track) = model.tracks.get_track(track_id) else {
+        return;
+    };
+    let mut sample_ix_offset = track.single.sample_ix_offset;
+    let mut use_file_offset = track.use_file_offset;
+    let file_backed = model.get_file_channel_for_track(track_id).is_some();
+
+    controls_ui.label("offset:");
+    if file_backed
+        && controls_ui
+            .checkbox(&mut use_file_offset, "file")
+            .on_hover_text("Use source file offset")
+            .changed()
+    {
+        model.actions.push(Action::SetTrackUseFileOffset {
+            track_id,
+            use_file_offset,
+        });
+    }
+    if controls_ui
+        .add_enabled(
+            !use_file_offset,
+            egui::DragValue::new(&mut sample_ix_offset).speed(1.0),
+        )
+        .on_hover_text("Absolute sample offset")
+        .changed()
+    {
+        model.actions.push(Action::SetTrackSampleIxOffset {
+            track_id,
+            sample_ix_offset,
+        });
     }
 }
 

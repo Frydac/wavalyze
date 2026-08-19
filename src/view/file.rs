@@ -1,6 +1,6 @@
 use crate::{
     model::{Action, FileVisibilityState, Model},
-    view::util::add_row_label,
+    view::{grid::KeyValueGrid, util::add_row_label},
     wav,
     wav::file::FileId,
 };
@@ -11,6 +11,8 @@ struct FileRow {
     title: String,
     hover_text: String,
     visibility: FileVisibilityState,
+    sample_ix_offset: crate::audio::sample::Ix,
+    metadata: Vec<(&'static str, String)>,
     channels: Vec<ChannelRow>,
 }
 
@@ -32,7 +34,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
         return;
     }
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    egui::ScrollArea::both().show(ui, |ui| {
         // PERF: we could cache this datastructure, but I expect we won't have that many files open
         // at the same time.
         let rows: Vec<_> = model
@@ -46,6 +48,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                 visibility: model
                     .file_visibility_state_for(file_id)
                     .unwrap_or(FileVisibilityState::NoneVisible),
+                sample_ix_offset: file.sample_ix_offset,
+                metadata: metadata_rows(file),
                 channels: channel_rows(model, file),
             })
             .collect();
@@ -80,61 +84,133 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                         });
                 })
                 .body(|ui| {
-                    for channel in row.channels {
-                        ui.horizontal(|ui| {
-                            let mut checked = channel.visible;
-                            let response = ui.add_enabled(
-                                !channel.missing_track,
-                                egui::Checkbox::without_text(&mut checked),
-                            );
-                            if response.changed()
-                                && let Some(buffer_id) = channel.buffer_id
-                            {
-                                model.set_channel_visible(buffer_id, checked);
+                    ui.horizontal(|ui| {
+                        ui.label("offset:");
+                        let mut sample_ix_offset = row.sample_ix_offset;
+                        if ui
+                            .add(egui::DragValue::new(&mut sample_ix_offset).speed(1.0))
+                            .changed()
+                        {
+                            model.actions.push(Action::SetFileSampleIxOffset {
+                                file_id: row.file_id,
+                                sample_ix_offset,
+                            });
+                        }
+                    });
+
+                    egui::CollapsingHeader::new("Metadata")
+                        .id_salt("metadata")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            let id: u64 = ui.id().with("file_metadata_grid").value();
+                            let mut grid = KeyValueGrid::new(id).key_col_width(80.0);
+                            for (key, value) in &row.metadata {
+                                grid.row(*key, value.clone());
                             }
-                            let channel_label = if channel.buffer_id.is_none() {
-                                format!("{} (not loaded)", channel.label)
-                            } else if channel.missing_track {
-                                format!("{} (closed)", channel.label)
-                            } else {
-                                channel.label
-                            };
-                            let label_response = if channel.buffer_id.is_none() {
-                                ui.add_enabled_ui(false, |ui| add_row_label(ui, channel_label))
-                                    .inner
-                            } else {
-                                add_row_label(ui, channel_label)
-                            };
-                            if let Some(buffer_id) = channel.buffer_id {
-                                label_response.context_menu(|ui| {
-                                    let button_label = if channel.missing_track {
-                                        "Load track"
-                                    } else {
-                                        "Remove track"
-                                    };
-                                    if ui.button(button_label).clicked() {
-                                        let result = if channel.missing_track {
-                                            model.restore_channel_track(buffer_id)
-                                        } else {
-                                            Ok(model.remove_channel_track(buffer_id))
-                                        };
-                                        if let Err(err) = result {
-                                            tracing::error!(
-                                                "Failed to toggle track for buffer {:?}: {err}",
-                                                buffer_id
-                                            );
-                                        }
-                                        ui.close_menu();
-                                    }
-                                });
-                            }
+                            grid.show(ui);
                         });
-                    }
+
+                    egui::CollapsingHeader::new("Channels")
+                        .id_salt("channels")
+                        .default_open(true)
+                        .show(ui, |ui| ui_channels(ui, model, &row.channels));
                 });
             });
             ui.add_space(2.0);
         }
     });
+}
+
+fn ui_channels(ui: &mut egui::Ui, model: &mut Model, channels: &[ChannelRow]) {
+    for channel in channels {
+        ui.horizontal(|ui| {
+            let mut checked = channel.visible;
+            let response = ui.add_enabled(
+                !channel.missing_track,
+                egui::Checkbox::without_text(&mut checked),
+            );
+            if response.changed()
+                && let Some(buffer_id) = channel.buffer_id
+            {
+                model.set_channel_visible(buffer_id, checked);
+            }
+            let channel_label = if channel.buffer_id.is_none() {
+                format!("{} (not loaded)", channel.label)
+            } else if channel.missing_track {
+                format!("{} (closed)", channel.label)
+            } else {
+                channel.label.clone()
+            };
+            let label_response = if channel.buffer_id.is_none() {
+                ui.add_enabled_ui(false, |ui| add_row_label(ui, channel_label))
+                    .inner
+            } else {
+                add_row_label(ui, channel_label)
+            };
+            if let Some(buffer_id) = channel.buffer_id {
+                label_response.context_menu(|ui| {
+                    let button_label = if channel.missing_track {
+                        "Load track"
+                    } else {
+                        "Remove track"
+                    };
+                    if ui.button(button_label).clicked() {
+                        let result = if channel.missing_track {
+                            model.restore_channel_track(buffer_id)
+                        } else {
+                            Ok(model.remove_channel_track(buffer_id))
+                        };
+                        if let Err(err) = result {
+                            tracing::error!(
+                                "Failed to toggle track for buffer {:?}: {err}",
+                                buffer_id
+                            );
+                        }
+                        ui.close_menu();
+                    }
+                });
+            }
+        });
+    }
+}
+
+fn metadata_rows(file: &wav::file::File) -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "path",
+            file.path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "unknown".to_string()),
+        ),
+        (
+            "channels",
+            format!(
+                "{} / {} loaded",
+                file.channels.len(),
+                file.total_nr_channels
+            ),
+        ),
+        ("sample type", format!("{:?}", file.sample_type)),
+        ("bit depth", file.bit_depth.to_string()),
+        ("sample rate", format!("{} Hz", file.sample_rate)),
+        ("samples", file.nr_samples.to_string()),
+        (
+            "duration",
+            if file.sample_rate == 0 {
+                "unknown".to_string()
+            } else {
+                format!("{:.3} s", file.nr_samples as f64 / file.sample_rate as f64)
+            },
+        ),
+        (
+            "layout",
+            file.layout
+                .as_ref()
+                .map(|layout| format!("{layout:?}"))
+                .unwrap_or_else(|| "unknown".to_string()),
+        ),
+    ]
 }
 
 fn channel_rows(model: &Model, file: &wav::file::File) -> Vec<ChannelRow> {
@@ -220,7 +296,16 @@ mod tests {
         };
 
         let rows = channel_rows(&model, &file);
+        let metadata = metadata_rows(&file);
 
+        assert_eq!(
+            metadata
+                .iter()
+                .find(|(key, _)| *key == "channels")
+                .unwrap()
+                .1,
+            "2 / 4 loaded"
+        );
         assert_eq!(rows.len(), 4);
         assert_eq!(rows[0].label, "ch 0");
         assert!(rows[0].buffer_id.is_some());

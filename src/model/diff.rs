@@ -71,6 +71,7 @@ impl Model {
                 .add_track_to_end(buffer_id, sample_rate, &self.user_config.track)?;
         if let Some(track) = self.tracks.tracks.get_mut(track_id) {
             track.single.sample_ix_offset = sample_ix_offset as f64;
+            track.use_file_offset = true;
         }
         Ok(())
     }
@@ -272,11 +273,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(model.tracks.tracks_order.len(), 3);
+        let source_a = model
+            .tracks
+            .get_track(model.tracks.tracks_order[0])
+            .unwrap();
+        let source_b = model
+            .tracks
+            .get_track(model.tracks.tracks_order[1])
+            .unwrap();
         let diff_track = model
             .tracks
             .get_track(*model.tracks.tracks_order.last().unwrap())
             .unwrap();
+        assert!(source_a.use_file_offset);
+        assert!(source_b.use_file_offset);
         assert!(diff_track.diff.is_some());
+        assert!(!diff_track.use_file_offset);
         assert_eq!(model.files_order.len(), 2);
     }
 

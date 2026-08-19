@@ -205,8 +205,8 @@ impl View {
         egui::SidePanel::left("left_panel")
             .resizable(true)
             .default_width(250.0)
-            // .width_range(80.0..=ctx.available_rect().width())
-            .width_range(100.0..=500.0)
+            .width_range(100.0..=ctx.available_rect().width() * 0.8)
+            // .width_range(100.0..=500.0)
             .show(ctx, |ui| {
                 ui.add_space(5.0);
                 ui.horizontal(|ui| {
