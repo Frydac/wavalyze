@@ -9,7 +9,7 @@ use crate::{
     },
     rect::Rect,
     wav::{
-        file2::File,
+        file::File,
         read::{ReadConfig, read_to_file},
     },
 };

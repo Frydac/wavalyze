@@ -3,7 +3,7 @@
 
 use crate::audio;
 use crate::model::{Model, track::TrackId};
-use crate::wav::{self, file2::FileId};
+use crate::wav::{self, file::FileId};
 use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,7 +17,7 @@ impl Model {
     pub fn get_file_channel_for_track(
         &self,
         track_id: TrackId,
-    ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
+    ) -> Option<(&wav::file::File, &wav::file::Channel)> {
         let track = self.tracks.get_track(track_id)?;
         self.get_file_channel_for_buffer(track.single.buffer_id)
     }
@@ -27,7 +27,7 @@ impl Model {
     pub fn get_file_channel_for_buffer(
         &self,
         buffer_id: audio::BufferId,
-    ) -> Option<(&wav::file2::File, &wav::file2::Channel)> {
+    ) -> Option<(&wav::file::File, &wav::file::Channel)> {
         for file in self.files.values() {
             if let Some(channel) = file.get_channel(buffer_id) {
                 return Some((file, channel));
@@ -42,7 +42,7 @@ impl Model {
             .map(|(track_id, _)| track_id)
     }
 
-    pub fn file_visibility_state(&self, file: &wav::file2::File) -> FileVisibilityState {
+    pub fn file_visibility_state(&self, file: &wav::file::File) -> FileVisibilityState {
         let mut any_visible = false;
         let mut any_hidden = false;
 
@@ -80,7 +80,7 @@ impl Model {
         true
     }
 
-    pub fn set_file_visible(&mut self, file: &wav::file2::File, visible: bool) {
+    pub fn set_file_visible(&mut self, file: &wav::file::File, visible: bool) {
         for channel in file.channels.values() {
             self.set_channel_visible(channel.buffer_id, visible);
         }

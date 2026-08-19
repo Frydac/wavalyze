@@ -392,7 +392,7 @@ impl View {
         });
     }
 
-    fn ui_tracks2(&mut self, ui: &mut egui::Ui) -> Result<()> {
+    fn ui_tracks(&mut self, ui: &mut egui::Ui) -> Result<()> {
         let model = &mut self.model;
 
         // render view tracks in specified order
@@ -457,7 +457,7 @@ impl View {
                     ui.set_min_width(size.x.max(0.0));
 
                     // let resp = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height() - 20.0), egui::Sense::hover());
-                    let _ = self.ui_tracks2(ui);
+                    let _ = self.ui_tracks(ui);
 
                     // util::debug_rect_text(ui, ui.min_rect().shrink(1.0), egui::Color32::LIGHT_GREEN, "tracks");
                 });

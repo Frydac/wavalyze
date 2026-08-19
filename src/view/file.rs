@@ -2,7 +2,7 @@ use crate::{
     model::{Action, FileVisibilityState, Model},
     view::util::add_row_label,
     wav,
-    wav::file2::FileId,
+    wav::file::FileId,
 };
 
 #[derive(Debug, Clone)]
@@ -137,7 +137,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
     });
 }
 
-fn channel_rows(model: &Model, file: &wav::file2::File) -> Vec<ChannelRow> {
+fn channel_rows(model: &Model, file: &wav::file::File) -> Vec<ChannelRow> {
     (0..file.total_nr_channels)
         .map(|ch_ix| {
             let channel = file.channels.get(&ch_ix);
@@ -158,7 +158,7 @@ fn channel_rows(model: &Model, file: &wav::file2::File) -> Vec<ChannelRow> {
         .collect()
 }
 
-fn file_title(file: &wav::file2::File) -> String {
+fn file_title(file: &wav::file::File) -> String {
     file.path
         .as_ref()
         .and_then(|path| path.file_name())
@@ -167,7 +167,7 @@ fn file_title(file: &wav::file2::File) -> String {
         .unwrap_or_else(|| "Demo".to_string())
 }
 
-fn channel_label(channel: &wav::file2::Channel) -> String {
+fn channel_label(channel: &wav::file::Channel) -> String {
     match channel.channel_id {
         Some(channel_id) => format!("ch {} - {}", channel.ch_ix, channel_id.long_name()),
         None => format!("ch {}", channel.ch_ix),
@@ -190,11 +190,11 @@ mod tests {
                 .insert(Arc::new(BufferE::F32(audio::buffer::Buffer::with_size(
                     48_000, 32, 16,
                 ))));
-        let file = wav::file2::File {
+        let file = wav::file::File {
             channels: BTreeMap::from([
                 (
                     0,
-                    wav::file2::Channel {
+                    wav::file::Channel {
                         ch_ix: 0,
                         buffer_id,
                         channel_id: None,
@@ -202,7 +202,7 @@ mod tests {
                 ),
                 (
                     2,
-                    wav::file2::Channel {
+                    wav::file::Channel {
                         ch_ix: 2,
                         buffer_id,
                         channel_id: None,

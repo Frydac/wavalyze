@@ -1,4 +1,4 @@
-use crate::model::{Action, tracks2::Tracks};
+use crate::model::{Action, tracks::Tracks};
 use egui::{Key, KeyboardShortcut, Modifiers};
 use egui_custom_widgets::focused_widget_is_digitwise_editor;
 use tracing::warn;
@@ -392,7 +392,7 @@ fn navigation_surface_hovered(ctx: &egui::Context, tracks: &Tracks) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{ShortcutAction, ShortcutBinding, ShortcutConfig, ShortcutScope};
-    use crate::model::{Action, tracks2::Tracks};
+    use crate::model::{Action, tracks::Tracks};
     use egui::{Context, Event, Key, Modifiers, RawInput};
 
     #[test]

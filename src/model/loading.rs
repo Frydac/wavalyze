@@ -3,7 +3,7 @@
 
 use crate::audio::thumbnail::ThumbnailE;
 use crate::model::{Model, jobs};
-use crate::wav::{self, file2::FileId};
+use crate::wav::{self, file::FileId};
 use anyhow::Result;
 use tracing::{info, trace};
 
@@ -56,7 +56,7 @@ impl Model {
             self.audio.thumbnails.insert(buffer_id, thumbnail);
             channels.insert(
                 ch_ix,
-                wav::file2::Channel {
+                wav::file::Channel {
                     ch_ix,
                     buffer_id,
                     channel_id: None,
@@ -64,7 +64,7 @@ impl Model {
             );
         }
 
-        let file = wav::file2::File {
+        let file = wav::file::File {
             channels,
             total_nr_channels: loaded.total_nr_channels,
             sample_type: loaded.sample_type,

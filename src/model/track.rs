@@ -23,7 +23,7 @@ pub fn min_total_height(track_config: &TrackConfig) -> f32 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrackMetaData {
-    File(wav::file2::File, wav::ChIx),
+    File(wav::file::File, wav::ChIx),
     None,
 }
 

@@ -4,7 +4,7 @@ use crate::{
         PixelCoord, hover_info::HoverInfoE, jobs, selection_info::SelectionInfoE, track::TrackId,
     },
     wav,
-    wav::file2::FileId,
+    wav::file::FileId,
 };
 use anyhow::{Context, Result};
 

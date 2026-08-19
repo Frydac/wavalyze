@@ -86,7 +86,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     let mut channels = BTreeMap::new();
     channels.insert(
         0,
-        wav::file2::Channel {
+        wav::file::Channel {
             ch_ix: 0,
             buffer_id: ch1_id,
             channel_id: Some(audio::Id::Left),
@@ -94,7 +94,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     );
     channels.insert(
         1,
-        wav::file2::Channel {
+        wav::file::Channel {
             ch_ix: 1,
             buffer_id: ch2_id,
             channel_id: Some(audio::Id::Right),
@@ -102,7 +102,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     );
     channels.insert(
         2,
-        wav::file2::Channel {
+        wav::file::Channel {
             ch_ix: 2,
             buffer_id: ch3_id,
             channel_id: Some(audio::Id::Center),
@@ -110,14 +110,14 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     );
     channels.insert(
         3,
-        wav::file2::Channel {
+        wav::file::Channel {
             ch_ix: 3,
             buffer_id: ch4_id,
             channel_id: Some(audio::Id::LFE),
         },
     );
 
-    let file = wav::file2::File {
+    let file = wav::file::File {
         total_nr_channels: channels.len(),
         channels,
         sample_type: audio::SampleType::Float,

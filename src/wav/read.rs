@@ -4,7 +4,7 @@ use crate::audio::sample;
 use crate::audio::thumbnail::ThumbnailE;
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::audio::SampleType;
-use crate::wav::file2::{Channel, File};
+use crate::wav::file::{Channel, File};
 use anyhow::{Result, ensure};
 use hound;
 use serde::{Deserialize, Serialize};

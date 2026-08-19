@@ -10,7 +10,7 @@ use slotmap::SlotMap;
 
 use crate::{
     model::track::{Track, TrackId},
-    wav::file2::File,
+    wav::file::File,
 };
 
 #[derive(Debug, Clone)]

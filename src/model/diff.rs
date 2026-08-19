@@ -6,7 +6,7 @@
 
 use crate::audio;
 use crate::model::{Model, jobs, track};
-use crate::wav::{self, file2::FileId};
+use crate::wav::{self, file::FileId};
 use anyhow::Result;
 
 impl Model {

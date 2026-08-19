@@ -4,7 +4,7 @@
 //! `TEST_SAMPLE_RATE` track is present.
 
 use wavalyze::audio;
-use wavalyze::model::tracks2::Tracks;
+use wavalyze::model::tracks::Tracks;
 use wavalyze::rect::Rect;
 
 const TEST_SAMPLE_RATE: u32 = 48_000;

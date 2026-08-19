@@ -136,7 +136,7 @@ pub fn handle_scroll_interaction(
 // InfoPanel
 ////////////////////////////////////////////////////////////////////////////////
 
-pub fn ui_ruler_info_panel(ui: &mut egui::Ui, tracks: &model::tracks2::Tracks) {
+pub fn ui_ruler_info_panel(ui: &mut egui::Ui, tracks: &model::tracks::Tracks) {
     let ruler = &tracks.ruler;
     ui.group(|ui| {
         ui.vertical(|ui| {

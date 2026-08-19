@@ -127,7 +127,7 @@ mod tests {
 
     use super::*;
     use crate::audio::manager::AudioManager;
-    use crate::model::{config::TrackConfig, tracks2::Tracks};
+    use crate::model::{config::TrackConfig, tracks::Tracks};
 
     fn f32_buffer(data: Vec<f32>) -> BufferE {
         BufferE::F32(Buffer {

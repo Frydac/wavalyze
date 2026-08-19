@@ -12,7 +12,7 @@ pub mod shortcuts;
 pub mod stats;
 pub mod time_camera;
 pub mod track;
-pub mod tracks2;
+pub mod tracks;
 pub mod types;
 pub mod view_buffer;
 
@@ -36,7 +36,7 @@ use crate::audio;
 pub use action::Action;
 
 use crate::wav;
-use crate::wav::file2::FileId;
+use crate::wav::file::FileId;
 use anyhow::Result;
 use slotmap::SlotMap;
 use std::sync::mpsc::{Receiver, Sender};
@@ -44,10 +44,10 @@ use std::sync::mpsc::{Receiver, Sender};
 #[derive(Debug)]
 pub struct Model {
     pub user_config: Config,
-    pub files: SlotMap<FileId, wav::file2::File>,
+    pub files: SlotMap<FileId, wav::file::File>,
     pub files_order: Vec<FileId>,
     pub audio: audio::manager::AudioManager,
-    pub tracks: tracks2::Tracks,
+    pub tracks: tracks::Tracks,
     pub actions: Vec<Action>,
     /// Sender cloned to background workers so they can push follow-up actions back into the
     /// model's action queue. Drained into `actions` each frame via `drain_action_messages`.
@@ -77,7 +77,7 @@ impl Default for Model {
             files: SlotMap::default(),
             files_order: Vec::new(),
             audio: audio::manager::AudioManager::default(),
-            tracks: tracks2::Tracks::default(),
+            tracks: tracks::Tracks::default(),
             actions: Vec::new(),
             actions_tx,
             actions_rx,
@@ -105,7 +105,7 @@ impl Model {
 
     /// Insert a file into the slotmap and append it to the display/order vec. The two fields
     /// are always mutated together through this helper (and `clear_files`/`remove_file`).
-    pub fn insert_file(&mut self, file: wav::file2::File) -> FileId {
+    pub fn insert_file(&mut self, file: wav::file::File) -> FileId {
         let id = self.files.insert(file);
         self.files_order.push(id);
         id

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::audio::{self, thumbnail::ThumbnailE};
 use crate::model::Model;
-use crate::wav::{self, file2};
+use crate::wav::{self, file};
 
 pub(crate) fn add_buffer(model: &mut Model) -> audio::BufferId {
     model
@@ -16,14 +16,14 @@ pub(crate) fn add_buffer(model: &mut Model) -> audio::BufferId {
         )))
 }
 
-pub(crate) fn make_file(buffers: &[audio::BufferId]) -> file2::File {
+pub(crate) fn make_file(buffers: &[audio::BufferId]) -> file::File {
     let channels = buffers
         .iter()
         .enumerate()
         .map(|(ch_ix, buffer_id)| {
             (
                 ch_ix as wav::read::ChIx,
-                file2::Channel {
+                file::Channel {
                     ch_ix: ch_ix as wav::read::ChIx,
                     buffer_id: *buffer_id,
                     channel_id: None,
@@ -32,7 +32,7 @@ pub(crate) fn make_file(buffers: &[audio::BufferId]) -> file2::File {
         })
         .collect::<BTreeMap<_, _>>();
 
-    file2::File {
+    file::File {
         total_nr_channels: channels.len(),
         channels,
         sample_type: audio::SampleType::Float,
