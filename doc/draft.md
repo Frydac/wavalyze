@@ -25,18 +25,53 @@
 * watch file for changes and reload, maybe reload option to always reload or ask user?
   * update diff when one of 2 source files changes?
 
-* [x] peak value
-  * show peak value with marker/highlight and sample value
-* [x] normalize sample value zoom to peak value of track/selection
+* repurpose 'Files' left side panel
+  * more an information on loaded files
+    * metadata: sample rate, bit depth, duration, etc
+    * available channels with load/unload
+  * have offset per file iso per track/channel (maybe also per channel..? relative/absolute?)
+    * add offset on first non-zero sample, or one before that (first value is often 0, e.g. multitone)
 * blocks
   * gui element for block size
   * use existing offset as start of first block?
   * show in ruler
   * show in selection
   * add snap to block option?
-* option "auto fill screen height"
+* track selection
+  * would be handy
+  * drag and drop tracks 
+    * to change order
+    * do initiate a diff
+* add functionality to auto-correlate 2 tracks
+* diff panel on start:
+  * show all the channels but pre fill as per cli args
+  * show file offset when opening with diff panel
+  * add functionality to find offset with auto correlate track
+* put theme under view menu
+* left panel view toggle
+* zoom y, value zoom, should have a dead zone around the 0 value so it is easy to leave it centered
+  * other options:
+    * button to recenter
+    * modifier key and zoom to leave center (or leave by default and use modifier key to zoom around mouse position)
+
+
+* blocks
+  * gui element for block size
+  * use existing offset as start of first block?
+  * show in ruler
+  * show in selection
+  * add snap to block option?
+
+### Done
+
+* [x] option "auto fill screen height"
   * when enabling/disabling tracks, add action to fill screen height
-* option to invert zooming, scrolling
+  * when resizing a track, auto disable it
+  * option to have it on by default when starting the app
+* [x] peak value
+  * show peak value with marker/highlight and sample value
+* [x] normalize sample value zoom to peak value of track/selection
+* [x] option to invert zooming, scrolling
 * [x] option to close everything at once (like a fresh start)
 
 
