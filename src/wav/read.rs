@@ -57,6 +57,8 @@ struct ReadOptions {
 pub struct LoadedFile {
     pub load_id: LoadId,
     pub channels: BTreeMap<ChIx, BufferE>,
+    /// Total channel count from the WAV header, including channels excluded by `ch_ixs`.
+    pub total_nr_channels: usize,
     /// Per-channel thumbnails built by the loader's worker. May be empty if a caller skips the
     /// worker path; `Model::add_loaded_file` falls back to on-thread building per missing channel.
     pub thumbnails: BTreeMap<ChIx, ThumbnailE>,
@@ -309,6 +311,7 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     let file = LoadedFile {
         load_id,
         channels: chix_buffers,
+        total_nr_channels: spec.channels as usize,
         thumbnails: BTreeMap::new(),
         layout: None, // TODO: first need to extend hound to 'publish' the wavextended channel mask?
         sample_rate: spec.sample_rate,
@@ -489,7 +492,12 @@ impl std::fmt::Display for LoadedFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "LoadedFile:")?;
         write!(f, " path: {:?}", self.path)?;
-        write!(f, ", nr_channels: {}", self.channels.len())?;
+        write!(
+            f,
+            ", nr_channels: {}/{}",
+            self.channels.len(),
+            self.total_nr_channels
+        )?;
         write!(f, ", sample_type: {:?}", self.sample_type)?;
         write!(f, ", bit_depth: {}", self.bit_depth)?;
         write!(f, ", sample_rate: {}", self.sample_rate)?;
@@ -505,6 +513,7 @@ impl LoadedFile {
     pub fn into_file(self, buffers: &mut Buffers) -> File {
         File {
             // move buffers to storage and store it's id in file
+            total_nr_channels: self.total_nr_channels,
             channels: self
                 .channels
                 .into_iter()

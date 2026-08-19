@@ -118,6 +118,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     );
 
     let file = wav::file2::File {
+        total_nr_channels: channels.len(),
         channels,
         sample_type: audio::SampleType::Float,
         bit_depth: BIT_DEPTH,

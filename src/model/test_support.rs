@@ -33,6 +33,7 @@ pub(crate) fn make_file(buffers: &[audio::BufferId]) -> file2::File {
         .collect::<BTreeMap<_, _>>();
 
     file2::File {
+        total_nr_channels: channels.len(),
         channels,
         sample_type: audio::SampleType::Float,
         bit_depth: 32,
@@ -65,6 +66,7 @@ pub(crate) fn loaded_file_with_buffers(
     }
     wav::read::LoadedFile {
         load_id: 0,
+        total_nr_channels: channels.len(),
         channels,
         thumbnails,
         sample_type: audio::SampleType::Float,

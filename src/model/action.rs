@@ -8,6 +8,14 @@ use crate::{
 };
 use anyhow::{Context, Result};
 
+/// Actions exist mainly to be something that can be 'scheduled' to be executed the next frame while
+/// doing egui interactions during drawing.
+/// e.g. to remove a track, we are already drawing it (part is already drawn) while we do the
+/// interaction, so we can't remove it right away.
+///
+/// Other advantages:
+/// - we could attach them to keyboard shortcuts
+/// - we could use them to record user actions and undo/redo them
 #[derive(Debug)]
 pub enum Action {
     RemoveAllTracks, // TODO: still needed?

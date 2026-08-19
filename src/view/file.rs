@@ -16,7 +16,7 @@ struct FileRow {
 
 #[derive(Debug, Clone)]
 struct ChannelRow {
-    buffer_id: crate::audio::BufferId,
+    buffer_id: Option<crate::audio::BufferId>,
     label: String,
     visible: bool,
     missing_track: bool,
@@ -46,21 +46,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                 visibility: model
                     .file_visibility_state_for(file_id)
                     .unwrap_or(FileVisibilityState::NoneVisible),
-                channels: file
-                    .channels
-                    .values()
-                    .map(|channel| {
-                        let track = model
-                            .find_track_id_for_buffer(channel.buffer_id)
-                            .and_then(|track_id| model.tracks.get_track(track_id));
-                        ChannelRow {
-                            buffer_id: channel.buffer_id,
-                            label: channel_label(channel),
-                            visible: track.is_some_and(|track| track.visible),
-                            missing_track: track.is_none(),
-                        }
-                    })
-                    .collect(),
+                channels: channel_rows(model, file),
             })
             .collect();
 
@@ -101,35 +87,47 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                                 !channel.missing_track,
                                 egui::Checkbox::without_text(&mut checked),
                             );
-                            if response.changed() {
-                                model.set_channel_visible(channel.buffer_id, checked);
+                            if response.changed()
+                                && let Some(buffer_id) = channel.buffer_id
+                            {
+                                model.set_channel_visible(buffer_id, checked);
                             }
-                            let channel_label = if channel.missing_track {
+                            let channel_label = if channel.buffer_id.is_none() {
+                                format!("{} (not loaded)", channel.label)
+                            } else if channel.missing_track {
                                 format!("{} (closed)", channel.label)
                             } else {
                                 channel.label
                             };
-                            add_row_label(ui, channel_label).context_menu(|ui| {
-                                let button_label = if channel.missing_track {
-                                    "Load track"
-                                } else {
-                                    "Remove track"
-                                };
-                                if ui.button(button_label).clicked() {
-                                    let result = if channel.missing_track {
-                                        model.restore_channel_track(channel.buffer_id)
+                            let label_response = if channel.buffer_id.is_none() {
+                                ui.add_enabled_ui(false, |ui| add_row_label(ui, channel_label))
+                                    .inner
+                            } else {
+                                add_row_label(ui, channel_label)
+                            };
+                            if let Some(buffer_id) = channel.buffer_id {
+                                label_response.context_menu(|ui| {
+                                    let button_label = if channel.missing_track {
+                                        "Load track"
                                     } else {
-                                        Ok(model.remove_channel_track(channel.buffer_id))
+                                        "Remove track"
                                     };
-                                    if let Err(err) = result {
-                                        tracing::error!(
-                                            "Failed to toggle track for buffer {:?}: {err}",
-                                            channel.buffer_id
-                                        );
+                                    if ui.button(button_label).clicked() {
+                                        let result = if channel.missing_track {
+                                            model.restore_channel_track(buffer_id)
+                                        } else {
+                                            Ok(model.remove_channel_track(buffer_id))
+                                        };
+                                        if let Err(err) = result {
+                                            tracing::error!(
+                                                "Failed to toggle track for buffer {:?}: {err}",
+                                                buffer_id
+                                            );
+                                        }
+                                        ui.close_menu();
                                     }
-                                    ui.close_menu();
-                                }
-                            });
+                                });
+                            }
                         });
                     }
                 });
@@ -137,6 +135,27 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
             ui.add_space(2.0);
         }
     });
+}
+
+fn channel_rows(model: &Model, file: &wav::file2::File) -> Vec<ChannelRow> {
+    (0..file.total_nr_channels)
+        .map(|ch_ix| {
+            let channel = file.channels.get(&ch_ix);
+            let track = channel.and_then(|channel| {
+                model
+                    .find_track_id_for_buffer(channel.buffer_id)
+                    .and_then(|track_id| model.tracks.get_track(track_id))
+            });
+            ChannelRow {
+                buffer_id: channel.map(|channel| channel.buffer_id),
+                label: channel
+                    .map(channel_label)
+                    .unwrap_or_else(|| format!("ch {ch_ix}")),
+                visible: track.is_some_and(|track| track.visible),
+                missing_track: track.is_none(),
+            }
+        })
+        .collect()
 }
 
 fn file_title(file: &wav::file2::File) -> String {
@@ -152,5 +171,65 @@ fn channel_label(channel: &wav::file2::Channel) -> String {
     match channel.channel_id {
         Some(channel_id) => format!("ch {} - {}", channel.ch_ix, channel_id.long_name()),
         None => format!("ch {}", channel.ch_ix),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::{self, buffer::BufferE};
+    use std::{collections::BTreeMap, sync::Arc};
+
+    #[test]
+    fn channel_rows_include_channels_excluded_from_load() {
+        let mut model = Model::new();
+        let buffer_id =
+            model
+                .audio
+                .buffers
+                .insert(Arc::new(BufferE::F32(audio::buffer::Buffer::with_size(
+                    48_000, 32, 16,
+                ))));
+        let file = wav::file2::File {
+            channels: BTreeMap::from([
+                (
+                    0,
+                    wav::file2::Channel {
+                        ch_ix: 0,
+                        buffer_id,
+                        channel_id: None,
+                    },
+                ),
+                (
+                    2,
+                    wav::file2::Channel {
+                        ch_ix: 2,
+                        buffer_id,
+                        channel_id: None,
+                    },
+                ),
+            ]),
+            total_nr_channels: 4,
+            sample_type: audio::SampleType::Float,
+            bit_depth: 32,
+            sample_rate: 48_000,
+            layout: None,
+            path: None,
+            nr_samples: 16,
+            sample_ix_offset: 0,
+        };
+
+        let rows = channel_rows(&model, &file);
+
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[0].label, "ch 0");
+        assert!(rows[0].buffer_id.is_some());
+        assert_eq!(rows[1].label, "ch 1");
+        assert!(rows[1].buffer_id.is_none());
+        assert!(rows[1].missing_track);
+        assert_eq!(rows[2].label, "ch 2");
+        assert!(rows[2].buffer_id.is_some());
+        assert_eq!(rows[3].label, "ch 3");
+        assert!(rows[3].buffer_id.is_none());
     }
 }

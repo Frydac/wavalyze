@@ -17,7 +17,10 @@ pub type Channels = BTreeMap<ChIx, Channel>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
+    /// Loaded channel buffers, which can be a subset of the WAV's channels.
     pub channels: Channels,
+    /// Total channel count from the WAV header, including channels that were not loaded.
+    pub total_nr_channels: usize,
     pub sample_type: audio::SampleType,
     pub bit_depth: u16,
     pub sample_rate: u32,
@@ -32,7 +35,12 @@ impl std::fmt::Display for File {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "File:")?;
         write!(f, " path: {:?}", self.path)?;
-        write!(f, ", nr_channels: {}", self.channels.len())?;
+        write!(
+            f,
+            ", nr_channels: {}/{}",
+            self.channels.len(),
+            self.total_nr_channels
+        )?;
         write!(f, ", sample_type: {:?}", self.sample_type)?;
         write!(f, ", bit_depth: {}", self.bit_depth)?;
         write!(f, ", sample_rate: {}", self.sample_rate)?;
