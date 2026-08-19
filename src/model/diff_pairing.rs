@@ -89,6 +89,19 @@ mod tests {
     }
 
     #[test]
+    fn file_offsets_survive_pairing_setup() {
+        let pairing = PendingDiffPairing::new(
+            wav::ReadConfig::new("a.wav").with_sample_ix_offset(-12),
+            wav::ReadConfig::new("b.wav").with_sample_ix_offset(34),
+            vec![0],
+            vec![0],
+        );
+
+        assert_eq!(pairing.file_a.sample_ix_offset, -12);
+        assert_eq!(pairing.file_b.sample_ix_offset, 34);
+    }
+
+    #[test]
     fn diagonal_is_checked_by_default() {
         let pairing = pairing(vec![0, 1], vec![0, 1, 2]);
 

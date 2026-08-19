@@ -707,8 +707,8 @@ mod tests {
 
         let diff = load_and_compute_diff(
             9,
-            wav::ReadConfig::new(path_a),
-            wav::ReadConfig::new(path_b),
+            wav::ReadConfig::new(path_a).with_sample_ix_offset(-1),
+            wav::ReadConfig::new(path_b).with_sample_ix_offset(2),
             vec![(0, 0), (1, 2)],
             &tx,
         )
@@ -722,7 +722,15 @@ mod tests {
 
         let pairs: Vec<_> = diff.pairs.iter().map(|p| (p.ch_a, p.ch_b)).collect();
         assert_eq!(pairs, vec![(0, 0), (1, 2)]);
-        assert!(diff.pairs.iter().all(|p| p.diff_buffer.nr_samples() == 1));
+        assert_eq!(diff.sample_ix_offset_a, -1);
+        assert_eq!(diff.sample_ix_offset_b, 2);
+        assert_eq!(diff.file_a.sample_ix_offset, -1);
+        assert_eq!(diff.file_b.sample_ix_offset, 2);
+        assert!(
+            diff.pairs.iter().all(|pair| {
+                pair.sample_ix_offset_diff == 2 && pair.diff_buffer.nr_samples() == 4
+            })
+        );
     }
 
     #[test]

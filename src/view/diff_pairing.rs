@@ -1,5 +1,7 @@
 use crate::model::{self, Action};
 
+const OFFSET_HOVER_TEXT: &str = "Absolute sample offset for all channels in file.\nPositive value means we start from that positive value.";
+
 /// Channel-pairing matrix dialog for diffing two files: rows are file A channels, columns are
 /// file B channels, one checkbox per cell. Shown while `model.pending_diff_pairing` is `Some`.
 pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
@@ -14,8 +16,34 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
-            ui.label(format!("A: {}", pending.file_a.filepath.display()));
-            ui.label(format!("B: {}", pending.file_b.filepath.display()));
+            egui::Grid::new("diff_pairing_files")
+                .num_columns(3)
+                .show(ui, |ui| {
+                    ui.label("");
+                    ui.label("path");
+                    ui.label("offset").on_hover_text(OFFSET_HOVER_TEXT);
+                    ui.end_row();
+
+                    ui.label("A");
+                    ui.label(pending.file_a.filepath.display().to_string());
+                    ui.add(
+                        egui::DragValue::new(&mut pending.file_a.sample_ix_offset)
+                            .speed(1.0)
+                            .suffix(" samples"),
+                    )
+                    .on_hover_text(OFFSET_HOVER_TEXT);
+                    ui.end_row();
+
+                    ui.label("B");
+                    ui.label(pending.file_b.filepath.display().to_string());
+                    ui.add(
+                        egui::DragValue::new(&mut pending.file_b.sample_ix_offset)
+                            .speed(1.0)
+                            .suffix(" samples"),
+                    )
+                    .on_hover_text(OFFSET_HOVER_TEXT);
+                    ui.end_row();
+                });
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Clear").clicked() {
