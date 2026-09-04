@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Build Wavalyze.app, install it for the current user, and expose `wv` on Cargo's PATH.
+
+##
+# Build Wavalyze.app, install it for the current user, and expose `wv` cli command via Cargo's PATH.
+##
 
 # Exit on command errors, unset variables, or failures hidden inside pipelines.
 set -euo pipefail
@@ -18,13 +21,14 @@ for command in cargo rustc; do
     fi
 done
 
-# cargo-bundle is a Cargo plugin. Install it once, using its locked dependencies.
-if ! command -v cargo-bundle >/dev/null 2>&1; then
-    cargo +1.93.0 install --locked cargo-bundle
-fi
-
 # Resolve paths from this script's location, so it works from any directory.
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# cargo-bundle is a Cargo plugin. Install it once, using its locked dependencies.
+if ! command -v cargo-bundle >/dev/null 2>&1; then
+    (cd "$repo_root" && cargo install --locked cargo-bundle)
+fi
+
 bundle="$repo_root/target/release/bundle/osx/Wavalyze.app"
 install_dir="${HOME:?}/Applications"
 installed_app="$install_dir/Wavalyze.app"
@@ -43,7 +47,7 @@ fi
 
 # Finish the release build before touching the currently installed app.
 cd "$repo_root"
-cargo +1.93.0 bundle --release --bin wavalyze-app
+cargo bundle --release --bin wavalyze-app
 
 if [[ ! -d "$bundle" || ! -x "$bundle/Contents/MacOS/wavalyze-app" ]]; then
     echo "error: cargo-bundle did not produce a valid $bundle" >&2

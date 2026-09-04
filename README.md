@@ -68,7 +68,7 @@ wv recording.wav
 Web (WASM):
 ```
 rustup toolchain install nightly-2026-01-15 --target wasm32-unknown-unknown --component rust-src
-cargo +1.93.0 install --locked trunk
+cargo install --locked trunk
 ./scripts/trunk-threaded.sh serve
 ```
 

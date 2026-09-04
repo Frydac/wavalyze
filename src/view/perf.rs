@@ -122,7 +122,7 @@ impl PerfCapture {
             .default_open(false)
             .show(ui, |ui| {
                 ui.label("1. Launch an optimized build with source information:");
-                ui.monospace("cargo +1.93.0 run --profile profiling");
+                ui.monospace("cargo run --profile profiling");
                 ui.label("2. Open the Profile tab in the right panel.");
                 ui.label("3. Enter a scenario label, delay, and duration.");
                 ui.label("4. Start the capture and perform one focused interaction.");
