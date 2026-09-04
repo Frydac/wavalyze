@@ -33,6 +33,7 @@ impl TimeCamera {
         self.time_start..end
     }
 
+    /// Time in seconds to absolute screen X position
     pub fn time_to_screen_x(&self, time: f64, screen_rect: Rect) -> f32 {
         let offset_s = time - self.time_start;
         let offset_px = offset_s / self.seconds_per_pixel;

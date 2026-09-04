@@ -1,5 +1,9 @@
 ## Ideas
 
+* installer/package for `wavalyze-app`
+  * provide a stable executable path so integrations do not depend on `target/release`
+  * decide later between a small install script, `cargo install --path`, or system packaging
+
 * when shift click in track, always adjust existing selection. Not only when at edge of selection.
   * use closest edge to move around
 
@@ -27,8 +31,9 @@
 
 * repurpose 'Files' left side panel
   * more an information on loaded files
-    * metadata: sample rate, bit depth, duration, etc
+    * [x] metadata: sample rate, bit depth, duration, etc
     * available channels with load/unload
+      * load/unload a bit of work unfortunately, just remove and re-add the file probably easier
   * have offset per file iso per track/channel (maybe also per channel..? relative/absolute?)
     * add offset on first non-zero sample, or one before that (first value is often 0, e.g. multitone)
 * blocks

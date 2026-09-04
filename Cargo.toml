@@ -16,6 +16,13 @@ crate-type = ["cdylib", "rlib"]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
+[package.metadata.bundle.bin.wavalyze-app]
+name = "Wavalyze"
+identifier = "com.github.frydac.wavalyze"
+icon = ["assets/icons/wavalyze_icon_bars_512@2x.png"]
+category = "Developer Tool"
+short_description = "View, analyze, and compare WAV audio files."
+
 [dependencies]
 egui = "0.34"
 egui_custom_widgets = { git = "https://github.com/Frydac/egui_custom_widgets" }

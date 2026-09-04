@@ -3,6 +3,8 @@
 [![CI](https://github.com/frydac/wavalyze/actions/workflows/rust.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/rust.yml)
 [![Cloudflare Deploy](https://github.com/frydac/wavalyze/actions/workflows/cloudflare-pages.yml/badge.svg)](https://github.com/frydac/wavalyze/actions/workflows/cloudflare-pages.yml)
 
+![Wavalyze banner](doc/images/wavalyze_banner.png)
+
 **Wavalyze** is a WAV file viewer with the goal of becoming a analysis and diff tool for (my) audio software development.
 
 It is a personal Rust learning project, and curious how well wasm works in a usecase like this.
@@ -35,6 +37,31 @@ See [CLI arguments](doc/cli_args.md).
 Native:
 ```
 cargo run --release
+```
+
+### macOS install
+
+Build and install `Wavalyze.app` for the current user:
+
+```bash
+./scripts/install-macos.sh
+```
+
+The app is installed in `~/Applications`. The installer also creates the `wv` command in `~/.cargo/bin`.
+
+To update an existing installation:
+
+```bash
+git pull
+./scripts/install-macos.sh
+```
+
+Launch the app from Finder or the command line:
+
+```bash
+open "$HOME/Applications/Wavalyze.app"
+wv --help
+wv recording.wav
 ```
 
 Web (WASM):

@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
             .with_min_inner_size([480.0, 320.0])
             .with_icon(
                 eframe::icon_data::from_png_bytes(
-                    &include_bytes!("../assets/wavalyze_icon_001.png")[..],
+                    &include_bytes!("../assets/icons/wavalyze_icon_bars_512@2x.png")[..],
                 )
                 .expect("Failed to load icon"),
             ),
