@@ -310,6 +310,7 @@ impl View {
                         self.model.user_config.save_to_storage();
                         ui.close_menu();
                     }
+                    ui.menu_button("Theme", egui::widgets::global_theme_preference_buttons);
                 });
                 ui.add_space(16.0);
 
@@ -322,8 +323,6 @@ impl View {
                     }
                 });
                 ui.add_space(16.0);
-
-                egui::widgets::global_theme_preference_buttons(ui);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let show = self.model.user_config.view.show_right_panel;
@@ -362,7 +361,7 @@ impl View {
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
-            if ui.button("reset x zoom").clicked() {
+            if ui.button("zoom full x").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
             }
             let mut equal_height_layout = self.model.tracks.equal_height_layout;

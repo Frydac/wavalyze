@@ -12,25 +12,26 @@ It is a personal Rust learning project, and curious how well wasm works in a use
 ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
 
 
-## Demo
+## WASM Web Demo
 
-Web demo: [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
+A WebAssembly build of the Wavalyze application hosted on cloudflare:  
+[wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
 
 ## Docs
 
 - [CLI arguments](doc/cli_args.md)
 - [Cloudflare deploy notes](doc/cloudflare_deploy.md)
 
-## CLI
-
-See [CLI arguments](doc/cli_args.md).
-
-## Features (current)
+## Features
 
 - Multi-file waveform viewing
-- Zoom, pan, and region inspection
+- Zoom and pan over x and y axes
 - Sample-level hover details
+- Diff files/tracks, with offset adjustment
+- Calculate RMS value of selection
+- Calculate peak value of selection + visual indication
 - Native and browser builds
+- Fast startup for quick file inspection
 
 ## Local dev
 
