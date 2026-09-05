@@ -1,5 +1,5 @@
 [build]
-filehash = false
+filehash = true
 
 [serve.headers]
 Cross-Origin-Embedder-Policy = "require-corp"
