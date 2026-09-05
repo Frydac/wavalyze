@@ -5,6 +5,8 @@ use crate::{
     wav::file::FileId,
 };
 
+const PATH_METADATA_KEY: &str = "path";
+
 #[derive(Debug, Clone)]
 struct FileRow {
     file_id: FileId,
@@ -105,7 +107,11 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                             let id: u64 = ui.id().with("file_metadata_grid").value();
                             let mut grid = KeyValueGrid::new(id).key_col_width(80.0);
                             for (key, value) in &row.metadata {
-                                grid.row(*key, value.clone());
+                                if *key == PATH_METADATA_KEY {
+                                    grid.row_with_hover(*key, value.clone(), value.clone());
+                                } else {
+                                    grid.row(*key, value.clone());
+                                }
                             }
                             grid.show(ui);
                         });
@@ -177,7 +183,7 @@ fn ui_channels(ui: &mut egui::Ui, model: &mut Model, channels: &[ChannelRow]) {
 fn metadata_rows(file: &wav::file::File) -> Vec<(&'static str, String)> {
     vec![
         (
-            "path",
+            PATH_METADATA_KEY,
             file.path
                 .as_ref()
                 .map(|path| path.display().to_string())

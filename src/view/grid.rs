@@ -3,7 +3,7 @@ use egui::{RichText, Ui};
 pub struct KeyValueGrid {
     id_source: u64,
     key_col_width: Option<f32>,
-    rows: Vec<(RichText, RichText)>,
+    rows: Vec<(RichText, RichText, Option<RichText>)>,
 }
 
 impl KeyValueGrid {
@@ -21,7 +21,18 @@ impl KeyValueGrid {
     }
 
     pub fn row(&mut self, key: impl Into<RichText>, value: impl Into<RichText>) -> &mut Self {
-        self.rows.push((key.into(), value.into()));
+        self.rows.push((key.into(), value.into(), None));
+        self
+    }
+
+    pub fn row_with_hover(
+        &mut self,
+        key: impl Into<RichText>,
+        value: impl Into<RichText>,
+        hover: impl Into<RichText>,
+    ) -> &mut Self {
+        self.rows
+            .push((key.into(), value.into(), Some(hover.into())));
         self
     }
 
@@ -36,9 +47,12 @@ impl KeyValueGrid {
         }
 
         grid.show(ui, |ui| {
-            for (key, value) in self.rows {
+            for (key, value, hover) in self.rows {
                 ui.label(key);
-                ui.label(value);
+                let response = ui.label(value);
+                if let Some(hover) = hover {
+                    response.on_hover_text(hover);
+                }
                 ui.end_row();
             }
         });
