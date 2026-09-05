@@ -174,10 +174,54 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn process(self, model: &mut crate::model::Model) -> Result<()> {
-        if !matches!(self, Action::SetHoverInfo(_)) {
-            tracing::trace!("Action::process: {:?}", self);
+    fn log_debug(&self) {
+        match self {
+            // Continuous pointer and drag interactions would overwhelm debug logs.
+            Action::PanX { .. }
+            | Action::ZoomX { .. }
+            | Action::PanY { .. }
+            | Action::ZoomY { .. }
+            | Action::SetHoverInfo(_)
+            | Action::SetSelection(_)
+            | Action::SetFileSampleIxOffset { .. }
+            | Action::SetTrackSampleIxOffset { .. }
+            | Action::SetTrackHeight { .. }
+            | Action::SetTracksHeight { .. } => {}
+            // Avoid formatting payloads containing complete files or decoded audio buffers.
+            Action::OpenFileBytes(config) => tracing::debug!(
+                action = "OpenFileBytes",
+                name = ?config.name,
+                bytes = config.bytes.len(),
+                "Processing action"
+            ),
+            Action::IntegrateLoadedFile { generation, loaded } => tracing::debug!(
+                action = "IntegrateLoadedFile",
+                generation,
+                load_id = loaded.load_id,
+                channels = loaded.channels.len(),
+                "Processing action"
+            ),
+            Action::IntegrateLoadedDiff { generation, diff } => tracing::debug!(
+                action = "IntegrateLoadedDiff",
+                generation,
+                file_a_load_id = diff.file_a.load_id,
+                file_b_load_id = diff.file_b.load_id,
+                pairs = diff.pairs.len(),
+                "Processing action"
+            ),
+            Action::IntegrateDiffBuffer { generation, diff } => tracing::debug!(
+                action = "IntegrateDiffBuffer",
+                generation,
+                buffer_id_a = ?diff.buffer_id_a,
+                buffer_id_b = ?diff.buffer_id_b,
+                "Processing action"
+            ),
+            action => tracing::debug!(?action, "Processing action"),
         }
+    }
+
+    pub fn process(self, model: &mut crate::model::Model) -> Result<()> {
+        self.log_debug();
 
         match self {
             Action::RemoveTrack(track_id) => {

@@ -4,6 +4,7 @@
 //! control when it runs again and to embed build metadata as compile-time environment variables.
 //! The finished native binary or WASM file contains the values; Git and `date` are not invoked
 //! when the application starts.
+//!
 
 use std::process::Command;
 
@@ -24,11 +25,16 @@ fn main() {
     // metadata stale. Environment variables let release systems provide reproducible values.
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=Cargo.toml");
+
+    // Environment variables intended for overriding derived values, e.g. for reproducible builds.
     println!("cargo:rerun-if-env-changed=WAVALYZE_GIT_HASH");
     println!("cargo:rerun-if-env-changed=WAVALYZE_BUILD_DATE");
 
     // Watching HEAD handles branch switches and detached HEADs. Watching the current branch ref
     // also catches new commits, because HEAD itself does not change when a branch advances.
+    //
+    //  NOTE: cargo doesn't run build script each build, so you have to specify that it watches for
+    //  some file changes:
     if let Some(head) = command_output("git", &["rev-parse", "--git-path", "HEAD"]) {
         println!("cargo:rerun-if-changed={head}");
     }
