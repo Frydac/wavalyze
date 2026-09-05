@@ -23,6 +23,9 @@ use egui;
 use std::sync::mpsc::{Receiver, Sender};
 
 const TOP_TOOL_BAR_HEIGHT: f32 = 50.0;
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+const GIT_HASH: &str = env!("WAVALYZE_GIT_HASH");
+const BUILD_DATE: &str = env!("WAVALYZE_BUILD_DATE");
 
 /// Which tab the left side panel currently shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -321,6 +324,14 @@ impl View {
                     {
                         ui.close_menu();
                     }
+                });
+                ui.add_space(16.0);
+
+                ui.menu_button("Help", |ui| {
+                    ui.heading("Wavalyze");
+                    ui.label(format!("Version {APP_VERSION}"));
+                    ui.label(format!("Commit {GIT_HASH}"));
+                    ui.label(format!("Build date {BUILD_DATE} (UTC)"));
                 });
                 ui.add_space(16.0);
 
