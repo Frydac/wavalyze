@@ -34,14 +34,9 @@ A WebAssembly build of the Wavalyze application hosted on cloudflare:
 - Native and browser builds
 - Fast startup for quick file inspection
 
-## Local dev
+## Installation
 
-Native:
-```
-cargo run --release
-```
-
-### macOS install
+### macOS
 
 Build and install `Wavalyze.app` for the current user:
 
@@ -64,6 +59,23 @@ Launch the app from Finder or the command line:
 open "$HOME/Applications/Wavalyze.app"
 wv --help
 wv recording.wav
+```
+
+### Other platforms
+
+No packaged installers are available. Build or run Wavalyze from source with Cargo:
+
+```bash
+cargo build --release
+cargo run --release
+```
+
+## Local development
+
+Native:
+
+```bash
+cargo run --release
 ```
 
 Web (WASM):
