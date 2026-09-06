@@ -14,6 +14,23 @@ pub use ticks::NR_PIXELS_PER_TICK;
 const TIME_RULER_HEIGHT: f32 = 50.0;
 pub(crate) const HEIGHT: f32 = overview::HEIGHT + TIME_RULER_HEIGHT;
 
+fn block_coordinates(ruler_sample: i64, block_size: u64) -> (i128, i128) {
+    let ruler_sample = i128::from(ruler_sample);
+    let block_size = i128::from(block_size.max(1));
+    (
+        ruler_sample.div_euclid(block_size),
+        ruler_sample.rem_euclid(block_size),
+    )
+}
+
+fn format_sample_block_label(sample_ix: i64, block_size: u64) -> String {
+    let (block_ix, in_block_offset) = block_coordinates(sample_ix, block_size);
+    format!(
+        "s: {}\nb: {block_ix} + {in_block_offset}",
+        sample_ix.separate_with_commas()
+    )
+}
+
 pub fn ui(ui: &mut egui::Ui, model: &mut model::Model, content_rect: egui::Rect) -> Result<()> {
     // The ruler block is split vertically: an overview strip above the interactive time ruler.
     // Overview edge-resizing depends on both rectangles sharing the waveform coordinate space.
@@ -196,4 +213,26 @@ pub fn ui_hover_info_panel2(ui: &mut egui::Ui, hover_info: &HoverInfoE) {
             }
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::block_coordinates;
+
+    #[test]
+    fn ruler_origin_is_block_zero_sample_zero() {
+        // Track placement already subtracts latency: source sample 512 with offset 512 is here.
+        assert_eq!(block_coordinates(0, 1024), (0, 0));
+    }
+
+    #[test]
+    fn sample_before_origin_uses_euclidean_block_coordinates() {
+        assert_eq!(block_coordinates(-1, 1024), (-1, 1023));
+    }
+
+    #[test]
+    fn block_coordinates_advance_from_ruler_origin() {
+        assert_eq!(block_coordinates(2048, 1024), (2, 0));
+        assert_eq!(block_coordinates(2049, 1024), (2, 1));
+    }
 }

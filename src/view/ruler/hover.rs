@@ -3,9 +3,11 @@ use crate::model::{
     hover_info::{HoverInfo, HoverInfoE},
 };
 use anyhow::Result;
-use thousands::Separable;
 
-use super::ticks::{self, TickLabel, TriangleType};
+use super::{
+    format_sample_block_label,
+    ticks::{self, TickLabel, TriangleType},
+};
 
 pub(crate) fn ui_hover_interaction_and_tick(
     ui: &mut egui::Ui,
@@ -49,25 +51,12 @@ fn ui_hover_tick_label(
     hover_info: &HoverInfo,
 ) -> Option<egui::Rect> {
     let sample_ix = hover_info.sample_ix.round() as i64;
-    let (block_ix, in_block_offset) = block_coordinates(sample_ix, model.block_size);
     ticks::ui_tick_label(
         ui,
         hover_info.screen_pos.x,
-        TickLabel::Text(format!(
-            "s: {}\nb: {block_ix} + {in_block_offset}",
-            sample_ix.separate_with_commas()
-        )),
+        TickLabel::Text(format_sample_block_label(sample_ix, model.block_size)),
         None,
         true,
-    )
-}
-
-fn block_coordinates(ruler_sample: i64, block_size: u64) -> (i128, i128) {
-    let ruler_sample = i128::from(ruler_sample);
-    let block_size = i128::from(block_size.max(1));
-    (
-        ruler_sample.div_euclid(block_size),
-        ruler_sample.rem_euclid(block_size),
     )
 }
 
@@ -80,26 +69,4 @@ fn ui_hover_tick_line_triangle(ui: &mut egui::Ui, hover_info: &HoverInfo, color:
     }
     ticks::ui_tick_line(ui, screen_x, ticks::TICK_HEIGHT_LONG - 2.0, Some(color));
     ticks::ui_triangle(ui, screen_x, TriangleType::Full, color);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::block_coordinates;
-
-    #[test]
-    fn ruler_origin_is_block_zero_sample_zero() {
-        // Track placement already subtracts latency: source sample 512 with offset 512 is here.
-        assert_eq!(block_coordinates(0, 1024), (0, 0));
-    }
-
-    #[test]
-    fn sample_before_origin_uses_euclidean_block_coordinates() {
-        assert_eq!(block_coordinates(-1, 1024), (-1, 1023));
-    }
-
-    #[test]
-    fn block_coordinates_advance_from_ruler_origin() {
-        assert_eq!(block_coordinates(2048, 1024), (2, 0));
-        assert_eq!(block_coordinates(2049, 1024), (2, 1));
-    }
 }

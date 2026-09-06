@@ -154,6 +154,7 @@ impl View {
                         ui,
                         &mut self.model.user_config,
                         self.model.tracks.selection_info,
+                        self.model.block_size,
                         &mut self.model.actions,
                     );
                     ui.group(|ui| {

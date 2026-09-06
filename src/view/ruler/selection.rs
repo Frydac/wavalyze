@@ -1,8 +1,10 @@
 use crate::model::{self, selection_info::SelectionInfoE};
 use anyhow::Result;
-use thousands::Separable;
 
-use super::ticks::{self, TickLabel, TriangleType};
+use super::{
+    format_sample_block_label,
+    ticks::{self, TickLabel, TriangleType},
+};
 
 const SELECTION_EDGE_RENDER_SLACK_PX: f32 = 8.0;
 
@@ -38,7 +40,10 @@ pub fn ui_selection_interaction_and_tics(
         .map(|left_x| {
             ticks::ui_tick_line(ui, left_x, ticks::TICK_HEIGHT_LONG, None);
             ticks::ui_triangle(ui, left_x, TriangleType::Left, accent);
-            (left_x, TickLabel::Text(left_ix.separate_with_commas()))
+            (
+                left_x,
+                TickLabel::Text(format_sample_block_label(left_ix, model.block_size)),
+            )
         });
 
     let right_ix = selection_ix_range.end - 1;
@@ -49,7 +54,10 @@ pub fn ui_selection_interaction_and_tics(
         .map(|right_x| {
             ticks::ui_tick_line(ui, right_x, ticks::TICK_HEIGHT_LONG, None);
             ticks::ui_triangle(ui, right_x - 1.0, TriangleType::Right, accent);
-            (right_x, TickLabel::Text(right_ix.separate_with_commas()))
+            (
+                right_x,
+                TickLabel::Text(format_sample_block_label(right_ix, model.block_size)),
+            )
         });
 
     // If both labels are visible, try the paired placement logic first so they can resolve
@@ -60,7 +68,7 @@ pub fn ui_selection_interaction_and_tics(
                 && let Some(rect) = ticks::ui_tick_label(
                     ui,
                     left_x,
-                    TickLabel::SampleIx(left_ix),
+                    left_text.clone(),
                     Some(existing_rects.as_slice()),
                     true,
                 )
@@ -68,37 +76,29 @@ pub fn ui_selection_interaction_and_tics(
                 result.push(rect);
             } else if let Some(pair_rects) = ticks::ui_selection_tick_label_pair(
                 ui,
-                (left_x, left_text),
+                (left_x, left_text.clone()),
                 (right_x, right_text),
                 existing_rects.as_slice(),
             ) {
                 result.extend(pair_rects);
-            } else if let Some(rect) = ticks::ui_tick_label(
-                ui,
-                left_x,
-                TickLabel::SampleIx(left_ix),
-                Some(existing_rects.as_slice()),
-                true,
-            ) {
+            } else if let Some(rect) =
+                ticks::ui_tick_label(ui, left_x, left_text, Some(existing_rects.as_slice()), true)
+            {
                 result.push(rect);
             }
         }
-        (Some((left_x, _)), None) => {
-            if let Some(rect) = ticks::ui_tick_label(
-                ui,
-                left_x,
-                TickLabel::SampleIx(left_ix),
-                Some(existing_rects.as_slice()),
-                true,
-            ) {
+        (Some((left_x, left_text)), None) => {
+            if let Some(rect) =
+                ticks::ui_tick_label(ui, left_x, left_text, Some(existing_rects.as_slice()), true)
+            {
                 result.push(rect);
             }
         }
-        (None, Some((right_x, _))) => {
+        (None, Some((right_x, right_text))) => {
             if let Some(rect) = ticks::ui_tick_label(
                 ui,
                 right_x,
-                TickLabel::SampleIx(right_ix),
+                right_text,
                 Some(existing_rects.as_slice()),
                 true,
             ) {
@@ -113,7 +113,7 @@ pub fn ui_selection_interaction_and_tics(
 
 #[cfg(test)]
 mod tests {
-    use super::selection_edge_is_renderable;
+    use super::{super::format_sample_block_label, selection_edge_is_renderable};
 
     #[test]
     fn selection_edge_is_renderable_inside_rect() {
@@ -136,5 +136,13 @@ mod tests {
 
         assert!(!selection_edge_is_renderable(rect, -9.0));
         assert!(!selection_edge_is_renderable(rect, 109.0));
+    }
+
+    #[test]
+    fn selection_label_shows_sample_block_and_offset() {
+        assert_eq!(
+            format_sample_block_label(2_049, 1_024),
+            "s: 2,049\nb: 2 + 1"
+        );
     }
 }
