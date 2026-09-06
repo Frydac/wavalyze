@@ -5,7 +5,7 @@
 
 ![Wavalyze banner](doc/images/wavalyze_banner.png)
 
-**Wavalyze** is a WAV file viewer with the goal of becoming a analysis and diff tool useful for (my personal) audio software development.
+**Wavalyze** is a WAV file viewer with the goal of becoming an analysis and diff tool useful for (my personal) audio software development.
 
 I started this project to learn about Rust and WebAssembly, and to have a tool that is faster to do
 what I want to do than the freely available alternatives.
