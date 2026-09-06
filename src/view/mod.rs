@@ -372,20 +372,22 @@ impl View {
 
     fn ui_top_panel_tool_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
-            if ui.button("zoom full x").clicked() {
+            if ui.button("show full x").clicked() {
                 self.model.actions.push(Action::ZoomToFull);
             }
-            let mut equal_height_layout = self.model.tracks.equal_height_layout;
-            if ui
-                .checkbox(&mut equal_height_layout, "even track heights")
-                .changed()
-            {
-                self.model
-                    .actions
-                    .push(Action::SetEqualHeightLayout(equal_height_layout));
-            }
-            if ui.button("recenter y").clicked() {
+            if ui.button("reset all y").clicked() {
                 self.model.actions.push(Action::RecenterYAll);
+            }
+            {
+                let mut equal_height_layout = self.model.tracks.equal_height_layout;
+                if ui
+                    .checkbox(&mut equal_height_layout, "even track heights")
+                        .changed()
+                {
+                    self.model
+                        .actions
+                        .push(Action::SetEqualHeightLayout(equal_height_layout));
+                }
             }
             if cfg!(target_arch = "wasm32") && ui.button("load demo").clicked() {
                 self.model.actions.push(Action::LoadDemo);
