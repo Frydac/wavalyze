@@ -76,6 +76,7 @@ pub fn ui_hover(
                 screen_pos: pos.into(),
                 sample_ix,
                 sample_pos_x,
+                track_id: Some(track_id),
             })));
         let scroll_zoom_speed = ui.ctx().options(|o| o.input_options.scroll_zoom_speed);
         ui.ctx().input(|i| {

@@ -69,6 +69,20 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                 );
             });
         });
+        ui.group(|ui| {
+            ui.label("Processing");
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("Default block size");
+                ui.add(
+                    egui::DragValue::new(&mut config.default_block_size)
+                        .speed(1.0)
+                        .range(1..=u64::MAX)
+                        .suffix(" samples"),
+                )
+                .on_hover_text("Block size used when the app next starts");
+            });
+        });
         ui.horizontal(|ui| {
             ui.label("Value Skew: ");
             ui.add(

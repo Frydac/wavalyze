@@ -13,10 +13,16 @@ what I want to do than the freely available alternatives.
 ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
 
 
-## WASM Web Demo
+## WASM Web application
 
 A WebAssembly build of the Wavalyze application hosted on cloudflare:  
 [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
+
+It loads a few tracks with generated waveform/metadata to quickly get a feel for the app.   
+It should be fully functional, except it doesn't save the configuration options.  
+You can add `.wav` files by drag-and-drop or by using the File open dialog.  
+I don't use this version, so some keymaps and mouse interactions might not work as expected.
+
 
 ## Docs
 

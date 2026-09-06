@@ -64,6 +64,9 @@ pub enum Action {
     /// Set x-zoom to sample-level detail, centered on the right edge of the current selection.
     ZoomToSelectionRightEdge,
 
+    /// Set global processing block size, clamped to at least one sample.
+    SetBlockSize(u64),
+
     /// Set a file's absolute sample offset and update channel tracks inheriting it.
     SetFileSampleIxOffset {
         file_id: FileId,
@@ -339,6 +342,9 @@ impl Action {
                 model
                     .tracks
                     .zoom_to_selection_edge(&model.audio, SelectionEdge::Right)?;
+            }
+            Action::SetBlockSize(block_size) => {
+                model.set_block_size(block_size);
             }
             Action::SetFileSampleIxOffset {
                 file_id,

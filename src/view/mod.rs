@@ -149,15 +149,29 @@ impl View {
             .resizable(false)
             .min_height(0.0)
             .show(ctx, |ui| {
-                selection_info::ui_selection_info_toolbar(
-                    ui,
-                    &mut self.model.user_config,
-                    self.model.tracks.selection_info,
-                    &mut self.model.actions,
-                );
-                // ui.vertical_centered(|ui| {
-                //     ui.heading("Bottom Panel");
-                // });
+                ui.horizontal(|ui| {
+                    selection_info::ui_selection_info_toolbar(
+                        ui,
+                        &mut self.model.user_config,
+                        self.model.tracks.selection_info,
+                        &mut self.model.actions,
+                    );
+                    ui.group(|ui| {
+                        ui.heading("Block size");
+                        let mut block_size = self.model.block_size;
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut block_size)
+                                    .speed(1.0)
+                                    .range(1..=u64::MAX)
+                                    .suffix(" samples"),
+                            )
+                            .changed()
+                        {
+                            self.model.actions.push(Action::SetBlockSize(block_size));
+                        }
+                    });
+                });
             });
     }
 

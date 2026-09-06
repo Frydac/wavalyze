@@ -1,10 +1,11 @@
-use crate::pos;
+use crate::{model::track::TrackId, pos};
 
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct HoverInfo {
     pub screen_pos: pos::Pos,
     pub sample_ix: f64,
     pub sample_pos_x: Option<f64>,
+    pub track_id: Option<TrackId>,
 }
 
 impl HoverInfo {

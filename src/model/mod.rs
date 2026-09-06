@@ -44,6 +44,8 @@ use std::sync::mpsc::{Receiver, Sender};
 #[derive(Debug)]
 pub struct Model {
     pub user_config: Config,
+    /// Global 'processing' block size for block-coordinate display.
+    pub block_size: u64,
     pub files: SlotMap<FileId, wav::file::File>,
     pub files_order: Vec<FileId>,
     pub audio: audio::manager::AudioManager,
@@ -72,8 +74,11 @@ pub struct Model {
 impl Default for Model {
     fn default() -> Self {
         let (actions_tx, actions_rx) = std::sync::mpsc::channel();
+        let user_config = Config::default();
+        let block_size = user_config.default_block_size.max(1);
         Self {
-            user_config: Config::default(),
+            user_config,
+            block_size,
             files: SlotMap::default(),
             files_order: Vec::new(),
             audio: audio::manager::AudioManager::default(),
@@ -99,8 +104,13 @@ impl Model {
         let mut res = Self::default();
         res.tracks.width_info = user_config.tracks_width_info;
         res.tracks.equal_height_layout = user_config.track.equal_height_layout_by_default;
+        res.block_size = user_config.default_block_size.max(1);
         res.user_config = user_config;
         res
+    }
+
+    pub fn set_block_size(&mut self, block_size: u64) {
+        self.block_size = block_size.max(1);
     }
 
     /// Insert a file into the slotmap and append it to the display/order vec. The two fields
@@ -231,7 +241,7 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use super::Model;
+    use super::{Action, Model};
     use crate::audio::thumbnail::ThumbnailE;
     use crate::model::test_support::{add_buffer, make_file};
 
@@ -243,6 +253,34 @@ mod tests {
         let model = Model::with_user_config(config);
 
         assert!(!model.tracks.equal_height_layout);
+    }
+
+    #[test]
+    fn block_size_uses_validated_configured_startup_default() {
+        let config = crate::model::Config {
+            default_block_size: 2048,
+            ..crate::model::Config::default()
+        };
+        assert_eq!(Model::with_user_config(config).block_size, 2048);
+
+        let config = crate::model::Config {
+            default_block_size: 0,
+            ..crate::model::Config::default()
+        };
+        assert_eq!(Model::with_user_config(config).block_size, 1);
+    }
+
+    #[test]
+    fn set_block_size_action_clamps_zero() {
+        let mut model = Model::new();
+
+        model.actions.push(Action::SetBlockSize(0));
+        model.process_actions().unwrap();
+        assert_eq!(model.block_size, 1);
+
+        model.actions.push(Action::SetBlockSize(4096));
+        model.process_actions().unwrap();
+        assert_eq!(model.block_size, 4096);
     }
 
     #[test]

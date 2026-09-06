@@ -15,6 +15,8 @@ pub struct Config {
     pub show_hover_info: bool,
 
     pub tracks_width_info: f32,
+    /// Block size assigned to a new app session.
+    pub default_block_size: u64,
     /// Show the per-track amplitude ruler (right-most slot in the track side panel).
     #[serde(default = "default_true")]
     pub show_amplitude_ruler: bool,
@@ -220,6 +222,7 @@ impl Default for Config {
             navigation: NavigationConfig::default(),
             show_hover_info: true,
             tracks_width_info: 250.0,
+            default_block_size: 1024,
             show_amplitude_ruler: true,
             show_db_ruler: false,
             round_minmax_waveform_to_pixel_center: true,
@@ -329,6 +332,19 @@ mod tests {
     #[test]
     fn equal_height_layout_is_enabled_by_default() {
         assert!(Config::default().track.equal_height_layout_by_default);
+    }
+
+    #[test]
+    fn default_block_size_is_1024() {
+        assert_eq!(Config::default().default_block_size, 1024);
+    }
+
+    #[test]
+    fn old_config_without_default_block_size_uses_default() {
+        let config: Config =
+            toml::from_str("show_hover_info = true\ntracks_width_info = 120.0\n").unwrap();
+
+        assert_eq!(config.default_block_size, 1024);
     }
 
     #[test]
