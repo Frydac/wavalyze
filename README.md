@@ -19,6 +19,7 @@ A WebAssembly build of the Wavalyze application hosted on cloudflare:
 
 ## Docs
 
+- [Mouse navigation](doc/mouse_navigation.md)
 - [CLI arguments](doc/cli_args.md)
 - [Cloudflare deploy notes](doc/cloudflare_deploy.md)
 

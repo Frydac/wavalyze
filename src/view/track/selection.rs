@@ -283,9 +283,12 @@ pub fn ui_selection(
     track_id: TrackId,
     waveform_rect: egui::Rect,
     response: &egui::Response,
+    interaction_blocked: bool,
     theme_colors: &ThemeColors,
 ) {
-    ui_selection_interaction(ui, model, track_id, waveform_rect, response);
+    if !interaction_blocked {
+        ui_selection_interaction(ui, model, track_id, waveform_rect, response);
+    }
 
     let Some((_sel_ix_rng, screen_x_rng)) = selection_screen_x_range(model) else {
         return;

@@ -22,6 +22,14 @@ use crate::{
 };
 use anyhow::Result;
 
+#[derive(Clone, Copy, Default)]
+struct RectangleZoomState {
+    origin: egui::Pos2,
+    current: egui::Pos2,
+    dragged: bool,
+    cancelled: bool,
+}
+
 pub fn ui_waveform_canvas(
     ui: &mut egui::Ui,
     model: &mut Model,
@@ -43,12 +51,124 @@ pub fn ui_waveform_canvas(
         ui.id().with(("waveform_interaction", track_id)),
         egui::Sense::click_and_drag(),
     );
-    handle_pan_drag(ui, model, track_id, &waveform_response);
+    let (rectangle_zoom_owns_pointer, rectangle_zoom_rect) =
+        handle_rectangle_zoom(ui, model, track_id, rect, &waveform_response);
+    if !rectangle_zoom_owns_pointer {
+        handle_pan_drag(ui, model, track_id, &waveform_response);
+    }
     ui_waveform(ui, model, track_id, rect, theme_colors)?;
     hover::ui_hover(ui, model, track_id, rect, theme_colors);
-    selection::ui_selection(ui, model, track_id, rect, &waveform_response, theme_colors);
+    selection::ui_selection(
+        ui,
+        model,
+        track_id,
+        rect,
+        &waveform_response,
+        rectangle_zoom_owns_pointer,
+        theme_colors,
+    );
+    if let Some(zoom_rect) = rectangle_zoom_rect {
+        ui.painter().rect(
+            zoom_rect,
+            0.0,
+            theme_colors.waveform_selection_fill,
+            egui::Stroke::new(1.0, theme_colors.accent),
+            egui::epaint::StrokeKind::Inside,
+        );
+    }
 
     Ok(())
+}
+
+fn handle_rectangle_zoom(
+    ui: &egui::Ui,
+    model: &mut Model,
+    track_id: TrackId,
+    canvas: egui::Rect,
+    response: &egui::Response,
+) -> (bool, Option<egui::Rect>) {
+    let state_id = response.id.with("rectangle_zoom_state");
+    let (
+        modifiers,
+        primary_pressed,
+        primary_down,
+        primary_released,
+        secondary_pressed,
+        pointer_pos,
+    ) = ui.input(|i| {
+        (
+            i.modifiers,
+            i.pointer.primary_pressed(),
+            i.pointer.primary_down(),
+            i.pointer.primary_released(),
+            i.pointer.secondary_pressed(),
+            i.pointer.latest_pos(),
+        )
+    });
+    let mut state = ui.data(|data| data.get_temp::<RectangleZoomState>(state_id));
+
+    if state.is_none() && primary_pressed && modifiers.ctrl {
+        state = ui
+            .input(|i| i.pointer.press_origin())
+            .filter(|origin| canvas.contains(*origin))
+            .map(|origin| RectangleZoomState {
+                origin,
+                current: origin,
+                dragged: false,
+                cancelled: false,
+            });
+    }
+
+    let Some(mut state) = state else {
+        return (false, None);
+    };
+
+    if let Some(pointer_pos) = pointer_pos {
+        state.current = canvas.clamp(pointer_pos);
+    }
+    state.dragged |= response.dragged_by(egui::PointerButton::Primary);
+    state.cancelled |= secondary_pressed;
+
+    if primary_released || !primary_down {
+        ui.data_mut(|data| {
+            data.remove_temp::<RectangleZoomState>(state_id);
+        });
+        if primary_released && state.dragged && !state.cancelled {
+            if let Some(actions) =
+                rectangle_zoom_actions(track_id, canvas, state.origin, state.current)
+            {
+                model.actions.extend(actions);
+            }
+        }
+        return (true, None);
+    }
+
+    ui.data_mut(|data| data.insert_temp(state_id, state));
+    let zoom_rect = (state.dragged && !state.cancelled)
+        .then(|| egui::Rect::from_two_pos(state.origin, state.current));
+    (true, zoom_rect)
+}
+
+fn rectangle_zoom_actions(
+    track_id: TrackId,
+    canvas: egui::Rect,
+    origin: egui::Pos2,
+    current: egui::Pos2,
+) -> Option<[Action; 2]> {
+    let zoom_rect = egui::Rect::from_two_pos(origin, current);
+    zoom_rect.is_positive().then(|| {
+        [
+            Action::ZoomX {
+                nr_pixels: zoom_rect.width() - canvas.width(),
+                center_x: zoom_rect.center().x,
+            },
+            Action::ZoomY {
+                track_id,
+                nr_pixels: zoom_rect.height() - canvas.height(),
+                center_y: zoom_rect.center().y,
+            },
+        ]
+    })
 }
 
 fn handle_pan_drag(
@@ -373,7 +493,66 @@ fn draw_peak_sample_grid_line(
 
 #[cfg(test)]
 mod tests {
-    use super::minmax_column_stroke_width;
+    use super::{minmax_column_stroke_width, rectangle_zoom_actions};
+    use crate::model::{Action, track::TrackId};
+
+    #[test]
+    fn rectangle_zoom_actions_normalize_reverse_drag_geometry() {
+        let canvas = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1000.0, 600.0));
+        let track_id = TrackId::default();
+        let actions = rectangle_zoom_actions(
+            track_id,
+            canvas,
+            egui::pos2(800.0, 400.0),
+            egui::pos2(600.0, 200.0),
+        )
+        .unwrap();
+
+        let [
+            Action::ZoomX {
+                nr_pixels: x_pixels,
+                center_x,
+            },
+            Action::ZoomY {
+                track_id: zoom_track_id,
+                nr_pixels: y_pixels,
+                center_y,
+            },
+        ] = actions
+        else {
+            panic!("unexpected rectangle zoom actions");
+        };
+        assert_eq!(x_pixels, -800.0);
+        assert_eq!(center_x, 700.0);
+        assert_eq!(y_pixels, -400.0);
+        assert_eq!(center_y, 300.0);
+        assert_eq!(zoom_track_id, track_id);
+    }
+
+    #[test]
+    fn rectangle_zoom_actions_reject_zero_size_rectangles() {
+        let canvas = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0));
+        let track_id = TrackId::default();
+
+        assert!(
+            rectangle_zoom_actions(
+                track_id,
+                canvas,
+                egui::pos2(100.0, 100.0),
+                egui::pos2(100.0, 200.0),
+            )
+            .is_none()
+        );
+        assert!(
+            rectangle_zoom_actions(
+                track_id,
+                canvas,
+                egui::pos2(100.0, 100.0),
+                egui::pos2(200.0, 100.0),
+            )
+            .is_none()
+        );
+    }
 
     #[test]
     fn minmax_column_stroke_width_covers_fractional_scale_pixels() {
