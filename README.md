@@ -5,9 +5,10 @@
 
 ![Wavalyze banner](doc/images/wavalyze_banner.png)
 
-**Wavalyze** is a WAV file viewer with the goal of becoming a analysis and diff tool for (my) audio software development.
+**Wavalyze** is a WAV file viewer with the goal of becoming a analysis and diff tool useful for (my personal) audio software development.
 
-It is a personal Rust learning project, and curious how well wasm works in a usecase like this.
+I started this project to learn about Rust and WebAssembly, and to have a tool that is faster to do
+what I want to do than the freely available alternatives.
 
 ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
 
@@ -26,13 +27,20 @@ A WebAssembly build of the Wavalyze application hosted on cloudflare:
 ## Features
 
 - Multi-file waveform viewing
-- Zoom and pan over x and y axes
-- Sample-level hover details
-- Diff files/tracks, with offset adjustment
-- Calculate RMS value of selection
-- Calculate peak value of selection + visual indication
-- Native and browser builds
 - Fast startup for quick file inspection
+- Zoom and pan over x and y axes with multiple types of controls
+   - see [Mouse navigation](doc/mouse_navigation.md)
+- Sample-level hover details
+- Calculate track statistics (dB-RMS, peak) over a selection
+  - Visual indication of peak value in selection
+- Diff files/tracks, with offset adjustment
+- Show/hide tracks with auto adjusting track height for filling the screen
+- Native and browser builds
+
+Non-goals:
+
+- Audio playback (simple stereo playback likely at some point)
+- Audio editing (probably never)
 
 ## Installation
 
