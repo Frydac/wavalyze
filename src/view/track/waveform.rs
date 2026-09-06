@@ -133,12 +133,13 @@ fn handle_rectangle_zoom(
         ui.data_mut(|data| {
             data.remove_temp::<RectangleZoomState>(state_id);
         });
-        if primary_released && state.dragged && !state.cancelled {
-            if let Some(actions) =
+        if primary_released
+            && state.dragged
+            && !state.cancelled
+            && let Some(actions) =
                 rectangle_zoom_actions(track_id, canvas, state.origin, state.current)
-            {
-                model.actions.extend(actions);
-            }
+        {
+            model.actions.extend(actions);
         }
         return (true, None);
     }

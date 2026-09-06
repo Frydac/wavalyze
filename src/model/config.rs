@@ -84,6 +84,8 @@ pub struct NavigationConfig {
     pub zoom_x_factor: f32,
     /// Zoom in/out in sample value.
     pub zoom_y_factor: f32,
+    /// Height in pixels around sample value zero where ruler zoom anchors to zero. Zero disables it.
+    pub zoom_y_zero_deadzone_height: f32,
     pub invert_pan_x: bool,
     pub invert_pan_y: bool,
     pub invert_zoom_x: bool,
@@ -99,6 +101,7 @@ impl Default for NavigationConfig {
             // Zoom factors default to 4.0 (the previous `zoom_x_scroll_factor` default).
             zoom_x_factor: 4.0,
             zoom_y_factor: 4.0,
+            zoom_y_zero_deadzone_height: 16.0,
             invert_pan_x: false,
             invert_pan_y: false,
             invert_zoom_x: false,
@@ -341,6 +344,7 @@ mod tests {
             toml::from_str("show_hover_info = true\ntracks_width_info = 120.0\n").unwrap();
 
         assert_eq!(config.navigation, super::NavigationConfig::default());
+        assert_eq!(config.navigation.zoom_y_zero_deadzone_height, 16.0);
     }
 
     #[test]

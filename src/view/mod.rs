@@ -382,7 +382,7 @@ impl View {
                 let mut equal_height_layout = self.model.tracks.equal_height_layout;
                 if ui
                     .checkbox(&mut equal_height_layout, "even track heights")
-                        .changed()
+                    .changed()
                 {
                     self.model
                         .actions

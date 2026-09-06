@@ -57,6 +57,17 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                         ui.end_row();
                     }
                 });
+            ui.horizontal(|ui| {
+                ui.label("Zoom Y zero deadzone").on_hover_text(
+                    "Ruler height around sample value zero where Ctrl-scroll zoom stays anchored to zero. Set to 0 to disable.",
+                );
+                ui.add(
+                    egui::DragValue::new(&mut nav.zoom_y_zero_deadzone_height)
+                        .speed(1.0)
+                        .range(0.0..=200.0)
+                        .suffix(" px"),
+                );
+            });
         });
         ui.horizontal(|ui| {
             ui.label("Value Skew: ");

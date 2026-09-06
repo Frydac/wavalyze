@@ -480,6 +480,7 @@ fn ui_rulers(
     let theme_colors = model.user_config.active_theme_colors(ui.visuals());
     let pan_y_mult = model.user_config.navigation.pan_y_mult();
     let zoom_y_mult = model.user_config.navigation.zoom_y_mult();
+    let zero_deadzone_height = model.user_config.navigation.zoom_y_zero_deadzone_height;
     let display_scale = model.user_config.value_display_scale;
 
     if let Some(rect) = db_rect {
@@ -496,6 +497,7 @@ fn ui_rulers(
             audio: &model.audio,
             pan_y_mult,
             zoom_y_mult,
+            zero_deadzone_height,
             display_scale,
         };
         db_ruler::ui(
@@ -525,6 +527,7 @@ fn ui_rulers(
             audio: &model.audio,
             pan_y_mult,
             zoom_y_mult,
+            zero_deadzone_height,
             display_scale,
         };
         value_ruler2::ui(

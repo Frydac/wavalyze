@@ -49,6 +49,20 @@ pub fn add_row_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> eg
     .inner
 }
 
+/// Build the visible part of a ruler's zero-centered zoom deadzone.
+pub fn ruler_zero_deadzone(rect: egui::Rect, zero_y: f32, height: f32) -> Option<egui::Rect> {
+    if height <= 0.0 || !height.is_finite() || zero_y < rect.top() || zero_y > rect.bottom() {
+        return None;
+    }
+
+    let deadzone = egui::Rect::from_center_size(
+        egui::pos2(rect.center().x, zero_y),
+        egui::vec2(rect.width(), height),
+    )
+    .intersect(rect);
+    deadzone.is_positive().then_some(deadzone)
+}
+
 /// Convert egui's multiplicative zoom factor back into the wheel-like delta used by the app.
 pub fn zoom_delta_to_scroll_delta(zoom_delta: f32, scroll_zoom_speed: f32) -> f32 {
     if zoom_delta == 1.0 || scroll_zoom_speed == 0.0 {
@@ -60,7 +74,43 @@ pub fn zoom_delta_to_scroll_delta(zoom_delta: f32, scroll_zoom_speed: f32) -> f3
 
 #[cfg(test)]
 mod tests {
-    use super::zoom_delta_to_scroll_delta;
+    use super::{ruler_zero_deadzone, zoom_delta_to_scroll_delta};
+
+    fn ruler_rect() -> egui::Rect {
+        egui::Rect::from_min_max(egui::pos2(10.0, 20.0), egui::pos2(110.0, 120.0))
+    }
+
+    #[test]
+    fn ruler_zero_deadzone_uses_configured_height_and_full_width() {
+        let deadzone = ruler_zero_deadzone(ruler_rect(), 70.0, 16.0).unwrap();
+
+        assert_eq!(deadzone.left(), 10.0);
+        assert_eq!(deadzone.right(), 110.0);
+        assert_eq!(deadzone.top(), 62.0);
+        assert_eq!(deadzone.bottom(), 78.0);
+    }
+
+    #[test]
+    fn ruler_zero_deadzone_clips_to_ruler() {
+        let deadzone = ruler_zero_deadzone(ruler_rect(), 22.0, 16.0).unwrap();
+
+        assert_eq!(deadzone.top(), 20.0);
+        assert_eq!(deadzone.bottom(), 30.0);
+    }
+
+    #[test]
+    fn zero_height_disables_ruler_zero_deadzone() {
+        assert_eq!(ruler_zero_deadzone(ruler_rect(), 70.0, 0.0), None);
+    }
+
+    #[test]
+    fn ruler_zero_deadzone_hit_detection_uses_visible_rectangle() {
+        let deadzone = ruler_zero_deadzone(ruler_rect(), 70.0, 16.0).unwrap();
+
+        assert!(deadzone.contains(egui::pos2(60.0, 70.0)));
+        assert!(!deadzone.contains(egui::pos2(60.0, 79.0)));
+        assert!(!deadzone.contains(egui::pos2(9.0, 70.0)));
+    }
 
     #[test]
     fn zoom_delta_round_trips_to_scroll_delta() {

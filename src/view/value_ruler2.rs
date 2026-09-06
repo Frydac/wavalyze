@@ -6,7 +6,7 @@ use crate::model::ruler::{
 };
 use crate::model::track::Track;
 use crate::model::{Action, track::TrackId};
-use crate::view::util::zoom_delta_to_scroll_delta;
+use crate::view::util::{ruler_zero_deadzone, zoom_delta_to_scroll_delta};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
 
 pub const NR_PIXELS_PER_VALUE_TICK: f32 = 50.0;
@@ -17,6 +17,7 @@ pub struct ValueRulerContext<'a> {
     pub audio: &'a crate::audio::manager::AudioManager,
     pub pan_y_mult: f32,
     pub zoom_y_mult: f32,
+    pub zero_deadzone_height: f32,
     pub display_scale: ValueDisplayScale,
 }
 
@@ -74,7 +75,22 @@ pub fn ui(
         return;
     }
 
+    let zero_y = sample_value_to_screen_y(0.0, val_rng, rect.into(), ctx.display_scale);
+    let active_deadzone = zero_y
+        .and_then(|zero_y| ruler_zero_deadzone(rect, zero_y, ctx.zero_deadzone_height))
+        .filter(|deadzone| {
+            ui.ctx().input(|i| {
+                i.modifiers.ctrl
+                    && i.pointer
+                        .hover_pos()
+                        .is_some_and(|pos| deadzone.contains(pos))
+            })
+        });
+
     let painter = ui.painter();
+    if let Some(deadzone) = active_deadzone {
+        painter.rect_filled(deadzone, 0.0, theme_colors.waveform_selection_fill);
+    }
     let border_stroke = ui.style().visuals.widgets.noninteractive.bg_stroke;
     // Match the time ruler tick color exactly so both rulers read as the same UI element.
     let tick_color = ui.style().visuals.text_color();
@@ -124,7 +140,7 @@ pub fn ui(
             nr_pixels: delta.y,
         });
     }
-    handle_value_ruler_scroll(ui, rect, track_id, ctx);
+    handle_value_ruler_scroll(ui, rect, track_id, active_deadzone.and(zero_y), ctx);
 
     let mut occupied: Vec<Rect> = Vec::new();
     let hover_style = HoverValueStyle {
@@ -158,6 +174,7 @@ fn handle_value_ruler_scroll(
     ui: &egui::Ui,
     rect: Rect,
     track_id: TrackId,
+    zero_anchor_y: Option<f32>,
     ctx: &mut ValueRulerContext<'_>,
 ) {
     let hovered = ui
@@ -189,9 +206,11 @@ fn handle_value_ruler_scroll(
         ctx.actions.push(Action::ZoomY {
             track_id,
             nr_pixels: zoom_scroll_delta * ctx.zoom_y_mult,
-            center_y: hover_pos
-                .map(|p: egui::Pos2| p.y)
-                .unwrap_or(rect.center().y),
+            center_y: zero_anchor_y.unwrap_or_else(|| {
+                hover_pos
+                    .map(|p: egui::Pos2| p.y)
+                    .unwrap_or(rect.center().y)
+            }),
         });
     }
 }
