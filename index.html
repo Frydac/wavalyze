@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<!-- Disable zooming: -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+<head>
+    <!-- change this to your project name -->
+    <title>wavalyze</title>
+
+    <script type="module">
+        window.addEventListener("TrunkApplicationStarted", async (event) => {
+            const waitForDom = async () => {
+                if (document.readyState !== "loading") {
+                    return;
+                }
+                await new Promise((resolve) => {
+                    document.addEventListener("DOMContentLoaded", resolve, { once: true });
+                });
+            };
+
+            const setLoadingFailure = (message) => {
+                const loadingText = document.getElementById("loading_text");
+                if (loadingText) {
+                    loadingText.innerHTML = `<p>${message}</p>`;
+                }
+            };
+
+            try {
+                await waitForDom();
+                const bindings = window.wasmBindings;
+                if (!bindings?.initThreadPool || !bindings?.startWebApp) {
+                    throw new Error("threaded wasm bindings were not initialized");
+                }
+
+                const threadCount = Math.max(1, navigator.hardwareConcurrency || 1);
+                await bindings.initThreadPool(threadCount);
+                await bindings.startWebApp();
+            } catch (error) {
+                console.error("Failed to start threaded wasm app", error);
+                setLoadingFailure("Failed to start the web app. See the developer console for details.");
+            }
+        });
+    </script>
+
+    <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
+    
+<script type="module">
+import init, * as bindings from 'https://frydac.github.io/wavalyze/wavalyze-bb844ef44a04f999.js';
+const wasm = await init({ module_or_path: 'https://frydac.github.io/wavalyze/wavalyze-bb844ef44a04f999_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+    <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
+    <base href="https://frydac.github.io/wavalyze/" />
+
+    <link rel="icon" href="https://frydac.github.io/wavalyze/favicon-f402c8741ce815ec.ico" integrity="sha384-jNOAE6jgE03LznIulCTVP6BH4NrTuROFjP9wj8bV1UUMJKtZAvstFpIAP3PDcFpx"/>
+    
+    
+    
+    
+    
+    
+    
+
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icon_ios_touch_192.png">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
+
+    <style>
+        html {
+            /* Remove touch delay: */
+            touch-action: manipulation;
+        }
+
+        body {
+            /* Light mode background color for what is not covered by the egui canvas,
+            or where the egui canvas is translucent. */
+            background: #909090;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                /* Dark mode background color for what is not covered by the egui canvas,
+                or where the egui canvas is translucent. */
+                background: #404040;
+            }
+        }
+
+        /* Allow canvas to fill entire web page: */
+        html,
+        body {
+            overflow: hidden;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Make canvas fill entire document: */
+        canvas {
+            margin-right: auto;
+            margin-left: auto;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .centered {
+            margin-right: auto;
+            margin-left: auto;
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #f0f0f0;
+            font-size: 24px;
+            font-family: Ubuntu-Light, Helvetica, sans-serif;
+            text-align: center;
+        }
+
+        /* ---------------------------------------------- */
+        /* Loading animation from https://loading.io/css/ */
+        .lds-dual-ring {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+        }
+
+        .lds-dual-ring:after {
+            content: " ";
+            display: block;
+            width: 24px;
+            height: 24px;
+            margin: 0px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            border-color: #fff transparent #fff transparent;
+            animation: lds-dual-ring 1.2s linear infinite;
+        }
+
+        @keyframes lds-dual-ring {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+<link rel="modulepreload" href="https://frydac.github.io/wavalyze/wavalyze-bb844ef44a04f999.js" crossorigin="anonymous" integrity="sha384-6K8gpq69Dhfr6jZoqet0+jPdhntNnb8XjCPPYMNuqjcmmxZzaXRyQr0ttIQzmwzK"><link rel="modulepreload" href="https://frydac.github.io/wavalyze/snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.no-bundler.js" crossorigin="anonymous" integrity="sha384-j7NcrpDFbLLPOa0yBgc2md2vCVtdbqgxYFV02430LDxCtY6gatc3oC7MI8sBFulw"><link rel="preload" href="https://frydac.github.io/wavalyze/wavalyze-bb844ef44a04f999_bg.wasm" crossorigin="anonymous" integrity="sha384-t7+386qoGZYYkcoEBuTK+I4sxKiqz2mrvgSlucpLuyOa/6lhxZrdYUwyN7024rUu" as="fetch" type="application/wasm"></head>
+
+<body>
+    <!-- The WASM code will resize the canvas dynamically -->
+    <!-- the id is hardcoded in main.rs . so, make sure both match. -->
+    <canvas id="the_canvas_id"></canvas>
+
+    <!-- the loading spinner will be removed in main.rs -->
+    <div class="centered" id="loading_text">
+        <p style="font-size:16px">
+            Loading…
+        </p>
+        <div class="lds-dual-ring"></div>
+    </div>
+
+    <!--Register Service Worker. this will cache the wasm / js scripts for offline use (for PWA functionality). -->
+    <script>
+        // We disable caching during development so that we always view the latest version.
+        if ('serviceWorker' in navigator && window.location.hash !== "#dev") {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+            });
+        }
+    </script>
+</body>
+
+</html>
+
+<!-- Powered by egui: https://github.com/emilk/egui/ -->
