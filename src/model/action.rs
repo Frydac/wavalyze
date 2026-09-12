@@ -426,6 +426,7 @@ impl Action {
             }
             Action::RecenterYAll => {
                 model.tracks.recenter_all_value_ranges()?;
+                model.user_config.value_display_scale.skew_factor = 0.0;
             }
             Action::ZoomY {
                 track_id,

@@ -15,7 +15,6 @@ use crate::{
 pub struct Args {
     /// Set the log level.
     /// Examples: "error", "warn", "info", "debug", "trace"
-    /// Can also be a more complex filter, e.g., "wavalyze=debug,eframe=info"
     #[arg(long, global = true)]
     pub log_level: Option<String>,
 

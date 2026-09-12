@@ -129,7 +129,17 @@ Sets the tracing/log level. Examples:
 
 ```bash
 wavalyze --log-level debug song.wav
-wavalyze --log-level wavalyze=debug,eframe=info song.wav
+WAVALYZE_LOG=trace wavalyze song.wav
+```
+
+`WAVALYZE_LOG` changes only Wavalyze logging. `--log-level` takes precedence when both are set.
+Without either, Wavalyze defaults to `info`, while `egui` and `eframe` default to `warn`.
+
+When set, `RUST_LOG` overrides all these settings and controls every package:
+
+```bash
+RUST_LOG=trace wavalyze song.wav
+RUST_LOG=wavalyze=trace,eframe=debug wavalyze song.wav
 ```
 
 ## Examples
