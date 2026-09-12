@@ -125,6 +125,8 @@ impl View {
             tracing::error!("{:#?}", e);
             tracing::error!("{}", e.backtrace());
         }
+        // Render globally: pending diff may come from either sidebar or central-panel drops.
+        tracks_panel::show_diff_menu(ctx, &mut self.model);
 
         self.ui_loading_modal(ctx);
         diff_pairing::ui_modal(ctx, &mut self.model);

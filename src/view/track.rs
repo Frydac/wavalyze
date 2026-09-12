@@ -1,12 +1,20 @@
+//! Central-panel track rendering.
+//!
+//! Builds fixed geometry for one track, renders sidebar/header/waveform/resize components, then
+//! registers track-wide drag/drop behavior. UI events enqueue model actions instead of mutating
+//! track state directly.
+
 use crate::{
     model::{
         Action, Model,
         track::{self, TrackId},
+        track_selection::TrackSelectionMode,
     },
     view::{db_ruler, grid::KeyValueGrid, value_ruler2},
 };
 use anyhow::Result;
 
+mod drag_drop;
 mod hover;
 // The geometry types are introduced separately from their rendering integration.
 #[allow(dead_code)]
@@ -298,6 +306,9 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId) -> Result<()>
                 .push(Action::SetTracksHeight { height: new_height });
         }
     }
+
+    // Register last: drop feedback must be painted above every track component.
+    drag_drop::handle_track_drop(&mut track_ui, model, track_id, track_rect);
 
     Ok(())
 }
@@ -597,10 +608,16 @@ pub fn ui_header(
     header_rect: egui::Rect,
 ) -> Result<()> {
     ui.set_clip_rect(ui.clip_rect().intersect(header_rect));
+    let selected = model.tracks.track_selection.is_selected(track_id);
+    let fill = if selected {
+        ui.visuals().selection.bg_fill
+    } else {
+        egui::Color32::TRANSPARENT
+    };
     ui.painter().rect(
         header_rect,
         0.0,
-        egui::Color32::TRANSPARENT,
+        fill,
         ui.style().visuals.window_stroke(),
         egui::epaint::StrokeKind::Inside,
     );
@@ -639,7 +656,11 @@ pub fn ui_header(
         .get(&egui::TextStyle::Body)
         .cloned()
         .unwrap_or_else(|| egui::FontId::proportional(8.0));
-    let color = ui.style().visuals.text_color();
+    let color = if selected {
+        ui.visuals().selection.stroke.color
+    } else {
+        ui.visuals().text_color()
+    };
     let padding = ui.spacing().button_padding;
     let item_spacing = ui.spacing().item_spacing.x.max(2.0);
     let text_size = ui
@@ -681,16 +702,37 @@ pub fn ui_header(
     );
     ui.painter().galley(text_pos, galley, color);
 
+    let response = ui.interact(
+        label_rect,
+        ui.id().with(("header_label", track_id)),
+        egui::Sense::click_and_drag(),
+    );
+    select_track_on_click(ui, &response, &mut model.actions, track_id);
+    drag_drop::handle_header_drag(ui, &response, model, track_id);
     if let Some(hover_info) = hover_info {
-        let response = ui.interact(
-            label_rect,
-            ui.id().with(("header_label", track_id)),
-            egui::Sense::hover(),
-        );
         response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
     }
 
     Ok(())
+}
+
+pub(crate) fn select_track_on_click(
+    ui: &egui::Ui,
+    response: &egui::Response,
+    actions: &mut Vec<Action>,
+    track_id: TrackId,
+) {
+    if response.clicked() {
+        let modifiers = ui.input(|input| input.modifiers);
+        let mode = if modifiers.shift {
+            TrackSelectionMode::Range
+        } else if modifiers.command {
+            TrackSelectionMode::Toggle
+        } else {
+            TrackSelectionMode::Replace
+        };
+        actions.push(Action::SelectTrack { track_id, mode });
+    }
 }
 
 fn truncate_path_keep_basename_to_width(

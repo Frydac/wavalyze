@@ -1,4 +1,4 @@
-//! Pending state for a track dropped *on* another track in the tracks panel: rather than diffing
+//! Pending state for a track dropped *on* another track: rather than diffing
 //! immediately (which is easy to trigger by accident while reordering), the view shows a small
 //! confirmation context menu while `model.pending_track_diff` is `Some`.
 

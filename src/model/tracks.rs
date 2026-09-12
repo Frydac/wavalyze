@@ -2,7 +2,7 @@ use crate::{
     audio::{self, BufferId},
     model::{
         PixelCoord, TimeCamera, action::SelectionEdge, config::TrackConfig, hover_info::HoverInfoE,
-        ruler, selection_info::SelectionInfoE, time_camera, track,
+        ruler, selection_info::SelectionInfoE, time_camera, track, track_selection::TrackSelection,
     },
 };
 use anyhow::Result;
@@ -24,7 +24,10 @@ pub struct Tracks {
 
     pub hover_info: HoverInfoE,
 
+    /// Selection of sample range, 1 selection range for all tracks
     pub selection_info: SelectionInfoE,
+    /// Selection of whole tracks, independent from the waveform sample-range selection above.
+    pub track_selection: TrackSelection,
 
     // zoom
     pub available_height: f32,
@@ -44,6 +47,7 @@ impl Default for Tracks {
             tracks_order: Vec::new(),
             hover_info: HoverInfoE::default(),
             selection_info: SelectionInfoE::default(),
+            track_selection: TrackSelection::default(),
             available_height: 0.0,
             equal_height_layout: true,
             width_info: 0.0,
@@ -119,6 +123,7 @@ impl Tracks {
     pub fn remove_track(&mut self, track_id: TrackId) {
         self.tracks.remove(track_id);
         self.tracks_order.retain(|id| *id != track_id);
+        self.track_selection.remove(track_id);
     }
 
     /// Move `track_id` to `to_gap_ix`, a gap index (`0..=len`) in the *current* `tracks_order`.
@@ -153,6 +158,7 @@ impl Tracks {
     pub fn remove_all_tracks(&mut self) {
         self.tracks.clear();
         self.tracks_order.clear();
+        self.track_selection.clear();
     }
 
     pub fn find_track(&self, buffer_id: BufferId) -> Option<(TrackId, &Track)> {

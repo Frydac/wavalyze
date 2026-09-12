@@ -2,6 +2,7 @@ use crate::{
     audio::BufferId,
     model::{
         PixelCoord, hover_info::HoverInfoE, jobs, selection_info::SelectionInfoE, track::TrackId,
+        track_selection::TrackSelectionMode,
     },
     wav,
     wav::file::FileId,
@@ -11,10 +12,10 @@ use anyhow::{Context, Result};
 /// Actions exist mainly to be something that can be 'scheduled' to be executed the next frame while
 /// doing egui interactions during drawing.
 /// e.g. to remove a track, we are already drawing it (part is already drawn) while we do the
-/// interaction, so we can't remove it right away.
+/// interaction, so we can't remove it in that frame we still have to complete drawing it.
 ///
-/// Other advantages:
-/// - we could attach them to keyboard shortcuts
+/// Other advantages (TODO):
+/// - we could attach them to keyboard shortcuts and configure them in the user config
 /// - we could use them to record user actions and undo/redo them
 #[derive(Debug)]
 pub enum Action {
@@ -135,6 +136,11 @@ pub enum Action {
 
     // SetSelection
     SetSelection(SelectionInfoE),
+    /// Apply plain, Ctrl/Cmd-toggle, or Shift-range selection after current UI frame.
+    SelectTrack {
+        track_id: TrackId,
+        mode: TrackSelectionMode,
+    },
 
     /// Start a background job to gather statistics (dB-RMS, peak) over a buffer. The range is
     /// derived from the current selection (whole buffer when nothing is selected) and the track's
@@ -150,14 +156,14 @@ pub enum Action {
         sample_ix_offset_a: crate::audio::sample::Ix,
         sample_ix_offset_b: crate::audio::sample::Ix,
     },
-    /// Diff two tracks (dragged onto dropped-on in the tracks panel). The diff is
+    /// Diff two tracks (dragged onto dropped-on). The diff is
     /// `dragged - dropped_on`, and the resulting diff track is inserted directly after `dropped_on`.
     DiffTracks {
         dragged: TrackId,
         dropped_on: TrackId,
     },
     /// Reorder `dragged` to `to_gap_ix` (a gap index in the current track order). Pushed when a
-    /// track is dropped *between* two rows in the tracks panel.
+    /// track is dropped *between* two tracks.
     ReorderTrack {
         dragged: TrackId,
         to_gap_ix: usize,
@@ -438,6 +444,12 @@ impl Action {
             }
             Action::SetSelection(selection_info) => {
                 model.tracks.selection_info = selection_info;
+            }
+            Action::SelectTrack { track_id, mode } => {
+                let tracks = &mut model.tracks;
+                tracks
+                    .track_selection
+                    .apply(track_id, mode, &tracks.tracks_order);
             }
             Action::ComputeBufferStats {
                 buffer_id,

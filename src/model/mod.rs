@@ -12,6 +12,7 @@ pub mod shortcuts;
 pub mod stats;
 pub mod time_camera;
 pub mod track;
+pub mod track_selection;
 pub mod tracks;
 pub mod types;
 pub mod view_buffer;
@@ -66,7 +67,7 @@ pub struct Model {
     /// Two dropped files awaiting a Diff/Load decision; the view shows a chooser dialog while
     /// `Some`. Only ever set on native (diff is native-only).
     pub pending_drop_choice: Option<pending_drop::PendingDropChoice>,
-    /// A track dropped onto another in the tracks panel, awaiting confirmation; the view shows a
+    /// A track dropped onto another, awaiting confirmation; the view shows a
     /// context menu while `Some` so reorder drags don't trigger accidental diffs.
     pub pending_track_diff: Option<pending_track_diff::PendingTrackDiff>,
 }

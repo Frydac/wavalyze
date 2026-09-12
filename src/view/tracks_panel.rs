@@ -1,3 +1,8 @@
+//! Left-panel track list and shared track-diff confirmation menu.
+//!
+//! Sidebar rows retain their existing reorder/diff drag behavior. Confirmation rendering is kept
+//! here but called from the top-level view so central drops work regardless of selected side tab.
+
 use crate::{
     model::{Action, Model, pending_track_diff::PendingTrackDiff, track::TrackId},
     view::{track, util::add_row_label},
@@ -67,22 +72,40 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
             };
             let label = format!("{ix}  {}", track::track_label(model, track_id));
             let hover_info = track::header_hover_info(model, track_id);
+            let selected = model.tracks.track_selection.is_selected(track_id);
+            let fill = if selected {
+                ui.visuals().selection.bg_fill
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            let label: egui::WidgetText = if selected {
+                egui::RichText::new(label)
+                    .color(ui.visuals().selection.stroke.color)
+                    .into()
+            } else {
+                label.into()
+            };
 
-            let row = ui.horizontal(|ui| {
-                let mut checked = visible;
-                let response = ui.add(egui::Checkbox::without_text(&mut checked));
-                if response.changed() {
-                    model.tracks.set_track_visibility(track_id, checked);
-                }
-                // The label is the drag handle: dragging one row's label onto another reorders or
-                // opens a diff menu depending on the drop zone (resolved on the row-wide response).
-                let dnd_id = egui::Id::new(("track_row_dnd", track_id));
-                let label_response = ui
-                    .dnd_drag_source(dnd_id, track_id, |ui| add_row_label(ui, label))
-                    .inner;
-                if let Some(hover_info) = hover_info {
-                    label_response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
-                }
+            let row = egui::Frame::new().fill(fill).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let mut checked = visible;
+                    let response = ui.add(egui::Checkbox::without_text(&mut checked));
+                    if response.changed() {
+                        model.tracks.set_track_visibility(track_id, checked);
+                    }
+                    // The label is the drag handle: dragging one row's label onto another reorders
+                    // or opens a diff menu depending on the drop zone (resolved on the row-wide
+                    // response).
+                    let dnd_id = egui::Id::new(("track_row_dnd", track_id));
+                    let dnd_response =
+                        ui.dnd_drag_source(dnd_id, track_id, |ui| add_row_label(ui, label));
+                    let click_response = dnd_response.response.interact(egui::Sense::click());
+                    track::select_track_on_click(ui, &click_response, &mut model.actions, track_id);
+                    let label_response = dnd_response.inner;
+                    if let Some(hover_info) = hover_info {
+                        label_response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
+                    }
+                });
             });
 
             // Row-wide drop target: an explicit hover interaction guarantees `contains_pointer`
@@ -160,13 +183,12 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
             None => {}
         }
     });
-
-    show_diff_menu(ui, model);
 }
 
 /// Confirmation context menu shown after a track is dropped *on* another, while
-/// `model.pending_track_diff` is `Some`. Closes on Diff/Cancel, Escape, or a click outside.
-fn show_diff_menu(ui: &mut egui::Ui, model: &mut Model) {
+/// `model.pending_track_diff` is `Some`. Called once from the top-level view, not from this tab,
+/// and closes on Diff/Cancel, Escape, or a click outside.
+pub(crate) fn show_diff_menu(ctx: &egui::Context, model: &mut Model) {
     let Some(pending) = model.pending_track_diff.clone() else {
         return;
     };
@@ -180,7 +202,7 @@ fn show_diff_menu(ui: &mut egui::Ui, model: &mut Model) {
         .order(egui::Order::Foreground)
         .fixed_pos(pos)
         .constrain(true)
-        .show(ui.ctx(), |ui| {
+        .show(ctx, |ui| {
             egui::Frame::menu(ui.style()).show(ui, |ui| {
                 ui.label(format!("{label_a}  −  {label_b}"));
                 ui.separator();
@@ -193,7 +215,7 @@ fn show_diff_menu(ui: &mut egui::Ui, model: &mut Model) {
             });
         });
 
-    let escaped = ui.input(|i| i.key_pressed(egui::Key::Escape));
+    let escaped = ctx.input(|i| i.key_pressed(egui::Key::Escape));
     // Don't let the same pointer release that opened the menu dismiss it via click-outside; only
     // arm the click-outside check once the menu has survived a frame.
     let clicked_outside = pending.armed && area.response.clicked_elsewhere();
@@ -210,6 +232,6 @@ fn show_diff_menu(ui: &mut egui::Ui, model: &mut Model) {
         if let Some(p) = model.pending_track_diff.as_mut() {
             p.armed = true;
         }
-        ui.ctx().request_repaint();
+        ctx.request_repaint();
     }
 }
