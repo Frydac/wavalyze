@@ -83,6 +83,18 @@ pub enum Action {
         track_id: TrackId,
         sample_ix_offset: f64,
     },
+    /// Scan one track buffer for its leading-silence boundary.
+    DetectTrackOffset {
+        track_id: TrackId,
+        mode: jobs::OffsetDetectionMode,
+    },
+    /// Scan every loaded channel buffer in one file and use the minimum detected boundary.
+    DetectFileOffset {
+        file_id: FileId,
+        mode: jobs::OffsetDetectionMode,
+    },
+    /// Result of asynchronously scanning buffers for a leading-silence boundary.
+    OffsetDetected(jobs::OffsetDetectionResult),
 
     /// Enable or disable continuous equal-height layout. Enabling immediately fits visible tracks.
     SetEqualHeightLayout(bool),
@@ -370,6 +382,62 @@ impl Action {
             } => {
                 model.set_track_sample_ix_offset(track_id, sample_ix_offset);
             }
+            Action::DetectTrackOffset { track_id, mode } => {
+                let track = model
+                    .tracks
+                    .get_track(track_id)
+                    .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+                if track.use_file_offset {
+                    return Ok(());
+                }
+                let buffer_id = track.single.buffer_id;
+                model.start_detect_offset_job(
+                    jobs::OffsetDetectionTarget::Track {
+                        track_id,
+                        buffer_id,
+                    },
+                    mode,
+                    [buffer_id],
+                )?;
+            }
+            Action::DetectFileOffset { file_id, mode } => {
+                let buffer_ids = model
+                    .files
+                    .get(file_id)
+                    .ok_or_else(|| anyhow::anyhow!("File {:?} not found", file_id))?
+                    .channels
+                    .values()
+                    .map(|channel| channel.buffer_id)
+                    .collect::<Vec<_>>();
+                model.start_detect_offset_job(
+                    jobs::OffsetDetectionTarget::File { file_id },
+                    mode,
+                    buffer_ids,
+                )?;
+            }
+            Action::OffsetDetected(result) => {
+                if let Some(sample_ix_offset) = result.sample_ix_offset {
+                    match result.target {
+                        jobs::OffsetDetectionTarget::Track {
+                            track_id,
+                            buffer_id,
+                        } => {
+                            let target_is_current = model
+                                .tracks
+                                .get_track(track_id)
+                                .is_some_and(|track| track.single.buffer_id == buffer_id);
+                            if target_is_current {
+                                model.set_track_sample_ix_offset(track_id, sample_ix_offset as f64);
+                            }
+                        }
+                        jobs::OffsetDetectionTarget::File { file_id } => {
+                            if model.files.contains_key(file_id) {
+                                model.set_file_sample_ix_offset(file_id, sample_ix_offset);
+                            }
+                        }
+                    }
+                }
+            }
             Action::SetEqualHeightLayout(true) => {
                 model.tracks.equal_height_layout = true;
                 let min_height = model.user_config.track.min_height;
@@ -561,7 +629,12 @@ pub enum SelectionEdge {
 #[cfg(test)]
 mod tests {
     use super::Action;
-    use crate::model::{Model, config::TrackConfig, test_support::add_buffer};
+    use crate::model::{
+        Model,
+        config::TrackConfig,
+        jobs,
+        test_support::{add_buffer, make_file},
+    };
 
     #[test]
     fn equal_height_actions_enable_and_disable_the_layout_mode() {
@@ -612,6 +685,161 @@ mod tests {
 
         assert!(model.tracks.equal_height_layout);
         assert_eq!(model.tracks.get_track_height(track_id), Some(80.0));
+    }
+
+    #[test]
+    fn file_offset_result_updates_file_and_inherited_tracks() {
+        let mut model = Model::default();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let file = make_file(&buffers);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        let file_id = model.insert_file(file);
+        let track_ids = buffers.map(|buffer_id| model.find_track_id_for_buffer(buffer_id).unwrap());
+        model.set_track_use_file_offset(track_ids[1], false);
+        model.set_track_sample_ix_offset(track_ids[1], 3.0);
+
+        Action::OffsetDetected(jobs::OffsetDetectionResult {
+            target: jobs::OffsetDetectionTarget::File { file_id },
+            sample_ix_offset: Some(7),
+        })
+        .process(&mut model)
+        .unwrap();
+        Action::OffsetDetected(jobs::OffsetDetectionResult {
+            target: jobs::OffsetDetectionTarget::File { file_id },
+            sample_ix_offset: None,
+        })
+        .process(&mut model)
+        .unwrap();
+
+        assert_eq!(model.files[file_id].sample_ix_offset, 7);
+        assert_eq!(
+            model
+                .tracks
+                .get_track(track_ids[0])
+                .unwrap()
+                .single
+                .sample_ix_offset,
+            7.0
+        );
+        assert_eq!(
+            model
+                .tracks
+                .get_track(track_ids[1])
+                .unwrap()
+                .single
+                .sample_ix_offset,
+            3.0
+        );
+    }
+
+    #[test]
+    fn track_offset_result_updates_detached_track_and_ignores_silence() {
+        let mut model = Model::default();
+        let buffer_id = add_buffer(&mut model);
+        let track_id = model
+            .tracks
+            .add_track_to_end(buffer_id, 48_000, &TrackConfig::default())
+            .unwrap();
+        let target = jobs::OffsetDetectionTarget::Track {
+            track_id,
+            buffer_id,
+        };
+
+        Action::OffsetDetected(jobs::OffsetDetectionResult {
+            target,
+            sample_ix_offset: Some(5),
+        })
+        .process(&mut model)
+        .unwrap();
+        Action::OffsetDetected(jobs::OffsetDetectionResult {
+            target,
+            sample_ix_offset: None,
+        })
+        .process(&mut model)
+        .unwrap();
+
+        assert_eq!(
+            model
+                .tracks
+                .get_track(track_id)
+                .unwrap()
+                .single
+                .sample_ix_offset,
+            5.0
+        );
+    }
+
+    #[test]
+    fn track_detection_is_unavailable_while_using_file_offset() {
+        let mut model = Model::default();
+        let buffer_id = add_buffer(&mut model);
+        let file = make_file(&[buffer_id]);
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        model.insert_file(file);
+        let track_id = model.find_track_id_for_buffer(buffer_id).unwrap();
+
+        Action::DetectTrackOffset {
+            track_id,
+            mode: jobs::OffsetDetectionMode::FirstNonZero,
+        }
+        .process(&mut model)
+        .unwrap();
+
+        assert_eq!(model.job_mgr.pending(), 0);
+        assert_eq!(
+            model
+                .tracks
+                .get_track(track_id)
+                .unwrap()
+                .single
+                .sample_ix_offset,
+            0.0
+        );
+    }
+
+    #[test]
+    fn offset_result_ignores_stale_track_and_file_targets() {
+        let mut model = Model::default();
+        let scanned_buffer = add_buffer(&mut model);
+        let current_buffer = add_buffer(&mut model);
+        let track_id = model
+            .tracks
+            .add_track_to_end(current_buffer, 48_000, &TrackConfig::default())
+            .unwrap();
+
+        Action::OffsetDetected(jobs::OffsetDetectionResult {
+            target: jobs::OffsetDetectionTarget::Track {
+                track_id,
+                buffer_id: scanned_buffer,
+            },
+            sample_ix_offset: Some(7),
+        })
+        .process(&mut model)
+        .unwrap();
+        Action::OffsetDetected(jobs::OffsetDetectionResult {
+            target: jobs::OffsetDetectionTarget::File {
+                file_id: crate::wav::file::FileId::default(),
+            },
+            sample_ix_offset: Some(9),
+        })
+        .process(&mut model)
+        .unwrap();
+
+        assert_eq!(
+            model
+                .tracks
+                .get_track(track_id)
+                .unwrap()
+                .single
+                .sample_ix_offset,
+            0.0
+        );
     }
 
     #[test]

@@ -204,6 +204,30 @@ impl Model {
         Ok(job_id)
     }
 
+    pub fn start_detect_offset_job(
+        &mut self,
+        target: jobs::OffsetDetectionTarget,
+        mode: jobs::OffsetDetectionMode,
+        buffer_ids: impl IntoIterator<Item = audio::BufferId>,
+    ) -> Result<jobs::JobId> {
+        let buffers = buffer_ids
+            .into_iter()
+            .map(|buffer_id| self.audio.buffer_arc(buffer_id))
+            .collect::<Result<Vec<_>>>()?;
+        let job_id = self
+            .job_mgr
+            .start_job(jobs::JobKind::DetectOffset, "detect offset");
+        jobs::spawn_detect_offset_job(
+            job_id,
+            target,
+            mode,
+            buffers,
+            self.job_mgr.sender(),
+            self.actions_tx.clone(),
+        );
+        Ok(job_id)
+    }
+
     pub fn start_compute_stats_job(
         &mut self,
         buffer_id: audio::BufferId,

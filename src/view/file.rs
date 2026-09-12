@@ -98,6 +98,28 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                                 sample_ix_offset,
                             });
                         }
+                        if ui
+                            .small_button("≠")
+                            .on_hover_text("Align first non-zero sample to timeline sample zero")
+                            .clicked()
+                        {
+                            model.actions.push(Action::DetectFileOffset {
+                                file_id: row.file_id,
+                                mode: crate::model::jobs::OffsetDetectionMode::FirstNonZero,
+                            });
+                        }
+                        if ui
+                            .small_button("0")
+                            .on_hover_text(
+                                "Align last leading zero before first non-zero to timeline sample zero",
+                            )
+                            .clicked()
+                        {
+                            model.actions.push(Action::DetectFileOffset {
+                                file_id: row.file_id,
+                                mode: crate::model::jobs::OffsetDetectionMode::LastLeadingZero,
+                            });
+                        }
                     });
 
                     egui::CollapsingHeader::new("Metadata")

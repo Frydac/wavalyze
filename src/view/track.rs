@@ -399,6 +399,26 @@ fn ui_offset_controls(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, r
             sample_ix_offset,
         });
     }
+    if controls_ui
+        .add_enabled(!use_file_offset, egui::Button::new("≠").small())
+        .on_hover_text("Align first non-zero sample to timeline sample zero")
+        .clicked()
+    {
+        model.actions.push(Action::DetectTrackOffset {
+            track_id,
+            mode: crate::model::jobs::OffsetDetectionMode::FirstNonZero,
+        });
+    }
+    if controls_ui
+        .add_enabled(!use_file_offset, egui::Button::new("0").small())
+        .on_hover_text("Align last leading zero before first non-zero to timeline sample zero")
+        .clicked()
+    {
+        model.actions.push(Action::DetectTrackOffset {
+            track_id,
+            mode: crate::model::jobs::OffsetDetectionMode::LastLeadingZero,
+        });
+    }
 }
 
 fn ui_y_zoom_controls(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, rect: egui::Rect) {
