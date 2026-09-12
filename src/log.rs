@@ -12,7 +12,8 @@ pub type TracingCollector = EventCollector;
 ///
 /// This should only be called once in the application's lifetime, typically in `main`.
 pub fn init_tracing(log_level: Option<&str>) -> Result<TracingCollector> {
-    const DEFAULT_LEVEL: &str = "info";
+    // const DEFAULT_LEVEL: &str = "info";
+    const DEFAULT_LEVEL: &str = "debug";
     let wavalyze_level = log_level.unwrap_or(DEFAULT_LEVEL);
 
     let mut filter = EnvFilter::from_default_env();

@@ -334,11 +334,29 @@ impl View {
                 });
                 ui.add_space(16.0);
 
-                ui.menu_button("Debug", |ui| {
-                    if ui
-                        .checkbox(&mut self.show_tracing_window, "Tracing")
-                        .clicked()
+                ui.menu_button("Track", |ui| {
+                    let selected: Vec<_> = self
+                        .model
+                        .tracks
+                        .tracks_order
+                        .iter()
+                        .copied()
+                        .filter(|track_id| {
+                            self.model.tracks.track_selection.is_selected(*track_id)
+                        })
+                        .collect();
+                    if let [track_a, track_b] = selected.as_slice()
+                        && ui
+                            .button("Diff selected...")
+                            .on_hover_text(
+                                "Diff selected tracks. You can also drag one track onto another to diff them.",
+                            )
+                            .clicked()
                     {
+                        self.model.actions.push(Action::DiffTracks {
+                            dragged: *track_a,
+                            dropped_on: *track_b,
+                        });
                         ui.close_menu();
                     }
                 });
@@ -349,6 +367,15 @@ impl View {
                     ui.label(format!("Version {APP_VERSION}"));
                     ui.label(format!("Commit {GIT_HASH}"));
                     ui.label(format!("Build date {BUILD_DATE} (UTC)"));
+                    ui.separator();
+                    ui.menu_button("Debug", |ui| {
+                        if ui
+                            .checkbox(&mut self.show_tracing_window, "Tracing")
+                            .clicked()
+                        {
+                            ui.close_menu();
+                        }
+                    });
                 });
                 ui.add_space(16.0);
 
