@@ -29,6 +29,7 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 - [Mouse navigation](doc/mouse_navigation.md)
 - [CLI arguments](doc/cli_args.md)
 - [Cloudflare deploy notes](doc/cloudflare_deploy.md)
+- [Cargo and desktop distribution plan](doc/dev/distribution-plan.md)
 
 ## Features
 
