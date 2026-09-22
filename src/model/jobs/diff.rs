@@ -16,12 +16,12 @@ use crate::audio::{
 use crate::model::Action;
 use crate::wav;
 
-#[cfg(not(target_arch = "wasm32"))]
-use super::load_wav;
 use super::{
     JobCompletionEvent, JobEvent, JobFailureEvent, JobId, JobProgress, JobProgressEvent,
     spawn_worker,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use super::{detect_offset, load_wav};
 
 const CHUNK: usize = 64 * 1024;
 
@@ -84,6 +84,16 @@ pub struct LoadedDiff {
     pub pairs: Vec<LoadedDiffPair>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub struct LoadDiffPathsJobInput {
+    pub generation: u64,
+    pub file_a: wav::ReadConfig,
+    pub file_b: wav::ReadConfig,
+    pub pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
+    pub offset_detection_a: Option<detect_offset::OffsetDetectionMode>,
+    pub offset_detection_b: Option<detect_offset::OffsetDetectionMode>,
+}
+
 pub struct DiffBuffersJobInput {
     pub buffer_id_a: BufferId,
     pub buffer_id_b: BufferId,
@@ -131,16 +141,21 @@ pub fn spawn_diff_buffers_job(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn spawn_load_diff_paths_job(
     job_id: JobId,
-    generation: u64,
-    file_a: wav::ReadConfig,
-    file_b: wav::ReadConfig,
-    pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
+    input: LoadDiffPathsJobInput,
     events_tx: Sender<JobEvent>,
     actions_tx: Sender<Action>,
 ) {
     spawn_worker(move || {
-        let result = load_and_compute_diff(job_id, file_a, file_b, pairs, &events_tx);
-        finish_loaded_diff_job(job_id, generation, result, &events_tx, &actions_tx);
+        let result = load_and_compute_diff(
+            job_id,
+            input.file_a,
+            input.file_b,
+            input.pairs,
+            input.offset_detection_a,
+            input.offset_detection_b,
+            &events_tx,
+        );
+        finish_loaded_diff_job(job_id, input.generation, result, &events_tx, &actions_tx);
     });
 }
 
@@ -150,6 +165,8 @@ fn load_and_compute_diff(
     mut file_a: wav::ReadConfig,
     mut file_b: wav::ReadConfig,
     pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
+    offset_detection_a: Option<detect_offset::OffsetDetectionMode>,
+    offset_detection_b: Option<detect_offset::OffsetDetectionMode>,
     events_tx: &Sender<JobEvent>,
 ) -> Result<LoadedDiff> {
     // Kept as one parent job so the model receives every source channel and diff in a single
@@ -191,7 +208,7 @@ fn load_and_compute_diff(
         0.42,
     );
     // Use the regular WAV load path but map its detailed progress into the A slice of this job.
-    let loaded_a = load_wav::load_wav_path_for_job(job_id, &file_a, &sink_a)
+    let mut loaded_a = load_wav::load_wav_path_for_job(job_id, &file_a, &sink_a)
         .context("failed to load first diff input")?;
 
     let sink_b = load_wav::ThreadedLoadJobProgressSink::new_mapped(
@@ -202,8 +219,11 @@ fn load_and_compute_diff(
         0.82,
     );
     // Same for B; no intermediate `IntegrateLoadedFile` action is emitted before the diff exists.
-    let loaded_b = load_wav::load_wav_path_for_job(job_id, &file_b, &sink_b)
+    let mut loaded_b = load_wav::load_wav_path_for_job(job_id, &file_b, &sink_b)
         .context("failed to load second diff input")?;
+
+    apply_detected_offset(&mut file_a, &mut loaded_a, offset_detection_a);
+    apply_detected_offset(&mut file_b, &mut loaded_b, offset_detection_b);
 
     // Spread the remaining progress (0.82..1.0) evenly across the per-pair diff computations.
     let pair_count = pairs.len();
@@ -248,6 +268,25 @@ fn load_and_compute_diff(
         sample_ix_offset_b: file_b.sample_ix_offset,
         pairs: pair_results,
     })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn apply_detected_offset(
+    config: &mut wav::ReadConfig,
+    loaded: &mut wav::read::LoadedFile,
+    mode: Option<detect_offset::OffsetDetectionMode>,
+) {
+    let Some(offset) = mode.and_then(|mode| {
+        loaded
+            .channels
+            .values()
+            .filter_map(|buffer| detect_offset::detect_offset(buffer, mode))
+            .min()
+    }) else {
+        return;
+    };
+    config.sample_ix_offset = offset;
+    loaded.sample_ix_offset = offset;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -681,6 +720,12 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn write_test_wav(name: &str, channels: u16) -> std::path::PathBuf {
+        write_test_wav_data(name, channels, &vec![0; channels as usize])
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn write_test_wav_data(name: &str, channels: u16, samples: &[i16]) -> std::path::PathBuf {
+        assert_eq!(samples.len() % channels as usize, 0);
         let dir = std::path::PathBuf::from("target/test_output/diff_jobs");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
@@ -691,8 +736,8 @@ mod tests {
             sample_format: hound::SampleFormat::Int,
         };
         let mut writer = hound::WavWriter::create(&path, spec).unwrap();
-        for _ in 0..channels {
-            writer.write_sample(0i16).unwrap();
+        for &sample in samples {
+            writer.write_sample(sample).unwrap();
         }
         writer.finalize().unwrap();
         path
@@ -710,6 +755,8 @@ mod tests {
             wav::ReadConfig::new(path_a).with_sample_ix_offset(-1),
             wav::ReadConfig::new(path_b).with_sample_ix_offset(2),
             vec![(0, 0), (1, 2)],
+            None,
+            None,
             &tx,
         )
         .unwrap();
@@ -735,6 +782,82 @@ mod tests {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
+    fn load_diff_detects_both_offset_modes_from_selected_channels_only() {
+        let path_a = write_test_wav_data("offset_selected_a.wav", 2, &[0, 0, 0, 9, 5, 9]);
+        let path_b = write_test_wav_data("offset_selected_b.wav", 1, &[0, 0, 7]);
+        let (tx, _rx) = std::sync::mpsc::channel();
+
+        let diff = load_and_compute_diff(
+            10,
+            wav::ReadConfig::new(path_a),
+            wav::ReadConfig::new(path_b),
+            vec![(0, 0)],
+            Some(detect_offset::OffsetDetectionMode::FirstNonZero),
+            Some(detect_offset::OffsetDetectionMode::LastLeadingZero),
+            &tx,
+        )
+        .unwrap();
+
+        assert_eq!(diff.file_a.channels.len(), 1);
+        assert!(diff.file_a.channels.contains_key(&0));
+        assert_eq!(diff.sample_ix_offset_a, 2);
+        assert_eq!(diff.file_a.sample_ix_offset, 2);
+        assert_eq!(diff.sample_ix_offset_b, 1);
+        assert_eq!(diff.file_b.sample_ix_offset, 1);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_diff_keeps_manual_offsets_when_selected_channels_are_silent() {
+        let path_a = write_test_wav("offset_silent_a.wav", 1);
+        let path_b = write_test_wav("offset_silent_b.wav", 1);
+        let (tx, _rx) = std::sync::mpsc::channel();
+
+        let diff = load_and_compute_diff(
+            11,
+            wav::ReadConfig::new(path_a).with_sample_ix_offset(4),
+            wav::ReadConfig::new(path_b).with_sample_ix_offset(-2),
+            vec![(0, 0)],
+            Some(detect_offset::OffsetDetectionMode::FirstNonZero),
+            Some(detect_offset::OffsetDetectionMode::LastLeadingZero),
+            &tx,
+        )
+        .unwrap();
+
+        assert_eq!(diff.sample_ix_offset_a, 4);
+        assert_eq!(diff.file_a.sample_ix_offset, 4);
+        assert_eq!(diff.sample_ix_offset_b, -2);
+        assert_eq!(diff.file_b.sample_ix_offset, -2);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn detected_offsets_are_used_to_align_diff_samples() {
+        let path_a = write_test_wav_data("offset_align_a.wav", 1, &[0, 10, 20]);
+        let path_b = write_test_wav_data("offset_align_b.wav", 1, &[0, 0, 10, 20]);
+        let (tx, _rx) = std::sync::mpsc::channel();
+
+        let diff = load_and_compute_diff(
+            12,
+            wav::ReadConfig::new(path_a),
+            wav::ReadConfig::new(path_b),
+            vec![(0, 0)],
+            Some(detect_offset::OffsetDetectionMode::FirstNonZero),
+            Some(detect_offset::OffsetDetectionMode::FirstNonZero),
+            &tx,
+        )
+        .unwrap();
+
+        assert_eq!(diff.sample_ix_offset_a, 1);
+        assert_eq!(diff.sample_ix_offset_b, 2);
+        let BufferE::I16(buffer) = &diff.pairs[0].diff_buffer else {
+            panic!("expected i16 diff buffer");
+        };
+        assert_eq!(buffer.data, vec![0, 0, 0, 0]);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn load_diff_reports_detailed_prefixed_load_progress() {
         let path_a = write_test_wav("progress_a.wav", 1);
         let path_b = write_test_wav("progress_b.wav", 1);
@@ -745,6 +868,8 @@ mod tests {
             wav::ReadConfig::new(path_a),
             wav::ReadConfig::new(path_b),
             vec![(0, 0)],
+            None,
+            None,
             &tx,
         )
         .unwrap();

@@ -287,7 +287,7 @@ impl Action {
                     };
                     match (single_channel_ix(&file_a), single_channel_ix(&file_b)) {
                         (Some(ch_a), Some(ch_b)) => {
-                            model.start_diff_pairs(file_a, file_b, vec![(ch_a, ch_b)]);
+                            model.start_diff_pairs(file_a, file_b, vec![(ch_a, ch_b)], None, None);
                         }
                         _ => {
                             model
@@ -305,7 +305,13 @@ impl Action {
             Action::ConfirmDiffPairing => {
                 if let Some(pending) = model.pending_diff_pairing.take() {
                     let pairs = pending.selected_pairs();
-                    model.start_diff_pairs(pending.file_a, pending.file_b, pairs);
+                    model.start_diff_pairs(
+                        pending.file_a,
+                        pending.file_b,
+                        pairs,
+                        pending.offset_detection_a,
+                        pending.offset_detection_b,
+                    );
                 }
             }
             Action::CancelDiffPairing => {

@@ -71,7 +71,7 @@ pub fn spawn_detect_offset_job(
     });
 }
 
-fn detect_offset(buffer: &BufferE, mode: OffsetDetectionMode) -> Option<sample::Ix> {
+pub(crate) fn detect_offset(buffer: &BufferE, mode: OffsetDetectionMode) -> Option<sample::Ix> {
     let first_non_zero = match buffer {
         BufferE::F32(buffer) => first_non_zero(&buffer.data),
         BufferE::I32(buffer) => first_non_zero(&buffer.data),

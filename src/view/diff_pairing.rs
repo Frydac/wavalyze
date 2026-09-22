@@ -1,6 +1,9 @@
 use crate::model::{self, Action};
 
 const OFFSET_HOVER_TEXT: &str = "Absolute sample offset for all channels in file.\nPositive value means we start from that positive value.";
+const FIRST_NON_ZERO_HOVER_TEXT: &str = "Align first non-zero sample to timeline sample zero";
+const LAST_LEADING_ZERO_HOVER_TEXT: &str =
+    "Align last leading zero before first non-zero to timeline sample zero";
 
 /// Channel-pairing matrix dialog for diffing two files: rows are file A channels, columns are
 /// file B channels, one checkbox per cell. Shown while `model.pending_diff_pairing` is `Some`.
@@ -26,22 +29,66 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
 
                     ui.label("A");
                     ui.label(pending.file_a.filepath.display().to_string());
-                    ui.add(
-                        egui::DragValue::new(&mut pending.file_a.sample_ix_offset)
-                            .speed(1.0)
-                            .suffix(" samples"),
-                    )
-                    .on_hover_text(OFFSET_HOVER_TEXT);
+                    ui.horizontal(|ui| {
+                        ui.add_enabled(
+                            pending.offset_detection_a.is_none(),
+                            egui::DragValue::new(&mut pending.file_a.sample_ix_offset)
+                                .speed(1.0)
+                                .suffix(" samples"),
+                        )
+                        .on_hover_text(OFFSET_HOVER_TEXT);
+                        let first_non_zero = model::jobs::OffsetDetectionMode::FirstNonZero;
+                        if ui
+                            .selectable_label(
+                                pending.offset_detection_a == Some(first_non_zero),
+                                "≠",
+                            )
+                            .on_hover_text(FIRST_NON_ZERO_HOVER_TEXT)
+                            .clicked()
+                        {
+                            pending.toggle_offset_detection_a(first_non_zero);
+                        }
+                        let last_zero = model::jobs::OffsetDetectionMode::LastLeadingZero;
+                        if ui
+                            .selectable_label(pending.offset_detection_a == Some(last_zero), "0")
+                            .on_hover_text(LAST_LEADING_ZERO_HOVER_TEXT)
+                            .clicked()
+                        {
+                            pending.toggle_offset_detection_a(last_zero);
+                        }
+                    });
                     ui.end_row();
 
                     ui.label("B");
                     ui.label(pending.file_b.filepath.display().to_string());
-                    ui.add(
-                        egui::DragValue::new(&mut pending.file_b.sample_ix_offset)
-                            .speed(1.0)
-                            .suffix(" samples"),
-                    )
-                    .on_hover_text(OFFSET_HOVER_TEXT);
+                    ui.horizontal(|ui| {
+                        ui.add_enabled(
+                            pending.offset_detection_b.is_none(),
+                            egui::DragValue::new(&mut pending.file_b.sample_ix_offset)
+                                .speed(1.0)
+                                .suffix(" samples"),
+                        )
+                        .on_hover_text(OFFSET_HOVER_TEXT);
+                        let first_non_zero = model::jobs::OffsetDetectionMode::FirstNonZero;
+                        if ui
+                            .selectable_label(
+                                pending.offset_detection_b == Some(first_non_zero),
+                                "≠",
+                            )
+                            .on_hover_text(FIRST_NON_ZERO_HOVER_TEXT)
+                            .clicked()
+                        {
+                            pending.toggle_offset_detection_b(first_non_zero);
+                        }
+                        let last_zero = model::jobs::OffsetDetectionMode::LastLeadingZero;
+                        if ui
+                            .selectable_label(pending.offset_detection_b == Some(last_zero), "0")
+                            .on_hover_text(LAST_LEADING_ZERO_HOVER_TEXT)
+                            .clicked()
+                        {
+                            pending.toggle_offset_detection_b(last_zero);
+                        }
+                    });
                     ui.end_row();
                 });
             ui.separator();

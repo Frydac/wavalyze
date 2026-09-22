@@ -160,6 +160,8 @@ impl Model {
         file_a: wav::ReadConfig,
         file_b: wav::ReadConfig,
         pairs: Vec<(wav::read::ChIx, wav::read::ChIx)>,
+        offset_detection_a: Option<jobs::OffsetDetectionMode>,
+        offset_detection_b: Option<jobs::OffsetDetectionMode>,
     ) {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -183,17 +185,27 @@ impl Model {
             let generation = self.generation();
             jobs::spawn_load_diff_paths_job(
                 job_id,
-                generation,
-                file_a,
-                file_b,
-                pairs,
+                jobs::diff::LoadDiffPathsJobInput {
+                    generation,
+                    file_a,
+                    file_b,
+                    pairs,
+                    offset_detection_a,
+                    offset_detection_b,
+                },
                 self.job_mgr.sender(),
                 self.actions_tx.clone(),
             );
         }
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = (file_a, file_b, pairs);
+            let _ = (
+                file_a,
+                file_b,
+                pairs,
+                offset_detection_a,
+                offset_detection_b,
+            );
             tracing::warn!("start_diff_pairs ignored on wasm");
         }
     }
