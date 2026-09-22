@@ -28,6 +28,9 @@ pub struct Config {
     /// zoom levels, but raw positions behave better on fractional display scaling.
     #[serde(default)]
     pub round_minmax_waveform_to_pixel_center: bool,
+    /// Show the hovered sample's value in value rulers below this samples-per-pixel level.
+    /// Higher values make the readout appear earlier while zooming in; zero disables it.
+    pub sample_value_ruler_max_samples_per_pixel: f32,
     pub value_display_scale: ValueDisplayScale,
     /// Scroll-wheel pan/zoom sensitivity and direction, per axis.
     pub navigation: NavigationConfig,
@@ -226,6 +229,7 @@ impl Default for Config {
             show_amplitude_ruler: true,
             show_db_ruler: false,
             round_minmax_waveform_to_pixel_center: true,
+            sample_value_ruler_max_samples_per_pixel: 1.0,
             value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
             selection: SelectionConfig::default(),
@@ -486,6 +490,7 @@ selection_fill = [1, 2, 3, 4]
 
         assert!(config.show_amplitude_ruler);
         assert!(!config.show_db_ruler);
+        assert_eq!(config.sample_value_ruler_max_samples_per_pixel, 1.0);
     }
 
     #[test]

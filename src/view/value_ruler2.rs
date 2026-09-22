@@ -6,7 +6,9 @@ use crate::model::ruler::{
 };
 use crate::model::track::Track;
 use crate::model::{Action, track::TrackId};
-use crate::view::util::{ruler_zero_deadzone, zoom_delta_to_scroll_delta};
+use crate::view::util::{
+    ruler_zero_deadzone, sample_value_readout_visible, zoom_delta_to_scroll_delta,
+};
 use egui::{Color32, FontId, Pos2, Rect, Stroke};
 
 pub const NR_PIXELS_PER_VALUE_TICK: f32 = 50.0;
@@ -19,6 +21,7 @@ pub struct ValueRulerContext<'a> {
     pub zoom_y_mult: f32,
     pub zero_deadzone_height: f32,
     pub display_scale: ValueDisplayScale,
+    pub sample_value_ruler_max_samples_per_pixel: f32,
 }
 
 pub struct ValueRulerConfig {
@@ -29,6 +32,7 @@ pub struct ValueRulerConfig {
 struct HoverValueStyle<'a> {
     theme_colors: &'a ThemeColors,
     display_scale: ValueDisplayScale,
+    max_samples_per_pixel: f32,
 }
 
 impl Default for ValueRulerConfig {
@@ -146,6 +150,7 @@ pub fn ui(
     let hover_style = HoverValueStyle {
         theme_colors,
         display_scale: ctx.display_scale,
+        max_samples_per_pixel: ctx.sample_value_ruler_max_samples_per_pixel,
     };
     if config.show_hover_tick {
         draw_hover_value_from_y(
@@ -335,7 +340,8 @@ fn draw_hover_value(
                 return;
             }
         };
-        if sample_view.samples_per_pixel >= 1.0 {
+        if !sample_value_readout_visible(sample_view.samples_per_pixel, style.max_samples_per_pixel)
+        {
             return;
         }
     }

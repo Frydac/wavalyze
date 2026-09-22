@@ -139,6 +139,19 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                 );
                 ui.checkbox(&mut config.show_amplitude_ruler, "Show amplitude ruler");
                 ui.checkbox(&mut config.show_db_ruler, "Show dB ruler");
+                ui.horizontal(|ui| {
+                    ui.label("Sample value readout cutoff").on_hover_text(
+                        "Show the hovered sample value in the rulers when the horizontal zoom is below this many samples per pixel. Higher values show it earlier; 0 disables it.",
+                    );
+                    ui.add(
+                        egui::DragValue::new(
+                            &mut config.sample_value_ruler_max_samples_per_pixel,
+                        )
+                        .speed(0.1)
+                        .range(0.0..=10_000.0)
+                        .suffix(" samples/px"),
+                    );
+                });
                 ui.checkbox(
                     &mut config.round_minmax_waveform_to_pixel_center,
                     "Round zoomed-out waveform columns",

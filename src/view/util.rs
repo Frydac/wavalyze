@@ -72,9 +72,22 @@ pub fn zoom_delta_to_scroll_delta(zoom_delta: f32, scroll_zoom_speed: f32) -> f3
     }
 }
 
+/// Whether the ruler should show the exact sample under the horizontal hover position.
+pub fn sample_value_readout_visible(samples_per_pixel: f32, max_samples_per_pixel: f32) -> bool {
+    samples_per_pixel < max_samples_per_pixel
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ruler_zero_deadzone, zoom_delta_to_scroll_delta};
+    use super::{ruler_zero_deadzone, sample_value_readout_visible, zoom_delta_to_scroll_delta};
+
+    #[test]
+    fn sample_value_readout_uses_configured_zoom_cutoff() {
+        assert!(sample_value_readout_visible(0.5, 1.0));
+        assert!(!sample_value_readout_visible(1.0, 1.0));
+        assert!(sample_value_readout_visible(4.0, 5.0));
+        assert!(!sample_value_readout_visible(0.0, 0.0));
+    }
 
     fn ruler_rect() -> egui::Rect {
         egui::Rect::from_min_max(egui::pos2(10.0, 20.0), egui::pos2(110.0, 120.0))

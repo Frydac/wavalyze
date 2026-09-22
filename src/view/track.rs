@@ -513,6 +513,8 @@ fn ui_rulers(
     let zoom_y_mult = model.user_config.navigation.zoom_y_mult();
     let zero_deadzone_height = model.user_config.navigation.zoom_y_zero_deadzone_height;
     let display_scale = model.user_config.value_display_scale;
+    let sample_value_ruler_max_samples_per_pixel =
+        model.user_config.sample_value_ruler_max_samples_per_pixel;
 
     if let Some(rect) = db_rect {
         let mut ruler_ui = component_ui(
@@ -530,6 +532,7 @@ fn ui_rulers(
             zoom_y_mult,
             zero_deadzone_height,
             display_scale,
+            sample_value_ruler_max_samples_per_pixel,
         };
         db_ruler::ui(
             &mut ruler_ui,
@@ -560,6 +563,7 @@ fn ui_rulers(
             zoom_y_mult,
             zero_deadzone_height,
             display_scale,
+            sample_value_ruler_max_samples_per_pixel,
         };
         value_ruler2::ui(
             &mut ruler_ui,
