@@ -14,6 +14,7 @@ use crate::{
 };
 use anyhow::Result;
 
+mod block_grid;
 mod drag_drop;
 mod hover;
 // The geometry types are introduced separately from their rendering integration.

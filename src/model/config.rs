@@ -15,10 +15,6 @@ pub struct Config {
     pub show_hover_info: bool,
 
     pub tracks_width_info: f32,
-    /// Block size assigned to a new app session.
-    pub default_block_size: u64,
-    /// Show block coordinates in the selection editor and time ruler.
-    pub show_blocks: bool,
     /// Show the per-track amplitude ruler (right-most slot in the track side panel).
     #[serde(default = "default_true")]
     pub show_amplitude_ruler: bool,
@@ -34,6 +30,7 @@ pub struct Config {
     /// Higher values make the readout appear earlier while zooming in; zero disables it.
     pub sample_value_ruler_max_samples_per_pixel: f32,
     pub value_display_scale: ValueDisplayScale,
+    pub blocks: BlockConfig,
     /// Scroll-wheel pan/zoom sensitivity and direction, per axis.
     pub navigation: NavigationConfig,
     pub shortcuts: ShortcutConfig,
@@ -64,7 +61,31 @@ pub enum StartEditMode {
 #[serde(default)]
 pub struct SelectionConfig {
     pub start_edit_mode: StartEditMode,
-    pub snap_to_blocks: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct BlockConfig {
+    /// Block size assigned to a new app session.
+    pub default_size: u64,
+    /// Show block coordinates and enable block-related features.
+    pub enabled: bool,
+    pub show_grid: bool,
+    /// Minimum spacing between block gridlines in logical pixels.
+    pub grid_min_spacing_px: f32,
+    pub snap_selection: bool,
+}
+
+impl Default for BlockConfig {
+    fn default() -> Self {
+        Self {
+            default_size: 1024,
+            enabled: false,
+            show_grid: false,
+            grid_min_spacing_px: 25.0,
+            snap_selection: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -174,7 +195,6 @@ impl Default for SelectionConfig {
     fn default() -> Self {
         Self {
             start_edit_mode: StartEditMode::KeepEnd,
-            snap_to_blocks: false,
         }
     }
 }
@@ -229,8 +249,7 @@ impl Default for Config {
             navigation: NavigationConfig::default(),
             show_hover_info: true,
             tracks_width_info: 250.0,
-            default_block_size: 1024,
-            show_blocks: false,
+            blocks: BlockConfig::default(),
             show_amplitude_ruler: true,
             show_db_ruler: false,
             round_minmax_waveform_to_pixel_center: true,
@@ -321,6 +340,7 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
+    use super::BlockConfig;
     use super::{ColorPaletteSet, Config, ThemeColors};
     use crate::model::{
         ruler::ValueDisplayScale,
@@ -345,8 +365,8 @@ mod tests {
 
     #[test]
     fn default_block_size_is_1024() {
-        assert_eq!(Config::default().default_block_size, 1024);
-        assert!(!Config::default().show_blocks);
+        assert_eq!(Config::default().blocks.default_size, 1024);
+        assert!(!Config::default().blocks.enabled);
     }
 
     #[test]
@@ -354,31 +374,54 @@ mod tests {
         let config: Config =
             toml::from_str("show_hover_info = true\ntracks_width_info = 120.0\n").unwrap();
 
-        assert_eq!(config.default_block_size, 1024);
-        assert!(!config.show_blocks);
+        assert_eq!(config.blocks.default_size, 1024);
+        assert!(!config.blocks.enabled);
+    }
+
+    #[test]
+    fn block_grid_defaults_and_preferences_survive_config_loading() {
+        let old: Config = toml::from_str("[blocks]\nenabled = true\n").unwrap();
+        assert!(!old.blocks.show_grid);
+        assert_eq!(old.blocks.grid_min_spacing_px, 25.0);
+        let config = Config {
+            blocks: BlockConfig {
+                enabled: false,
+                show_grid: true,
+                grid_min_spacing_px: 50.0,
+                ..BlockConfig::default()
+            },
+            ..Config::default()
+        };
+        let restored: Config = toml::from_str(&toml::to_string(&config).unwrap()).unwrap();
+        assert!(restored.blocks.show_grid);
+        assert!(!restored.blocks.enabled);
+        assert_eq!(restored.blocks.grid_min_spacing_px, 50.0);
     }
 
     #[test]
     fn block_visibility_is_persisted() {
         let config = Config {
-            show_blocks: true,
+            blocks: BlockConfig {
+                enabled: true,
+                ..BlockConfig::default()
+            },
             ..Config::default()
         };
         let saved = toml::to_string(&config).unwrap();
         let restored: Config = toml::from_str(&saved).unwrap();
-        assert!(restored.show_blocks);
+        assert!(restored.blocks.enabled);
     }
 
     #[test]
     fn block_snapping_defaults_off_and_is_persisted() {
         let mut config: Config =
             toml::from_str("[selection]\nstart_edit_mode = 'KeepEnd'\n").unwrap();
-        assert!(!config.selection.snap_to_blocks);
-        assert!(!Config::default().selection.snap_to_blocks);
-        config.selection.snap_to_blocks = true;
+        assert!(!config.blocks.snap_selection);
+        assert!(!Config::default().blocks.snap_selection);
+        config.blocks.snap_selection = true;
         let restored: Config = toml::from_str(&toml::to_string(&config).unwrap()).unwrap();
-        assert!(restored.selection.snap_to_blocks);
-        assert!(!restored.show_blocks);
+        assert!(restored.blocks.snap_selection);
+        assert!(!restored.blocks.enabled);
     }
 
     #[test]

@@ -105,13 +105,13 @@ pub fn ui_selection_info_toolbar(
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
             ui.vertical(|ui| {
                 ui.heading("Selection");
-                if config.show_blocks
+                if config.blocks.enabled
                     && ui
-                        .checkbox(&mut config.selection.snap_to_blocks, "Snap to blocks")
+                        .checkbox(&mut config.blocks.snap_selection, "Snap to blocks")
                         .changed()
                 {
                     config.save_to_storage();
-                    if config.selection.snap_to_blocks
+                    if config.blocks.snap_selection
                         && let SelectionInfoE::IsSelected(mut selection) = selection_info
                     {
                         selection.ix_rng = model::selection_info::snapped_selection_range(
@@ -152,12 +152,12 @@ pub fn ui_selection_info_toolbar(
 
             egui::Grid::new(ui.id().with("selection_toolbar_grid"))
                 .striped(true)
-                .num_columns(if config.show_blocks { 4 } else { 2 })
+                .num_columns(if config.blocks.enabled { 4 } else { 2 })
                 .spacing([8.0, 4.0])
                 .show(ui, |ui| {
                     ui.label("");
                     ui.label("samples");
-                    if config.show_blocks {
+                    if config.blocks.enabled {
                         ui.label("block index");
                         ui.label("block offset");
                     }
@@ -166,14 +166,14 @@ pub fn ui_selection_info_toolbar(
                     ui.label("start");
                     let start_sample_changed =
                         number_editor(ui, "selection_start", &mut start_val, SELECTION_EDITOR_MAX);
-                    let start_block_changed = config.show_blocks
+                    let start_block_changed = config.blocks.enabled
                         && number_editor(
                             ui,
                             "selection_start_block",
                             &mut start_block,
                             max_block_ix,
                         );
-                    let start_offset_changed = config.show_blocks
+                    let start_offset_changed = config.blocks.enabled
                         && number_editor(
                             ui,
                             "selection_start_offset",
@@ -189,14 +189,14 @@ pub fn ui_selection_info_toolbar(
                         &mut length_val,
                         SELECTION_EDITOR_MAX,
                     );
-                    let length_block_changed = config.show_blocks
+                    let length_block_changed = config.blocks.enabled
                         && number_editor(
                             ui,
                             "selection_length_block",
                             &mut length_block,
                             max_block_ix,
                         );
-                    let length_offset_changed = config.show_blocks
+                    let length_offset_changed = config.blocks.enabled
                         && number_editor(
                             ui,
                             "selection_length_offset",
@@ -208,9 +208,9 @@ pub fn ui_selection_info_toolbar(
                     ui.label("end");
                     let end_sample_changed =
                         number_editor(ui, "selection_end", &mut end_val, SELECTION_EDITOR_MAX);
-                    let end_block_changed = config.show_blocks
+                    let end_block_changed = config.blocks.enabled
                         && number_editor(ui, "selection_end_block", &mut end_block, max_block_ix);
-                    let end_offset_changed = config.show_blocks
+                    let end_offset_changed = config.blocks.enabled
                         && number_editor(ui, "selection_end_offset", &mut end_offset, max_offset);
                     ui.end_row();
 

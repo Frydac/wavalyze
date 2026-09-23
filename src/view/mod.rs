@@ -162,7 +162,7 @@ impl View {
                     );
                     ui.group(|ui| {
                         if ui
-                            .checkbox(&mut self.model.user_config.show_blocks, "Block size")
+                            .checkbox(&mut self.model.user_config.blocks.enabled, "Block size")
                             .changed()
                         {
                             self.model.user_config.save_to_storage();
@@ -170,7 +170,7 @@ impl View {
                         let mut block_size = self.model.block_size;
                         if ui
                             .add_enabled(
-                                self.model.user_config.show_blocks,
+                                self.model.user_config.blocks.enabled,
                                 egui::DragValue::new(&mut block_size)
                                     .speed(1.0)
                                     .range(1..=u64::MAX)
@@ -179,6 +179,16 @@ impl View {
                             .changed()
                         {
                             self.model.actions.push(Action::SetBlockSize(block_size));
+                        }
+                        if self.model.user_config.blocks.enabled
+                            && ui
+                                .checkbox(
+                                    &mut self.model.user_config.blocks.show_grid,
+                                    "Block grid",
+                                )
+                                .changed()
+                        {
+                            self.model.user_config.save_to_storage();
                         }
                     });
                 });

@@ -56,6 +56,7 @@ pub fn ui_waveform_canvas(
     if !rectangle_zoom_owns_pointer {
         handle_pan_drag(ui, model, track_id, &waveform_response);
     }
+    super::block_grid::draw(ui, model, rect);
     ui_waveform(ui, model, track_id, rect, theme_colors)?;
     hover::ui_hover(ui, model, track_id, rect, theme_colors);
     selection::ui_selection(

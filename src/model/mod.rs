@@ -76,7 +76,7 @@ impl Default for Model {
     fn default() -> Self {
         let (actions_tx, actions_rx) = std::sync::mpsc::channel();
         let user_config = Config::default();
-        let block_size = user_config.default_block_size.max(1);
+        let block_size = user_config.blocks.default_size.max(1);
         Self {
             user_config,
             block_size,
@@ -105,7 +105,7 @@ impl Model {
         let mut res = Self::default();
         res.tracks.width_info = user_config.tracks_width_info;
         res.tracks.equal_height_layout = user_config.track.equal_height_layout_by_default;
-        res.block_size = user_config.default_block_size.max(1);
+        res.block_size = user_config.blocks.default_size.max(1);
         res.user_config = user_config;
         res
     }
@@ -266,6 +266,7 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
+    use super::config;
     use super::{Action, Model};
     use crate::audio::thumbnail::ThumbnailE;
     use crate::model::test_support::{add_buffer, make_file};
@@ -283,13 +284,19 @@ mod tests {
     #[test]
     fn block_size_uses_validated_configured_startup_default() {
         let config = crate::model::Config {
-            default_block_size: 2048,
+            blocks: config::BlockConfig {
+                default_size: 2048,
+                ..config::BlockConfig::default()
+            },
             ..crate::model::Config::default()
         };
         assert_eq!(Model::with_user_config(config).block_size, 2048);
 
         let config = crate::model::Config {
-            default_block_size: 0,
+            blocks: config::BlockConfig {
+                default_size: 0,
+                ..config::BlockConfig::default()
+            },
             ..crate::model::Config::default()
         };
         assert_eq!(Model::with_user_config(config).block_size, 1);

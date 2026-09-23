@@ -267,7 +267,7 @@ fn ui_selection_interaction(
         return;
     };
 
-    if model.user_config.show_blocks && model.user_config.selection.snap_to_blocks {
+    if model.user_config.blocks.enabled && model.user_config.blocks.snap_selection {
         if let Some(state) =
             ui.data(|data| data.get_temp::<SelectionResizeState>(selection_resize_state_id))
         {

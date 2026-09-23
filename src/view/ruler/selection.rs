@@ -45,7 +45,7 @@ pub fn ui_selection_interaction_and_tics(
                 TickLabel::Text(format_sample_block_label(
                     left_ix,
                     model.block_size,
-                    model.user_config.show_blocks,
+                    model.user_config.blocks.enabled,
                 )),
             )
         });
@@ -63,7 +63,7 @@ pub fn ui_selection_interaction_and_tics(
                 TickLabel::Text(format_sample_block_label(
                     right_ix,
                     model.block_size,
-                    model.user_config.show_blocks,
+                    model.user_config.blocks.enabled,
                 )),
             )
         });
