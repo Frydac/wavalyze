@@ -22,6 +22,30 @@ enum SelectionResizeEdge {
 struct SelectionResizeState {
     active_edge: SelectionResizeEdge,
     anchor_sample_ix: sample::Ix,
+    anchor_boundary: sample::Ix,
+}
+
+use crate::model::selection_info::snapped_selection_range;
+
+fn set_snapped_selection(model: &mut Model, anchor: f64, current: f64, toward_left: bool) {
+    let ix_rng = snapped_selection_range(anchor, current, model.block_size, toward_left);
+    let screen_x_start = model
+        .tracks
+        .sample_ix_to_screen_x(ix_rng.start as f64 - 0.1)
+        .unwrap_or(0.0);
+    let screen_x_end = model
+        .tracks
+        .sample_ix_to_screen_x(ix_rng.end as f64 - 0.1)
+        .unwrap_or(screen_x_start);
+    model
+        .actions
+        .push(Action::SetSelection(SelectionInfoE::IsSelected(
+            SelectionInfo {
+                ix_rng,
+                screen_x_start,
+                screen_x_end,
+            },
+        )));
 }
 
 fn selection_screen_x_range(
@@ -208,6 +232,11 @@ fn ui_selection_interaction(
                     SelectionResizeState {
                         active_edge: edge,
                         anchor_sample_ix,
+                        anchor_boundary: if edge == SelectionResizeEdge::Left {
+                            anchor_sample_ix.saturating_add(1)
+                        } else {
+                            anchor_sample_ix
+                        },
                     },
                 );
             });
@@ -237,6 +266,26 @@ fn ui_selection_interaction(
     let Some(start_sample_ix) = model.tracks.screen_x_to_sample_ix(press_origin.x) else {
         return;
     };
+
+    if model.user_config.show_blocks && model.user_config.selection.snap_to_blocks {
+        if let Some(state) =
+            ui.data(|data| data.get_temp::<SelectionResizeState>(selection_resize_state_id))
+        {
+            let anchor = state.anchor_boundary as f64;
+            let toward_left = current_sample_ix < anchor
+                || (current_sample_ix == anchor && state.active_edge == SelectionResizeEdge::Left);
+            set_snapped_selection(model, anchor, current_sample_ix, toward_left);
+            ui.ctx().set_cursor_icon(SELECTION_RESIZE_CURSOR);
+        } else {
+            set_snapped_selection(
+                model,
+                start_sample_ix,
+                current_sample_ix,
+                current_sample_ix < start_sample_ix,
+            );
+        }
+        return;
+    }
 
     let current_sample_ix = current_sample_ix.round() as sample::Ix;
     let start_sample_ix = start_sample_ix.round() as sample::Ix;
@@ -311,7 +360,78 @@ pub fn ui_selection(
 
 #[cfg(test)]
 mod tests {
+    use super::snapped_selection_range;
     use super::{SelectionResizeEdge, hovered_selection_edge, whole_track_selection_range};
+
+    #[test]
+    fn block_drag_rounds_both_boundaries_in_either_direction() {
+        assert_eq!(
+            snapped_selection_range(100.0, 1900.0, 1024, false),
+            (0..2048).into()
+        );
+        assert_eq!(
+            snapped_selection_range(1900.0, 100.0, 1024, true),
+            (0..2048).into()
+        );
+        assert_eq!(
+            snapped_selection_range(0.0, 1535.9, 1024, false),
+            (0..1024).into()
+        );
+        assert_eq!(
+            snapped_selection_range(0.0, 1536.0, 1024, false),
+            (0..2048).into()
+        );
+        assert_eq!(
+            snapped_selection_range(0.0, -1536.0, 1024, true),
+            (-2048..0).into()
+        );
+    }
+
+    #[test]
+    fn block_drag_keeps_one_block_when_boundaries_coincide() {
+        assert_eq!(
+            snapped_selection_range(1024.0, 1100.0, 1024, false),
+            (1024..2048).into()
+        );
+        assert_eq!(
+            snapped_selection_range(1024.0, 1000.0, 1024, true),
+            (0..1024).into()
+        );
+    }
+
+    #[test]
+    fn block_resize_preserves_anchor_and_allows_crossing_it() {
+        // Left resize anchors at the exclusive end; right resize anchors at the start.
+        assert_eq!(
+            snapped_selection_range(2048.0, 900.0, 1024, true),
+            (1024..2048).into()
+        );
+        assert_eq!(
+            snapped_selection_range(1024.0, 2900.0, 1024, false),
+            (1024..3072).into()
+        );
+        assert_eq!(
+            snapped_selection_range(2048.0, 3100.0, 1024, false),
+            (2048..3072).into()
+        );
+        assert_eq!(
+            snapped_selection_range(1024.0, -100.0, 1024, true),
+            (0..1024).into()
+        );
+    }
+
+    #[test]
+    fn block_drag_handles_extreme_sizes_and_positions() {
+        for size in [0, 1, 1024, u64::MAX] {
+            for position in [i64::MIN as f64, i64::MAX as f64] {
+                let range = snapped_selection_range(position, position, size, false);
+                assert!(range.start < range.end);
+                let size = size.max(1).min(i64::MAX as u64) as i64;
+                assert_eq!(range.start % size, 0);
+                assert_eq!(range.end % size, 0);
+            }
+        }
+    }
 
     #[test]
     fn hovered_selection_edge_keeps_visible_left_edge_draggable() {

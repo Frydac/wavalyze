@@ -158,6 +158,7 @@ impl View {
                         self.model.tracks.selection_info,
                         self.model.block_size,
                         &mut self.model.actions,
+                        |sample_ix| self.model.tracks.sample_ix_to_screen_x(sample_ix),
                     );
                     ui.group(|ui| {
                         if ui

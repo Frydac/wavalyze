@@ -64,6 +64,7 @@ pub enum StartEditMode {
 #[serde(default)]
 pub struct SelectionConfig {
     pub start_edit_mode: StartEditMode,
+    pub snap_to_blocks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -173,6 +174,7 @@ impl Default for SelectionConfig {
     fn default() -> Self {
         Self {
             start_edit_mode: StartEditMode::KeepEnd,
+            snap_to_blocks: false,
         }
     }
 }
@@ -365,6 +367,18 @@ mod tests {
         let saved = toml::to_string(&config).unwrap();
         let restored: Config = toml::from_str(&saved).unwrap();
         assert!(restored.show_blocks);
+    }
+
+    #[test]
+    fn block_snapping_defaults_off_and_is_persisted() {
+        let mut config: Config =
+            toml::from_str("[selection]\nstart_edit_mode = 'KeepEnd'\n").unwrap();
+        assert!(!config.selection.snap_to_blocks);
+        assert!(!Config::default().selection.snap_to_blocks);
+        config.selection.snap_to_blocks = true;
+        let restored: Config = toml::from_str(&toml::to_string(&config).unwrap()).unwrap();
+        assert!(restored.selection.snap_to_blocks);
+        assert!(!restored.show_blocks);
     }
 
     #[test]

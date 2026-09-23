@@ -68,6 +68,7 @@ pub fn ui_selection_info_toolbar(
     selection_info: SelectionInfoE,
     block_size: u64,
     actions: &mut Vec<Action>,
+    sample_ix_to_screen_x: impl Fn(f64) -> Option<f32>,
 ) {
     let block_size = block_size.max(1);
     let has_selection = selection_info.is_selected();
@@ -104,6 +105,30 @@ pub fn ui_selection_info_toolbar(
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
             ui.vertical(|ui| {
                 ui.heading("Selection");
+                if config.show_blocks
+                    && ui
+                        .checkbox(&mut config.selection.snap_to_blocks, "Snap to blocks")
+                        .changed()
+                {
+                    config.save_to_storage();
+                    if config.selection.snap_to_blocks
+                        && let SelectionInfoE::IsSelected(mut selection) = selection_info
+                    {
+                        selection.ix_rng = model::selection_info::snapped_selection_range(
+                            selection.ix_rng.start as f64,
+                            selection.ix_rng.end as f64,
+                            block_size,
+                            false,
+                        );
+                        selection.screen_x_start =
+                            sample_ix_to_screen_x(selection.ix_rng.start as f64 - 0.1)
+                                .unwrap_or(0.0);
+                        selection.screen_x_end =
+                            sample_ix_to_screen_x(selection.ix_rng.end as f64 - 0.1)
+                                .unwrap_or(selection.screen_x_start);
+                        actions.push(Action::SetSelection(SelectionInfoE::IsSelected(selection)));
+                    }
+                }
                 ui.menu_button("⚙", |ui| {
                     ui.label("Start edit");
                     ui.radio_value(
