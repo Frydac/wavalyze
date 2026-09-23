@@ -43,6 +43,11 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 - Diff files/tracks, with offset adjustment
 - Show/hide tracks with auto adjusting track height for filling the screen
 - Native and browser builds
+* Block-based visual indication and selection
+  * Show selection and hover info in terms of block index and offset
+  * Snap sample selection to block boundaries
+  * Show grid lines for block boundaries
+  * Configure block size and start offset
 
 Non-goals:
 
