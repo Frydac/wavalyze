@@ -54,7 +54,11 @@ fn ui_hover_tick_label(
     ticks::ui_tick_label(
         ui,
         hover_info.screen_pos.x,
-        TickLabel::Text(format_sample_block_label(sample_ix, model.block_size)),
+        TickLabel::Text(format_sample_block_label(
+            sample_ix,
+            model.block_size,
+            model.user_config.show_blocks,
+        )),
         None,
         true,
     )

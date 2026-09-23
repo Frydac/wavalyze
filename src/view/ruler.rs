@@ -23,7 +23,11 @@ fn block_coordinates(ruler_sample: i64, block_size: u64) -> (i128, i128) {
     )
 }
 
-fn format_sample_block_label(sample_ix: i64, block_size: u64) -> String {
+fn format_sample_block_label(sample_ix: i64, block_size: u64, show_blocks: bool) -> String {
+    if !show_blocks {
+        return sample_ix.separate_with_commas().to_string();
+    }
+
     let (block_ix, in_block_offset) = block_coordinates(sample_ix, block_size);
     format!(
         "s: {}\nb: {block_ix} + {in_block_offset}",

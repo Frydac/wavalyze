@@ -160,10 +160,16 @@ impl View {
                         &mut self.model.actions,
                     );
                     ui.group(|ui| {
-                        ui.heading("Block size");
+                        if ui
+                            .checkbox(&mut self.model.user_config.show_blocks, "Block size")
+                            .changed()
+                        {
+                            self.model.user_config.save_to_storage();
+                        }
                         let mut block_size = self.model.block_size;
                         if ui
-                            .add(
+                            .add_enabled(
+                                self.model.user_config.show_blocks,
                                 egui::DragValue::new(&mut block_size)
                                     .speed(1.0)
                                     .range(1..=u64::MAX)

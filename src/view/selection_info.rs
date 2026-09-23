@@ -127,22 +127,34 @@ pub fn ui_selection_info_toolbar(
 
             egui::Grid::new(ui.id().with("selection_toolbar_grid"))
                 .striped(true)
-                .num_columns(4)
+                .num_columns(if config.show_blocks { 4 } else { 2 })
                 .spacing([8.0, 4.0])
                 .show(ui, |ui| {
                     ui.label("");
                     ui.label("samples");
-                    ui.label("block index");
-                    ui.label("block offset");
+                    if config.show_blocks {
+                        ui.label("block index");
+                        ui.label("block offset");
+                    }
                     ui.end_row();
 
                     ui.label("start");
                     let start_sample_changed =
                         number_editor(ui, "selection_start", &mut start_val, SELECTION_EDITOR_MAX);
-                    let start_block_changed =
-                        number_editor(ui, "selection_start_block", &mut start_block, max_block_ix);
-                    let start_offset_changed =
-                        number_editor(ui, "selection_start_offset", &mut start_offset, max_offset);
+                    let start_block_changed = config.show_blocks
+                        && number_editor(
+                            ui,
+                            "selection_start_block",
+                            &mut start_block,
+                            max_block_ix,
+                        );
+                    let start_offset_changed = config.show_blocks
+                        && number_editor(
+                            ui,
+                            "selection_start_offset",
+                            &mut start_offset,
+                            max_offset,
+                        );
                     ui.end_row();
 
                     ui.label("length");
@@ -152,27 +164,29 @@ pub fn ui_selection_info_toolbar(
                         &mut length_val,
                         SELECTION_EDITOR_MAX,
                     );
-                    let length_block_changed = number_editor(
-                        ui,
-                        "selection_length_block",
-                        &mut length_block,
-                        max_block_ix,
-                    );
-                    let length_offset_changed = number_editor(
-                        ui,
-                        "selection_length_offset",
-                        &mut length_offset,
-                        max_offset,
-                    );
+                    let length_block_changed = config.show_blocks
+                        && number_editor(
+                            ui,
+                            "selection_length_block",
+                            &mut length_block,
+                            max_block_ix,
+                        );
+                    let length_offset_changed = config.show_blocks
+                        && number_editor(
+                            ui,
+                            "selection_length_offset",
+                            &mut length_offset,
+                            max_offset,
+                        );
                     ui.end_row();
 
                     ui.label("end");
                     let end_sample_changed =
                         number_editor(ui, "selection_end", &mut end_val, SELECTION_EDITOR_MAX);
-                    let end_block_changed =
-                        number_editor(ui, "selection_end_block", &mut end_block, max_block_ix);
-                    let end_offset_changed =
-                        number_editor(ui, "selection_end_offset", &mut end_offset, max_offset);
+                    let end_block_changed = config.show_blocks
+                        && number_editor(ui, "selection_end_block", &mut end_block, max_block_ix);
+                    let end_offset_changed = config.show_blocks
+                        && number_editor(ui, "selection_end_offset", &mut end_offset, max_offset);
                     ui.end_row();
 
                     let start_changed =

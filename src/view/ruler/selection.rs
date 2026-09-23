@@ -42,7 +42,11 @@ pub fn ui_selection_interaction_and_tics(
             ticks::ui_triangle(ui, left_x, TriangleType::Left, accent);
             (
                 left_x,
-                TickLabel::Text(format_sample_block_label(left_ix, model.block_size)),
+                TickLabel::Text(format_sample_block_label(
+                    left_ix,
+                    model.block_size,
+                    model.user_config.show_blocks,
+                )),
             )
         });
 
@@ -56,7 +60,11 @@ pub fn ui_selection_interaction_and_tics(
             ticks::ui_triangle(ui, right_x - 1.0, TriangleType::Right, accent);
             (
                 right_x,
-                TickLabel::Text(format_sample_block_label(right_ix, model.block_size)),
+                TickLabel::Text(format_sample_block_label(
+                    right_ix,
+                    model.block_size,
+                    model.user_config.show_blocks,
+                )),
             )
         });
 
@@ -141,8 +149,9 @@ mod tests {
     #[test]
     fn selection_label_shows_sample_block_and_offset() {
         assert_eq!(
-            format_sample_block_label(2_049, 1_024),
+            format_sample_block_label(2_049, 1_024, true),
             "s: 2,049\nb: 2 + 1"
         );
+        assert_eq!(format_sample_block_label(2_049, 1_024, false), "2,049");
     }
 }

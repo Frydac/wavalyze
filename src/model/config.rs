@@ -17,6 +17,8 @@ pub struct Config {
     pub tracks_width_info: f32,
     /// Block size assigned to a new app session.
     pub default_block_size: u64,
+    /// Show block coordinates in the selection editor and time ruler.
+    pub show_blocks: bool,
     /// Show the per-track amplitude ruler (right-most slot in the track side panel).
     #[serde(default = "default_true")]
     pub show_amplitude_ruler: bool,
@@ -226,6 +228,7 @@ impl Default for Config {
             show_hover_info: true,
             tracks_width_info: 250.0,
             default_block_size: 1024,
+            show_blocks: false,
             show_amplitude_ruler: true,
             show_db_ruler: false,
             round_minmax_waveform_to_pixel_center: true,
@@ -341,6 +344,7 @@ mod tests {
     #[test]
     fn default_block_size_is_1024() {
         assert_eq!(Config::default().default_block_size, 1024);
+        assert!(!Config::default().show_blocks);
     }
 
     #[test]
@@ -349,6 +353,18 @@ mod tests {
             toml::from_str("show_hover_info = true\ntracks_width_info = 120.0\n").unwrap();
 
         assert_eq!(config.default_block_size, 1024);
+        assert!(!config.show_blocks);
+    }
+
+    #[test]
+    fn block_visibility_is_persisted() {
+        let config = Config {
+            show_blocks: true,
+            ..Config::default()
+        };
+        let saved = toml::to_string(&config).unwrap();
+        let restored: Config = toml::from_str(&saved).unwrap();
+        assert!(restored.show_blocks);
     }
 
     #[test]
