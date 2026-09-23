@@ -38,6 +38,7 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 - Zoom and pan over x and y axes with multiple types of controls
    - see [Mouse navigation](doc/mouse_navigation.md)
 - Sample-level hover details
+  * Configure zoom level for when to show sample-level details
 - Calculate track statistics (dB-RMS, peak) over a selection
   - Visual indication of peak value in selection
 - Diff files/tracks, with offset adjustment
