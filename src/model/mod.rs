@@ -1,3 +1,12 @@
+//! Application state and the boundary between background work and workspace mutations.
+//!
+//! `Files` owns file records, display order, and native monitoring/reload state; `Tracks` owns
+//! track presentation and diff dependencies; the audio manager owns buffers and cached data.
+//! Background computation lives under `jobs` and returns results through the action queue.
+//!
+//! `Model` coordinates changes spanning those owners, such as committing a reload or closing
+//! the workspace. This module keeps construction and workspace lifecycle rules together.
+
 pub mod action;
 pub mod config;
 pub mod demo;
@@ -17,41 +26,44 @@ pub mod tracks;
 pub mod types;
 pub mod view_buffer;
 
-// Domain modules: each holds an `impl Model` block (and its unit tests) for one area, keeping this
-// file focused on the struct and core lifecycle. See also `test_support` for shared test fixtures.
+// Domain modules own their state; cross-collection operations remain small Model coordinators.
+// See test_support for fixtures shared by collection and coordination tests.
 mod diff;
-mod files;
-mod loading;
+pub mod files;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 pub use self::config::Config;
 pub use self::jobs::JobManager;
 pub use self::time_camera::TimeCamera;
 pub use self::types::{BitDepth, PixelCoord, SampleRate};
 pub use self::view_buffer::ViewBufferE;
-pub use files::FileVisibilityState;
+pub use files::{FileVisibilityState, Files};
 pub use jobs::FinishedJob;
 // pub use self::hover_info::HoverInfo;
 use crate::audio;
 pub use action::Action;
 
-use crate::wav;
-use crate::wav::file::FileId;
 use anyhow::Result;
-use slotmap::SlotMap;
 use std::sync::mpsc::{Receiver, Sender};
 
+/// Live workspace and its asynchronous work queues.
+/// Workers prepare data independently; actions integrate it here while preserving the identities
+/// used by file rows, track selections, and diff dependencies.
 #[derive(Debug)]
 pub struct Model {
     pub user_config: Config,
     /// Global 'processing' block size for block-coordinate display.
     pub block_size: u64,
-    pub files: SlotMap<FileId, wav::file::File>,
-    pub files_order: Vec<FileId>,
+    /// File records, sidebar order, and native disk monitoring/update state.
+    pub files: Files,
+    /// Audio buffers
     pub audio: audio::manager::AudioManager,
+    /// Data and operations for GUI tracks
     pub tracks: tracks::Tracks,
+    /// Actions to be processed by the UI in between drawing frames
     pub actions: Vec<Action>,
+
     /// Sender cloned to background workers so they can push follow-up actions back into the
     /// model's action queue. Drained into `actions` each frame via `drain_action_messages`.
     pub actions_tx: Sender<Action>,
@@ -80,8 +92,7 @@ impl Default for Model {
         Self {
             user_config,
             block_size,
-            files: SlotMap::default(),
-            files_order: Vec::new(),
+            files: Files::default(),
             audio: audio::manager::AudioManager::default(),
             tracks: tracks::Tracks::default(),
             actions: Vec::new(),
@@ -114,26 +125,12 @@ impl Model {
         self.block_size = block_size.max(1);
     }
 
-    /// Insert a file into the slotmap and append it to the display/order vec. The two fields
-    /// are always mutated together through this helper (and `clear_files`/`remove_file`).
-    pub fn insert_file(&mut self, file: wav::file::File) -> FileId {
-        let id = self.files.insert(file);
-        self.files_order.push(id);
-        id
-    }
-
-    pub fn clear_files(&mut self) {
-        self.files.clear();
-        self.files_order.clear();
-    }
-
     pub fn close_all(&mut self) {
         self.generation = self.generation.wrapping_add(1);
         self.tracks.remove_all_tracks();
         self.tracks.hover_info = Default::default();
         self.tracks.selection_info = Default::default();
         self.files.clear();
-        self.files_order.clear();
         self.audio.clear();
     }
 
@@ -339,12 +336,12 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.insert_file(file);
+        model.files.insert(file);
 
         model.close_all();
 
         assert!(model.files.is_empty());
-        assert!(model.files_order.is_empty());
+        assert!(model.files.order().is_empty());
         assert!(model.tracks.tracks.is_empty());
         assert!(model.tracks.tracks_order.is_empty());
         assert_eq!(

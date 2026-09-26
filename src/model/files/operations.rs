@@ -6,6 +6,7 @@ use crate::model::{Model, track::TrackId};
 use crate::wav::{self, file::FileId};
 use anyhow::Result;
 
+/// Summarize a file's channel-track visibility for its sidebar checkbox.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileVisibilityState {
     NoneVisible,
@@ -19,21 +20,7 @@ impl Model {
         track_id: TrackId,
     ) -> Option<(&wav::file::File, &wav::file::Channel)> {
         let track = self.tracks.get_track(track_id)?;
-        self.get_file_channel_for_buffer(track.single.buffer_id)
-    }
-
-    /// Resolve a buffer to the file/channel it belongs to. Used by diff tracks, whose own
-    /// `single.buffer_id` is the computed diff buffer (not in any file), to describe their sources.
-    pub fn get_file_channel_for_buffer(
-        &self,
-        buffer_id: audio::BufferId,
-    ) -> Option<(&wav::file::File, &wav::file::Channel)> {
-        for file in self.files.values() {
-            if let Some(channel) = file.get_channel(buffer_id) {
-                return Some((file, channel));
-            }
-        }
-        None
+        self.files.channel_for_buffer(track.single.buffer_id)
     }
 
     pub fn find_track_id_for_buffer(&self, buffer_id: audio::BufferId) -> Option<TrackId> {
@@ -181,7 +168,6 @@ impl Model {
         }
         self.audio.remove_buffers_from_file(&file);
         self.files.remove(file_id);
-        self.files_order.retain(|id| *id != file_id);
         true
     }
 
@@ -201,7 +187,8 @@ impl Model {
             return Ok(false);
         };
         let Some(file_offset) = self
-            .get_file_channel_for_buffer(buffer_id)
+            .files
+            .channel_for_buffer(buffer_id)
             .map(|(file, _)| file.sample_ix_offset)
         else {
             return Ok(false);
@@ -223,7 +210,12 @@ impl Model {
 
     fn track_insert_index_for_buffer(&self, buffer_id: audio::BufferId) -> Option<usize> {
         let mut insert_ix = 0;
-        for file in self.files_order.iter().filter_map(|id| self.files.get(*id)) {
+        for file in self
+            .files
+            .order()
+            .iter()
+            .filter_map(|id| self.files.get(*id))
+        {
             for channel in file.channels.values() {
                 if channel.buffer_id == buffer_id {
                     return Some(insert_ix);
@@ -252,7 +244,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        let file_id = model.insert_file(file);
+        let file_id = model.files.insert(file);
 
         assert_eq!(
             model.file_visibility_state_for(file_id),
@@ -284,7 +276,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        let file_id = model.insert_file(file);
+        let file_id = model.files.insert(file);
         let track_ids = buffers.map(|buffer_id| model.find_track_id_for_buffer(buffer_id).unwrap());
 
         Action::SetTrackUseFileOffset {
@@ -324,7 +316,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        let file_id = model.insert_file(file);
+        let file_id = model.files.insert(file);
         let track_id = model.find_track_id_for_buffer(buffer).unwrap();
 
         assert!(model.set_track_use_file_offset(track_id, false));
@@ -362,7 +354,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.insert_file(file);
+        model.files.insert(file);
         let track_id = model.find_track_id_for_buffer(buffer).unwrap();
 
         assert!(!model.set_track_sample_ix_offset(track_id, 5.0));
@@ -386,7 +378,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        let file_id = model.insert_file(file.clone());
+        let file_id = model.files.insert(file.clone());
 
         assert!(model.remove_channel_track(buffers[0]));
         assert!(model.find_track_id_for_buffer(buffers[0]).is_none());
@@ -410,7 +402,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        let file_id = model.insert_file(file);
+        let file_id = model.files.insert(file);
 
         assert!(model.remove_channel_track(buffers[0]));
         assert!(model.set_file_sample_ix_offset(file_id, 11));
@@ -439,7 +431,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.insert_file(file);
+        model.files.insert(file);
 
         let track_id = model.find_track_id_for_buffer(buffers[0]).unwrap();
         model.tracks.set_track_height(track_id, 120.0);
@@ -470,8 +462,8 @@ mod tests {
             .tracks
             .add_tracks_from_file(&second_file, &model.user_config.track)
             .unwrap();
-        model.insert_file(first_file);
-        model.insert_file(second_file);
+        model.files.insert(first_file);
+        model.files.insert(second_file);
 
         assert!(model.remove_channel_track(first_file_buffers[1]));
         assert!(model.restore_channel_track(first_file_buffers[1]).unwrap());
@@ -501,7 +493,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.insert_file(file);
+        model.files.insert(file);
 
         assert!(!model.restore_channel_track(buffers[0]).unwrap());
         assert_eq!(model.tracks.tracks_order.len(), 2);

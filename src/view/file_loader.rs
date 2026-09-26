@@ -1,13 +1,23 @@
+//! Bridge platform file pickers and native path drops to the view's loading queue.
+//!
+//! Native results keep full paths so the model can watch and reload them through its path
+//! jobs. Browser results carry uploaded bytes instead. This module collects those inputs;
+//! decoding and model integration belong to the existing load actions and workers.
+
+#[cfg(target_arch = "wasm32")]
 use crate::wav;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
+/// Completed platform input handed back to the view for queuing the appropriate load actions.
+/// Cancellation is explicit so the view can also clear its pending-picker state.
 #[derive(Debug)]
 pub enum PickerMessage {
+    #[cfg(target_arch = "wasm32")]
     Files(Vec<wav::ReadConfigBytes>),
     #[cfg(not(target_arch = "wasm32"))]
-    Error(String),
+    Paths(Vec<PathBuf>),
     Cancelled,
 }
 
@@ -53,26 +63,5 @@ pub fn pick_wav_files(tx: Sender<PickerMessage>) {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_paths(paths: Vec<PathBuf>, tx: Sender<PickerMessage>) {
-    std::thread::spawn(move || {
-        let mut configs = Vec::with_capacity(paths.len());
-        for path in paths {
-            let bytes = match std::fs::read(&path) {
-                Ok(bytes) => bytes,
-                Err(err) => {
-                    let _ = tx.send(PickerMessage::Error(format!(
-                        "Failed to read '{}': {err}",
-                        path.display()
-                    )));
-                    return;
-                }
-            };
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(str::to_owned);
-            configs.push(wav::ReadConfigBytes::new(name, bytes));
-        }
-
-        let _ = tx.send(PickerMessage::Files(configs));
-    });
+    let _ = tx.send(PickerMessage::Paths(paths));
 }

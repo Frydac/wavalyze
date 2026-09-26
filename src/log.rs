@@ -12,7 +12,7 @@ pub type TracingCollector = EventCollector;
 ///
 /// This should only be called once in the application's lifetime, typically in `main`.
 pub fn init_tracing(log_level: Option<&str>) -> Result<TracingCollector> {
-    const DEFAULT_LEVEL: &str = "info";
+    const DEFAULT_LEVEL: &str = "warn";
     let env_log_level = std::env::var("WAVALYZE_LOG").ok();
     let wavalyze_level = log_level
         .or(env_log_level.as_deref())

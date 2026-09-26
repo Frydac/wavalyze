@@ -1,3 +1,9 @@
+//! Compose the application panels and coordinate each egui frame.
+//!
+//! This module receives picker results and background notifications, draws the workspace,
+//! and dispatches queued model actions after drawing. Individual panels live in submodules;
+//! platform-specific input handling stays here so the native and browser views share a model.
+
 pub mod config;
 pub mod db_ruler;
 pub mod diff_pairing;
@@ -44,6 +50,8 @@ enum RightPanelTab {
     Profile,
 }
 
+/// UI coordinator owning the workspace model and presentation-only state such as active tabs.
+/// It bridges platform input and background messages into the shared frame/action lifecycle.
 #[derive(Debug)]
 pub struct View {
     model: model::Model,
@@ -84,6 +92,11 @@ impl View {
 
     /// Draw ui and handle interactions
     pub fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.model.files.poll_changes(
+            ctx,
+            self.model.job_mgr.pending() > 0 || !self.model.actions.is_empty(),
+        );
         self.drain_picker_results(ctx);
         if self.picker_pending > 0 {
             ctx.request_repaint();
@@ -135,6 +148,7 @@ impl View {
 
         let had_dropped_files = self.handle_drag_and_drop_into_app(ctx);
 
+        // Process all actions created by the UI (and background jobs).
         // We don't stop the program when something fails, like opening a wav file.
         if let Err(e) = self.model.process_actions() {
             tracing::error!("Error processing actions");
@@ -579,6 +593,7 @@ impl View {
         let mut had_results = false;
         loop {
             match self.picker_rx.try_recv() {
+                #[cfg(target_arch = "wasm32")]
                 Ok(file_loader::PickerMessage::Files(files)) => {
                     had_results = true;
                     self.picker_pending = self.picker_pending.saturating_sub(1);
@@ -587,10 +602,14 @@ impl View {
                         .extend(files.into_iter().map(Action::OpenFileBytes));
                 }
                 #[cfg(not(target_arch = "wasm32"))]
-                Ok(file_loader::PickerMessage::Error(err)) => {
+                Ok(file_loader::PickerMessage::Paths(paths)) => {
                     had_results = true;
                     self.picker_pending = self.picker_pending.saturating_sub(1);
-                    tracing::error!("File picker load failed: {err}");
+                    self.model.actions.extend(
+                        paths
+                            .into_iter()
+                            .map(|path| Action::OpenFilePath(crate::wav::ReadConfig::new(path))),
+                    );
                 }
                 Ok(file_loader::PickerMessage::Cancelled) => {
                     had_results = true;

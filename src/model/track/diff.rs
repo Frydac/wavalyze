@@ -3,7 +3,7 @@ use crate::audio;
 /// Represents a time domain view of 2 audio buffers and their difference.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Diff {
-    /// this buffer should be (buffer_a - buffer_b)
+    /// this audio buffer contains the diff data and should be (buffer_a - buffer_b)
     pub buffer_id_diff: audio::BufferId,
 
     pub buffer_id_a: audio::BufferId,

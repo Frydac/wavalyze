@@ -186,7 +186,7 @@ pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
 /// Resolve a source buffer to a [`DiffSourceInfo`], falling back to "unknown" if the file/channel is
 /// no longer present (e.g. the source file was closed).
 fn diff_source_info(model: &Model, buffer_id: crate::audio::BufferId) -> DiffSourceInfo {
-    match model.get_file_channel_for_buffer(buffer_id) {
+    match model.files.channel_for_buffer(buffer_id) {
         Some((file, channel)) => DiffSourceInfo {
             path: file
                 .path

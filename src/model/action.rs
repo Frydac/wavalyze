@@ -1,3 +1,8 @@
+//! Commands from the UI and completion messages from background workers.
+//!
+//! Both are queued and processed after drawing, so files and tracks are not
+//! added or removed while the UI is still rendering them.
+
 use crate::{
     audio::BufferId,
     model::{
@@ -9,29 +14,60 @@ use crate::{
 };
 use anyhow::{Context, Result};
 
-/// Actions exist mainly to be something that can be 'scheduled' to be executed the next frame while
-/// doing egui interactions during drawing.
-/// e.g. to remove a track, we are already drawing it (part is already drawn) while we do the
-/// interaction, so we can't remove it in that frame we still have to complete drawing it.
-///
-/// Other advantages (TODO):
-/// - we could attach them to keyboard shortcuts and configure them in the user config
-/// - we could use them to record user actions and undo/redo them
+/// Workspace commands from UI interactions and completion messages from background workers.
+/// Queuing structural changes avoids e.g. removing files or tracks while their UI is still drawing.
+/// Variants are grouped by functionality, keeping worker results beside the commands that start
+/// their work. Result validation is implemented by the relevant handlers.
 #[derive(Debug)]
 pub enum Action {
-    RemoveAllTracks, // TODO: still needed?
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Workspace and files
     CloseAll, // remove all tracks/buffers/files
-    RemoveTrack(TrackId),
+    LoadDemo,
+    /// Load a WAV from a native CLI, picker, or dropped path, retaining its reload recipe.
+    OpenFilePath(wav::ReadConfig),
+    /// Load supplied WAV bytes, including browser picker/drop inputs without disk access.
+    OpenFileBytes(wav::ReadConfigBytes),
+    /// Integrate a fully-loaded WAV file into the model. Pushed by background load jobs on success.
+    IntegrateLoadedFile {
+        generation: u64,
+        loaded: wav::read::LoadedFile,
+    },
     /// Unload a whole file: all its channels, their tracks, the audio buffers, and the file spec.
     CloseFile {
         file_id: FileId,
     },
+    /// Request one atomic reload batch; both individual and Update all controls use this action.
+    #[cfg(not(target_arch = "wasm32"))]
+    ReloadFiles(Vec<FileId>),
+    /// Validate and integrate a prepared batch on the UI thread, or expose its failure for retry.
+    #[cfg(not(target_arch = "wasm32"))]
+    FinishReload(Box<crate::model::files::reload::ReloadResult>),
 
-    /// Load a WAV from a filesystem path (native CLI startup, future native file-path flows).
-    OpenFilePath(wav::ReadConfig),
-    /// Load a WAV from in-memory bytes (file picker, drag-drop, wasm).
-    OpenFileBytes(wav::ReadConfigBytes),
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Track organization and layout
+    RemoveAllTracks, // TODO: still needed?
+    RemoveTrack(TrackId),
+    /// Reorder `dragged` to `to_gap_ix` (a gap index in the current track order). Pushed when a
+    /// track is dropped *between* two tracks.
+    ReorderTrack {
+        dragged: TrackId,
+        to_gap_ix: usize,
+    },
+    /// Enable or disable continuous equal-height layout. Enabling immediately fits visible tracks.
+    SetEqualHeightLayout(bool),
+    /// Manually set one track's height, disabling continuous equal-height layout.
+    SetTrackHeight {
+        track_id: TrackId,
+        height: f32,
+    },
+    /// Manually set every track's height, disabling continuous equal-height layout.
+    SetTracksHeight {
+        height: f32,
+    },
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Diff creation and results
     /// Load two WAV files and compute a diff track from their selected channels. When the channel
     /// pairing is ambiguous (multichannel input without an explicit selection), this opens the
     /// channel-pairing matrix dialog instead.
@@ -43,31 +79,29 @@ pub enum Action {
     ConfirmDiffPairing,
     /// Cancel in the channel-pairing dialog: discard the pending pairing.
     CancelDiffPairing,
-    StartDemoJob(jobs::DemoTimedConfig),
-    LoadDemo,
-    /// Integrate a fully-loaded WAV file into the model. Pushed by background load jobs on success.
-    IntegrateLoadedFile {
-        generation: u64,
-        loaded: wav::read::LoadedFile,
+    DiffBuffers {
+        buffer_id_a: BufferId,
+        buffer_id_b: BufferId,
+        sample_ix_offset_a: crate::audio::sample::Ix,
+        sample_ix_offset_b: crate::audio::sample::Ix,
+    },
+    /// Diff two tracks (dragged onto dropped-on). The diff is
+    /// `dragged - dropped_on`, and the resulting diff track is inserted directly after `dropped_on`.
+    DiffTracks {
+        dragged: TrackId,
+        dropped_on: TrackId,
     },
     IntegrateLoadedDiff {
         generation: u64,
         diff: jobs::LoadedDiff,
     },
+    IntegrateDiffBuffer {
+        generation: u64,
+        diff: jobs::ComputedDiff,
+    },
 
-    /// Set x-zoom so the longest track is full width
-    /// Set y-zoom to fill the screen, with a minimum height per track
-    ZoomToFull,
-    /// Set x-zoom so the current selection fills the visible width.
-    ZoomToSelection,
-    /// Set x-zoom to sample-level detail, centered on the left edge of the current selection.
-    ZoomToSelectionLeftEdge,
-    /// Set x-zoom to sample-level detail, centered on the right edge of the current selection.
-    ZoomToSelectionRightEdge,
-
-    /// Set global processing block size, clamped to at least one sample.
-    SetBlockSize(u64),
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // File and track alignment
     /// Set a file's absolute sample offset and update channel tracks inheriting it.
     SetFileSampleIxOffset {
         file_id: FileId,
@@ -93,22 +127,27 @@ pub enum Action {
         file_id: FileId,
         mode: jobs::OffsetDetectionMode,
     },
+    /// Buffer identity prevents a completed alignment job from changing newly reloaded audio.
+    OffsetDetectedChecked {
+        result: jobs::OffsetDetectionResult,
+        buffers: Vec<std::sync::Arc<crate::audio::buffer::BufferE>>,
+    },
     /// Result of asynchronously scanning buffers for a leading-silence boundary.
     OffsetDetected(jobs::OffsetDetectionResult),
 
-    /// Enable or disable continuous equal-height layout. Enabling immediately fits visible tracks.
-    SetEqualHeightLayout(bool),
-    /// Manually set one track's height, disabling continuous equal-height layout.
-    SetTrackHeight {
-        track_id: TrackId,
-        height: f32,
-    },
-    /// Manually set every track's height, disabling continuous equal-height layout.
-    SetTracksHeight {
-        height: f32,
-    },
-
-    /// Move the _view_ of all the tracks to the lef (negative value) or right (positive value)
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // View navigation and display
+    // TODO: zoom rect?
+    /// Set x-zoom so the longest track is full width
+    /// Set y-zoom to fill the screen, with a minimum height per track
+    ZoomToFull,
+    /// Set x-zoom so the current selection fills the visible width.
+    ZoomToSelection,
+    /// Set x-zoom to sample-level detail, centered on the left edge of the current selection.
+    ZoomToSelectionLeftEdge,
+    /// Set x-zoom to sample-level detail, centered on the right edge of the current selection.
+    ZoomToSelectionRightEdge,
+    /// Move the _view_ of all the tracks to the left (negative value) or right (positive value)
     PanX {
         nr_pixels: PixelCoord,
     },
@@ -118,23 +157,11 @@ pub enum Action {
         nr_pixels: PixelCoord,
         center_x: PixelCoord,
     },
-
     /// Move one track up or down wrt to the sample values
     PanY {
         track_id: TrackId,
         nr_pixels: PixelCoord,
     },
-    /// Detect the peak in the selected range, or the visible range when there is no valid
-    /// selection, then auto-fit one track's value range.
-    AutoFitY {
-        track_id: TrackId,
-    },
-    /// Reset the sample value range to full-scale for a single track.
-    RecenterY {
-        track_id: TrackId,
-    },
-    /// Reset the sample value range to full-scale for all tracks.
-    RecenterYAll,
     /// Zoom the _view_ of the given track, center_y should be absolute y-position of the
     /// mouse/center
     ZoomY {
@@ -142,18 +169,35 @@ pub enum Action {
         nr_pixels: PixelCoord,
         center_y: PixelCoord,
     },
-    /// Update hover info on the next frame so all views stay in sync.
-    SetHoverInfo(HoverInfoE),
-    // TODO: zoom rect?
+    /// Reset the sample value range to full-scale for a single track.
+    RecenterY {
+        track_id: TrackId,
+    },
+    /// Reset the sample value range to full-scale for all tracks.
+    RecenterYAll,
+    /// Detect the peak in the selected range, or the visible range when there is no valid
+    /// selection, then auto-fit one track's value range.
+    AutoFitY {
+        track_id: TrackId,
+    },
+    /// Result of asynchronously scanning a track range for its normalized absolute peak.
+    AutoFitPeakDetected(jobs::AutoFitPeakResult),
+    /// Set global processing block size, clamped to at least one sample.
+    SetBlockSize(u64),
 
-    // SetSelection
+    // Selection and hover
+    /// Update the shared sample-range selection.
     SetSelection(SelectionInfoE),
     /// Apply plain, Ctrl/Cmd-toggle, or Shift-range selection after current UI frame.
     SelectTrack {
         track_id: TrackId,
         mode: TrackSelectionMode,
     },
+    /// Update hover info on the next frame so all views stay in sync.
+    SetHoverInfo(HoverInfoE),
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Audio statistics
     /// Start a background job to gather statistics (dB-RMS, peak) over a buffer. The range is
     /// derived from the current selection (whole buffer when nothing is selected) and the track's
     /// sample offset. Result lands via `Action::SetBufferStats` once the worker finishes.
@@ -162,89 +206,27 @@ pub enum Action {
         track_id: TrackId,
         options: crate::model::stats::StatsOptions,
     },
-    DiffBuffers {
-        buffer_id_a: BufferId,
-        buffer_id_b: BufferId,
-        sample_ix_offset_a: crate::audio::sample::Ix,
-        sample_ix_offset_b: crate::audio::sample::Ix,
-    },
-    /// Diff two tracks (dragged onto dropped-on). The diff is
-    /// `dragged - dropped_on`, and the resulting diff track is inserted directly after `dropped_on`.
-    DiffTracks {
-        dragged: TrackId,
-        dropped_on: TrackId,
-    },
-    /// Reorder `dragged` to `to_gap_ix` (a gap index in the current track order). Pushed when a
-    /// track is dropped *between* two tracks.
-    ReorderTrack {
-        dragged: TrackId,
-        to_gap_ix: usize,
-    },
-    IntegrateDiffBuffer {
-        generation: u64,
-        diff: jobs::ComputedDiff,
-    },
     /// Integrate freshly gathered buffer statistics. Pushed by the compute-stats worker via
     /// `actions_tx`. Silently dropped if the buffer no longer exists (e.g., file closed mid-flight).
     SetBufferStats {
         buffer_id: BufferId,
         stats: crate::model::stats::BufferStats,
     },
-    /// Result of asynchronously scanning a track range for its normalized absolute peak.
-    AutoFitPeakDetected(jobs::AutoFitPeakResult),
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Development jobs
+    StartDemoJob(jobs::DemoTimedConfig),
 }
 
 impl Action {
-    fn log_debug(&self) {
-        match self {
-            // Continuous pointer and drag interactions would overwhelm debug logs.
-            Action::PanX { .. }
-            | Action::ZoomX { .. }
-            | Action::PanY { .. }
-            | Action::ZoomY { .. }
-            | Action::SetHoverInfo(_)
-            | Action::SetSelection(_)
-            | Action::SetFileSampleIxOffset { .. }
-            | Action::SetTrackSampleIxOffset { .. }
-            | Action::SetTrackHeight { .. }
-            | Action::SetTracksHeight { .. } => {}
-            // Avoid formatting payloads containing complete files or decoded audio buffers.
-            Action::OpenFileBytes(config) => tracing::debug!(
-                action = "OpenFileBytes",
-                name = ?config.name,
-                bytes = config.bytes.len(),
-                "Processing action"
-            ),
-            Action::IntegrateLoadedFile { generation, loaded } => tracing::debug!(
-                action = "IntegrateLoadedFile",
-                generation,
-                load_id = loaded.load_id,
-                channels = loaded.channels.len(),
-                "Processing action"
-            ),
-            Action::IntegrateLoadedDiff { generation, diff } => tracing::debug!(
-                action = "IntegrateLoadedDiff",
-                generation,
-                file_a_load_id = diff.file_a.load_id,
-                file_b_load_id = diff.file_b.load_id,
-                pairs = diff.pairs.len(),
-                "Processing action"
-            ),
-            Action::IntegrateDiffBuffer { generation, diff } => tracing::debug!(
-                action = "IntegrateDiffBuffer",
-                generation,
-                buffer_id_a = ?diff.buffer_id_a,
-                buffer_id_b = ?diff.buffer_id_b,
-                "Processing action"
-            ),
-            action => tracing::debug!(?action, "Processing action"),
-        }
-    }
-
     pub fn process(self, model: &mut crate::model::Model) -> Result<()> {
         self.log_debug();
 
         match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::ReloadFiles(ids) => model.start_reload(ids)?,
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::FinishReload(result) => model.finish_reload(*result),
             Action::RemoveTrack(track_id) => {
                 model.tracks.remove_track(track_id);
             }
@@ -420,6 +402,31 @@ impl Action {
                     mode,
                     buffer_ids,
                 )?;
+            }
+            Action::OffsetDetectedChecked { result, buffers } => {
+                let current =
+                    match result.target {
+                        jobs::OffsetDetectionTarget::File { file_id } => {
+                            model.files.get(file_id).is_some_and(|file| {
+                                file.channels.len() == buffers.len()
+                                    && file.channels.values().zip(&buffers).all(|(ch, buffer)| {
+                                        model.audio.buffers.get(ch.buffer_id).is_some_and(
+                                            |current| std::sync::Arc::ptr_eq(current, buffer),
+                                        )
+                                    })
+                            })
+                        }
+                        jobs::OffsetDetectionTarget::Track {
+                            track_id,
+                            buffer_id,
+                        } => model
+                            .tracks
+                            .get_track(track_id)
+                            .is_some_and(|t| t.single.buffer_id == buffer_id),
+                    };
+                if current {
+                    Action::OffsetDetected(result).process(model)?;
+                }
             }
             Action::OffsetDetected(result) => {
                 if let Some(sample_ix_offset) = result.sample_ix_offset {
@@ -624,6 +631,60 @@ impl Action {
 
         Ok(())
     }
+
+    /// We don't want to log _every_ action at debug log level, it would be too noisy.
+    fn log_debug(&self) {
+        match self {
+            Action::OffsetDetectedChecked { .. } => {
+                tracing::debug!(action = "OffsetDetectedChecked", "Processing action")
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::FinishReload(_) => {
+                tracing::debug!(action = "FinishReload", "Processing action")
+            }
+            // Continuous pointer and drag interactions would overwhelm debug logs.
+            Action::PanX { .. }
+            | Action::ZoomX { .. }
+            | Action::PanY { .. }
+            | Action::ZoomY { .. }
+            | Action::SetHoverInfo(_)
+            | Action::SetSelection(_)
+            | Action::SetFileSampleIxOffset { .. }
+            | Action::SetTrackSampleIxOffset { .. }
+            | Action::SetTrackHeight { .. }
+            | Action::SetTracksHeight { .. } => {}
+            // Avoid formatting payloads containing complete files or decoded audio buffers.
+            Action::OpenFileBytes(config) => tracing::debug!(
+                action = "OpenFileBytes",
+                name = ?config.name,
+                bytes = config.bytes.len(),
+                "Processing action"
+            ),
+            Action::IntegrateLoadedFile { generation, loaded } => tracing::debug!(
+                action = "IntegrateLoadedFile",
+                generation,
+                load_id = loaded.load_id,
+                channels = loaded.channels.len(),
+                "Processing action"
+            ),
+            Action::IntegrateLoadedDiff { generation, diff } => tracing::debug!(
+                action = "IntegrateLoadedDiff",
+                generation,
+                file_a_load_id = diff.file_a.load_id,
+                file_b_load_id = diff.file_b.load_id,
+                pairs = diff.pairs.len(),
+                "Processing action"
+            ),
+            Action::IntegrateDiffBuffer { generation, diff } => tracing::debug!(
+                action = "IntegrateDiffBuffer",
+                generation,
+                buffer_id_a = ?diff.buffer_id_a,
+                buffer_id_b = ?diff.buffer_id_b,
+                "Processing action"
+            ),
+            action => tracing::debug!(?action, "Processing action"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -702,7 +763,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        let file_id = model.insert_file(file);
+        let file_id = model.files.insert(file);
         let track_ids = buffers.map(|buffer_id| model.find_track_id_for_buffer(buffer_id).unwrap());
         model.set_track_use_file_offset(track_ids[1], false);
         model.set_track_sample_ix_offset(track_ids[1], 3.0);
@@ -787,7 +848,7 @@ mod tests {
             .tracks
             .add_tracks_from_file(&file, &model.user_config.track)
             .unwrap();
-        model.insert_file(file);
+        model.files.insert(file);
         let track_id = model.find_track_id_for_buffer(buffer_id).unwrap();
 
         Action::DetectTrackOffset {

@@ -301,7 +301,7 @@ mod tests {
         assert!(source_b.use_file_offset);
         assert!(diff_track.diff.is_some());
         assert!(!diff_track.use_file_offset);
-        assert_eq!(model.files_order.len(), 2);
+        assert_eq!(model.files.order().len(), 2);
     }
 
     #[test]

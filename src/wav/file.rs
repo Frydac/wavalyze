@@ -1,3 +1,9 @@
+//! Metadata and channel-to-buffer mappings for audio already registered in the model.
+//!
+//! A file keeps its identity while reload replaces its buffers. Its optional source recipe
+//! distinguishes reloadable disk files from browser uploads and generated audio, whose names
+//! may look like paths but do not grant access to a filesystem source.
+
 use crate::{
     audio::{self, manager::BufferId, sample},
     wav::read::ChIx,
@@ -5,7 +11,7 @@ use crate::{
 use slotmap::new_key_type;
 use std::{collections::BTreeMap, path::PathBuf};
 
-// Accociate a channel id with a buffer
+/// Connect a WAV channel index and optional speaker identity to its currently loaded audio buffer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Channel {
     pub ch_ix: ChIx,
@@ -15,8 +21,12 @@ pub struct Channel {
 
 pub type Channels = BTreeMap<ChIx, Channel>;
 
+/// Registered file metadata and its loaded channel buffers, independent of displayed tracks.
+/// Reload updates this record in place so file identity and user-controlled offsets survive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
+    /// Retained reload recipe, absent for browser bytes and generated audio.
+    pub source: Option<Box<crate::wav::ReadConfig>>,
     /// Loaded channel buffers, which can be a subset of the WAV's channels.
     pub channels: Channels,
     /// Total channel count from the WAV header, including channels that were not loaded.

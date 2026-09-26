@@ -23,6 +23,8 @@ pub mod detect_offset;
 pub mod detect_peak;
 pub mod diff;
 pub mod load_wav;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod reload;
 pub use compute_stats::spawn_compute_stats_job;
 pub use demo::{DemoTimedConfig, spawn_demo_timed_job};
 pub use detect_offset::{
@@ -46,6 +48,8 @@ const RECENT_FINISHED_CAP: usize = 12;
 /// UI tag for categorizing in-flight jobs. Purely descriptive — `JobManager` does not branch on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobKind {
+    #[cfg(not(target_arch = "wasm32"))]
+    Reload,
     DemoTimed,
     LoadWav,
     ComputeStats,
@@ -54,6 +58,7 @@ pub enum JobKind {
     Diff,
 }
 
+/// Lifecycle state shown for an active job or retained in its recent outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobStatus {
     Running,
@@ -133,14 +138,16 @@ pub struct JobProgressEvent {
     pub message: Option<String>,
 }
 
-/// Completion notification. The worker is responsible for any side effects (e.g., pushing an
-/// `Action`) before sending this; the summary is shown to the user in the "recent jobs" list.
+/// Terminal success displayed in the recent-jobs list.
+/// Ordinary workers queue integration before sending this; atomic reload sends it from the UI
+/// thread only after its prepared data has passed validation and been committed.
 #[derive(Debug, Clone)]
 pub struct JobCompletionEvent {
     pub job_id: JobId,
     pub summary: String,
 }
 
+/// Terminal failure sent to the job manager for the recent-jobs error display.
 #[derive(Debug)]
 pub struct JobFailureEvent {
     pub job_id: JobId,
@@ -151,6 +158,8 @@ pub struct JobFailureEvent {
 // JobManager — pure bookkeeper. No knowledge of specific job kinds beyond the `JobKind` tag.
 // ---------------------------------------------------------------------------
 
+/// Bookkeeping for active jobs and recent outcomes, independent of the work each job performs.
+/// Workers send progress through its channel; the UI drains that channel to refresh job views.
 #[derive(Debug)]
 pub struct JobManager {
     tx: Sender<JobEvent>,
@@ -287,11 +296,11 @@ impl Default for JobManager {
 }
 
 // ---------------------------------------------------------------------------
-// Worker spawn helper — picks the platform-appropriate spawn primitive. Private to the module;
+// Worker spawn helper — picks the platform-appropriate spawn primitive;
 // child submodules (`demo`, `load_wav`) reach it via `super::spawn_worker`.
 // ---------------------------------------------------------------------------
 
-fn spawn_worker(f: impl FnOnce() + Send + 'static) {
+pub(crate) fn spawn_worker(f: impl FnOnce() + Send + 'static) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         std::thread::spawn(f);

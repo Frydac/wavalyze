@@ -12,6 +12,8 @@ impl Model {
         trace!("Loading wav file: {wav_read_config:?}");
 
         // Load buffers and associate with buffer id's in a File instance
+        #[cfg(not(target_arch = "wasm32"))]
+        self.files.watch_source(&wav_read_config.filepath);
         let file = self.audio.load_file(wav_read_config)?;
         info!("Loaded file: {file}");
 
@@ -25,7 +27,7 @@ impl Model {
         }
 
         // Store the file instance itself
-        self.insert_file(file);
+        self.files.insert(file);
 
         Ok(())
     }
@@ -71,12 +73,13 @@ impl Model {
             bit_depth: loaded.bit_depth,
             sample_rate: loaded.sample_rate,
             layout: loaded.layout,
+            source: loaded.source,
             path: loaded.path,
             nr_samples: loaded.nr_samples,
             sample_ix_offset: loaded.sample_ix_offset,
         };
 
-        Ok(self.insert_file(file))
+        Ok(self.files.insert(file))
     }
 
     pub fn start_load_wav_job(&mut self, config: wav::ReadConfigBytes) -> jobs::JobId {
@@ -94,7 +97,8 @@ impl Model {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn start_load_wav_path_job(&mut self, config: wav::ReadConfig) -> jobs::JobId {
+    pub fn start_load_wav_path_job(&mut self, mut config: wav::ReadConfig) -> jobs::JobId {
+        config.filepath = self.files.watch_source(&config.filepath);
         let label = config
             .filepath
             .file_name()

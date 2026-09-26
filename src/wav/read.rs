@@ -1,3 +1,9 @@
+//! Decode WAV paths or uploaded bytes into channel buffers, before assigning model IDs.
+//!
+//! Both inputs share channel selection, sample-range handling, and progress reporting. The
+//! returned `LoadedFile` can be consumed by ordinary loading, diff creation, or an atomic
+//! reload; retaining the disk read recipe lets reload reproduce the original selection.
+
 use crate::audio::buffer::{Buffer, BufferE};
 use crate::audio::manager::Buffers;
 use crate::audio::sample;
@@ -15,8 +21,8 @@ use thousands::Separable;
 
 pub type ChIx = usize; // Channel index
 
-/// File-based read options (path + optional filters).
-#[derive(Debug, Clone, PartialEq)]
+/// Disk source and read selection, retained as the recipe for subsequent native reloads.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadConfig {
     /// Path to wav file to read
     pub filepath: PathBuf,
@@ -33,7 +39,8 @@ pub struct ReadConfig {
     pub sample_ix_offset: sample::Ix,
 }
 
-/// In-memory read options for interactive file loads on all platforms.
+/// Uploaded or otherwise supplied WAV bytes and their read selection.
+/// The optional name is a display label, not a reloadable filesystem path.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReadConfigBytes {
     // Optional filename for UI labels; bytes hold the entire file content.
@@ -52,9 +59,13 @@ struct ReadOptions {
     sample_range: sample::OptIxRange,
 }
 
-/// Fully decoded data, ready to be integrated into the model.
+/// Decoder output before channels receive model buffer IDs.
+/// Owns the samples, metadata, and optional worker-built thumbnails so a load or reload can
+/// finish successfully before committing anything to the live workspace.
 #[derive(Debug)]
 pub struct LoadedFile {
+    /// Real filesystem origin and read selection; byte-source names are only labels.
+    pub source: Option<Box<ReadConfig>>,
     pub load_id: LoadId,
     pub channels: BTreeMap<ChIx, BufferE>,
     /// Total channel count from the WAV header, including channels excluded by `ch_ixs`.
@@ -222,6 +233,10 @@ pub fn read_path_to_loaded_file_with_sink(
         filepath,
         Some(PathBuf::from(&config.filepath)),
     )
+    .map(|mut loaded| {
+        loaded.source = Some(Box::new(config.clone()));
+        loaded
+    })
 }
 
 // Same pipeline as file-based reading, but from an in-memory cursor.
@@ -309,6 +324,7 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     }
 
     let file = LoadedFile {
+        source: None,
         load_id,
         channels: chix_buffers,
         total_nr_channels: spec.channels as usize,
@@ -512,7 +528,7 @@ impl std::fmt::Display for LoadedFile {
 impl LoadedFile {
     pub fn into_file(self, buffers: &mut Buffers) -> File {
         File {
-            // move buffers to storage and store it's id in file
+            source: self.source, // move buffers to storage and store it's id in file
             total_nr_channels: self.total_nr_channels,
             channels: self
                 .channels

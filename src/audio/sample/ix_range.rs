@@ -1,3 +1,8 @@
+//! Sample-index ranges shared by audio loading, analysis, and timeline navigation.
+//!
+//! Integer ranges address stored samples, fractional ranges support smooth viewing, and
+//! optional endpoints represent a user's partial load selection before the file length is known.
+
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::ops::Range;
@@ -14,9 +19,8 @@ impl IxTrait for Ix {}
 impl IxTrait for FracIx {}
 impl IxTrait for OptIx {}
 
-// Used for representing user-specified ranges where omission means from the start or to the end of
-// the buffer
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+/// User-specified load range whose omitted endpoints resolve to the start or end of the buffer.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct OptIxRange {
     pub start: Option<Ix>,
     pub end: Option<Ix>,

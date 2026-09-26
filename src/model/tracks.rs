@@ -1,3 +1,12 @@
+//! Workspace track collection, display order, selection, and shared viewing controls.
+//!
+//! Tracks reference audio buffers owned elsewhere. Removing a track hides that presentation
+//! without necessarily removing its audio; recipes for removed intermediate diffs are retained
+//! so a visible downstream diff can still be recomputed when a source file reloads.
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod dependencies;
+
 use crate::{
     audio::{self, BufferId},
     model::{
@@ -13,6 +22,8 @@ use crate::{
     wav::file::File,
 };
 
+/// Track identities and display order, with the shared camera, selection, and layout settings.
+/// Audio storage belongs to the model's audio manager; tracks describe how that audio is viewed.
 #[derive(Debug, Clone)]
 pub struct Tracks {
     pub ruler: ruler::Time,
@@ -21,6 +32,8 @@ pub struct Tracks {
     pub time_camera: TimeCamera,
     pub tracks: SlotMap<TrackId, Track>,
     pub tracks_order: Vec<TrackId>,
+    /// Removing an intermediate diff track must not lose the recipe used by downstream diffs.
+    retired_diffs: std::collections::HashMap<BufferId, track::diff::Diff>,
 
     pub hover_info: HoverInfoE,
 
@@ -45,6 +58,7 @@ impl Default for Tracks {
             time_camera: TimeCamera::default(),
             tracks: SlotMap::default(),
             tracks_order: Vec::new(),
+            retired_diffs: Default::default(),
             hover_info: HoverInfoE::default(),
             selection_info: SelectionInfoE::default(),
             track_selection: TrackSelection::default(),
@@ -121,7 +135,11 @@ impl Tracks {
     }
 
     pub fn remove_track(&mut self, track_id: TrackId) {
-        self.tracks.remove(track_id);
+        if let Some(track) = self.tracks.remove(track_id)
+            && let Some(diff) = track.diff
+        {
+            self.retired_diffs.insert(diff.buffer_id_diff, diff);
+        }
         self.tracks_order.retain(|id| *id != track_id);
         self.track_selection.remove(track_id);
     }
@@ -157,6 +175,7 @@ impl Tracks {
 
     pub fn remove_all_tracks(&mut self) {
         self.tracks.clear();
+        self.retired_diffs.clear();
         self.tracks_order.clear();
         self.track_selection.clear();
     }

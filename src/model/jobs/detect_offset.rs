@@ -1,4 +1,8 @@
-//! Background leading-silence detection for file and track offsets.
+//! Compute leading-silence alignment without scanning audio on the UI thread.
+//!
+//! The worker reads buffer snapshots and returns an offset proposal through an action. The
+//! action checks those snapshots before applying the proposal, so an in-flight scan cannot
+//! overwrite alignment after its file has been reloaded.
 
 use std::sync::{Arc, mpsc::Sender};
 
@@ -10,12 +14,15 @@ use crate::{
 
 use super::{JobCompletionEvent, JobEvent, JobId, JobProgress, JobProgressEvent, spawn_worker};
 
+/// Choose which boundary of the leading silence should align with timeline sample zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OffsetDetectionMode {
-    FirstNonZero,
-    LastLeadingZero,
+    FirstNonZero, // when the signal starts with a non-zero
+    LastLeadingZero, // e.g. when the signal starts with a zero (often sine waves are used for
+                  // testing signal processing)
 }
 
+/// Destination for a detected offset: one track or a file and its inheriting channel tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OffsetDetectionTarget {
     Track {
@@ -27,6 +34,7 @@ pub enum OffsetDetectionTarget {
     },
 }
 
+/// Alignment proposal from a completed scan; `None` means no qualifying boundary was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OffsetDetectionResult {
     pub target: OffsetDetectionTarget,
@@ -66,7 +74,7 @@ pub fn spawn_detect_offset_job(
         let summary = sample_ix_offset
             .map(|offset| format!("offset {offset}"))
             .unwrap_or_else(|| "no non-zero sample".to_owned());
-        let _ = actions_tx.send(Action::OffsetDetected(result));
+        let _ = actions_tx.send(Action::OffsetDetectedChecked { result, buffers });
         let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent { job_id, summary }));
     });
 }
@@ -226,7 +234,7 @@ mod tests {
         );
 
         let action = actions_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-        let Action::OffsetDetected(result) = action else {
+        let Action::OffsetDetectedChecked { result, .. } = action else {
             panic!("unexpected offset worker action");
         };
         assert_eq!(result.target, target);

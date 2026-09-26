@@ -1,3 +1,9 @@
+//! Populate a workspace with generated audio for the initial browser view and the demo action.
+//!
+//! Keeping fixture generation here lets the UI show tracks without a disk source.
+//! Demo file records deliberately have no reload recipe and are excluded from filesystem
+//! monitoring.
+
 use std::collections::BTreeMap;
 use std::f32::consts::TAU;
 
@@ -19,7 +25,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     let nr_samples = (SAMPLE_RATE as f32 * duration_s) as usize;
 
     model.tracks.remove_all_tracks();
-    model.clear_files();
+    model.files.clear();
     model.audio = audio::manager::AudioManager::default();
 
     let mut ch1 = Buffer::with_capacity(SAMPLE_RATE, BIT_DEPTH, nr_samples);
@@ -27,24 +33,27 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     let mut ch3 = Buffer::with_capacity(SAMPLE_RATE, BIT_DEPTH, nr_samples);
     let mut ch4 = Buffer::with_capacity(SAMPLE_RATE, BIT_DEPTH, nr_samples);
 
+    const AMPLITUDE: f32 = 0.5;
+
     for i in 0..nr_samples {
         let t = i as f32 / SAMPLE_RATE as f32;
 
         // 1) Pure sine
-        let s1 = (TAU * 220.0 * t).sin();
+        let s1 = (TAU * 220.0 * t).sin() * AMPLITUDE;
 
         // 2) Sine + harmonics (stable but richer)
         let s2 = (0.7 * (TAU * 220.0 * t).sin()
             + 0.2 * (TAU * 440.0 * t).sin()
             + 0.1 * (TAU * 880.0 * t).sin())
-        .clamp(-1.0, 1.0);
+        .clamp(-1.0, 1.0)
+            * AMPLITUDE;
 
         // 3) Chirp (linear sweep 80Hz -> 880Hz)
         let f0 = 80.0;
         let f1 = 880.0;
         let k = (f1 - f0) / duration_s.max(0.001);
         let phase = TAU * (f0 * t + 0.5 * k * t * t);
-        let s3 = phase.sin();
+        let s3 = phase.sin() * AMPLITUDE;
 
         // 4) Drum hit: decaying sine burst
         let decay = (-t * 6.0).exp();
@@ -124,6 +133,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
         bit_depth: BIT_DEPTH,
         sample_rate: SAMPLE_RATE,
         layout: Some(audio::Layout::LAYOUT_4_0),
+        source: None,
         path: None,
         nr_samples: nr_samples as u64,
         sample_ix_offset: 0,
@@ -132,7 +142,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     model
         .tracks
         .add_tracks_from_file(&file, &model.user_config.track)?;
-    model.insert_file(file);
+    model.files.insert(file);
 
     Ok(())
 }

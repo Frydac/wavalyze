@@ -19,7 +19,7 @@ A WebAssembly build of the Wavalyze application hosted on cloudflare:
 [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
 
 It loads a few tracks with generated waveform/metadata to quickly get a feel for the app.   
-It should be fully functional, except it doesn't save the configuration options.  
+Configuration persistence and filesystem change notifications are native-only.
 You can add `.wav` files by drag-and-drop or by using the File open dialog.  
 I don't use this version, so some keymaps and mouse interactions might not work as expected.
 
@@ -42,6 +42,7 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 - Calculate track statistics (dB-RMS, peak) over a selection
   - Visual indication of peak value in selection
 - Diff files/tracks, with offset adjustment
+- Native file-change notifications with individual or batch reload and automatic diff recomputation
 - Show/hide tracks with auto adjusting track height for filling the screen
 - Native and browser builds
 * Block-based visual indication and selection
@@ -153,3 +154,28 @@ Optional Nix shell:
 ```bash
 nix develop ./dev/nix
 ```
+
+## Reloading changed files
+
+On desktop, file changes for opened WAV files are detected and shown above the Files list.
+Choose **Update** for one file or **Update all** for all changed files. Hover over a changed
+filename to see its full path, affected tracks and diffs, and the offsets that will be reused.
+
+Reload preserves track layout, visibility, selection, and existing file/track/diff alignment
+offsets. Automatic alignment is not rerun. Individual updates use the other diff inputs as
+currently loaded, even if those files also have pending changes. Added channels are shown in
+metadata but are not automatically loaded; the original channel selection and sample range
+are preserved.
+
+Each update is all-or-nothing: new audio and associated diffs replace the old data together.
+If a file is missing, incomplete, loses a loaded channel, or produces incompatible diff sample
+rates, the previous data remains available and the notification shows an error. Retry after
+regenerating the file, or update an unaffected file individually. Files that change during an
+update remain pending for retry.
+
+For each file we watch, we also watch its ancestor directories.
+When when a filetree containing a loaded file is removed and regenerated, then the monitoring is
+restored for the new tree.
+There is no polling fallback for filesystems that do not deliver notifications. Browser uploads
+are byte snapshots, so the browser build does not show these controls.
+
