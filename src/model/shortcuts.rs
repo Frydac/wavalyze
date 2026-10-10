@@ -1,11 +1,18 @@
+//! Store shortcut bindings and turn key presses into workspace commands.
+//!
+//! Most shortcuts queue model actions. Opening the file picker is reported to
+//! the view because the view owns the dialog and receives its result.
+
 use crate::model::{Action, tracks::Tracks};
 use egui::{Key, KeyboardShortcut, Modifiers};
 use egui_custom_widgets::focused_widget_is_digitwise_editor;
 use tracing::warn;
 
+/// Commands that can be triggered by a keyboard binding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShortcutAction {
+    OpenWavFiles,
     CloseAll,
     ZoomToSelection,
     ZoomToSelectionLeftEdge,
@@ -16,7 +23,8 @@ pub enum ShortcutAction {
 }
 
 impl ShortcutAction {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
+        Self::OpenWavFiles,
         Self::CloseAll,
         Self::ZoomToSelection,
         Self::ZoomToSelectionLeftEdge,
@@ -28,6 +36,7 @@ impl ShortcutAction {
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::OpenWavFiles => "Open WAV Files",
             Self::CloseAll => "Close All",
             Self::ZoomToSelection => "Zoom To Selection",
             Self::ZoomToSelectionLeftEdge => "Zoom To Selection Left Edge",
@@ -37,20 +46,9 @@ impl ShortcutAction {
             Self::RecenterYAll => "Recenter Y",
         }
     }
-
-    pub fn to_model_action(self) -> Action {
-        match self {
-            Self::CloseAll => Action::CloseAll,
-            Self::ZoomToSelection => Action::ZoomToSelection,
-            Self::ZoomToSelectionLeftEdge => Action::ZoomToSelectionLeftEdge,
-            Self::ZoomToSelectionRightEdge => Action::ZoomToSelectionRightEdge,
-            Self::ZoomToFull => Action::ZoomToFull,
-            Self::FillScreenHeight => Action::SetEqualHeightLayout(true),
-            Self::RecenterYAll => Action::RecenterYAll,
-        }
-    }
 }
 
+/// Where a binding is active: throughout the app or over the navigation surface.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Deserialize, serde::Serialize,
 )]
@@ -72,6 +70,7 @@ impl ShortcutScope {
     }
 }
 
+/// One key combination assigned to an action in a scope.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct ShortcutBinding {
@@ -167,6 +166,7 @@ impl Default for ShortcutBinding {
     }
 }
 
+/// The saved set of keyboard bindings, including both shortcut scopes.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct ShortcutConfig {
@@ -189,8 +189,22 @@ impl Default for ShortcutConfig {
 }
 
 impl ShortcutConfig {
+    /// Find the configured binding for an action in one shortcut scope.
+    pub fn binding_for(
+        &self,
+        action: ShortcutAction,
+        scope: ShortcutScope,
+    ) -> Option<&ShortcutBinding> {
+        self.bindings
+            .iter()
+            .find(|binding| binding.action == action && binding.scope == scope)
+    }
+
     pub fn default_binding_for(action: ShortcutAction, scope: ShortcutScope) -> ShortcutBinding {
         match (action, scope) {
+            (ShortcutAction::OpenWavFiles, scope) => ShortcutBinding::new(action, "O")
+                .with_scope(scope)
+                .with_command(),
             (ShortcutAction::CloseAll, ShortcutScope::Global) => ShortcutBinding::new(action, "W")
                 .with_scope(scope)
                 .with_ctrl(),
@@ -324,28 +338,31 @@ fn legacy_fill_screen_height_binding(key: &str) -> ShortcutBinding {
         .with_shift()
 }
 
+/// Queue model actions and report whether a shortcut asked the view to open its file picker.
 pub fn dispatch_shortcuts(
     ctx: &egui::Context,
     tracks: &Tracks,
     shortcut_config: &ShortcutConfig,
     actions: &mut Vec<Action>,
-) {
-    dispatch_global_shortcuts(ctx, shortcut_config, actions);
+) -> bool {
+    let mut open_picker_requested = dispatch_global_shortcuts(ctx, shortcut_config, actions);
 
     if navigation_surface_hovered(ctx, tracks) {
-        dispatch_scoped_shortcuts(shortcut_config, ShortcutScope::OneHand, ctx, actions);
+        open_picker_requested |=
+            dispatch_scoped_shortcuts(shortcut_config, ShortcutScope::OneHand, ctx, actions);
     }
+    open_picker_requested
 }
 
 fn dispatch_global_shortcuts(
     ctx: &egui::Context,
     shortcut_config: &ShortcutConfig,
     actions: &mut Vec<Action>,
-) {
+) -> bool {
     if ctx.wants_keyboard_input() && !focused_widget_is_digitwise_editor(ctx) {
-        return;
+        return false;
     }
-    dispatch_scoped_shortcuts(shortcut_config, ShortcutScope::Global, ctx, actions);
+    dispatch_scoped_shortcuts(shortcut_config, ShortcutScope::Global, ctx, actions)
 }
 
 fn dispatch_scoped_shortcuts(
@@ -353,7 +370,7 @@ fn dispatch_scoped_shortcuts(
     scope: ShortcutScope,
     ctx: &egui::Context,
     actions: &mut Vec<Action>,
-) {
+) -> bool {
     let mut bindings: Vec<_> = shortcut_config
         .bindings
         .iter()
@@ -367,12 +384,29 @@ fn dispatch_scoped_shortcuts(
     bindings.sort_by_key(|(binding, _)| std::cmp::Reverse(binding.specificity()));
 
     ctx.input_mut(|input| {
+        let mut open_picker_requested = false;
         for (binding, shortcut) in &bindings {
             if input.consume_shortcut(shortcut) {
-                actions.push(binding.action.to_model_action());
+                match binding.action {
+                    ShortcutAction::OpenWavFiles => open_picker_requested = true,
+                    ShortcutAction::CloseAll => actions.push(Action::CloseAll),
+                    ShortcutAction::ZoomToSelection => actions.push(Action::ZoomToSelection),
+                    ShortcutAction::ZoomToSelectionLeftEdge => {
+                        actions.push(Action::ZoomToSelectionLeftEdge)
+                    }
+                    ShortcutAction::ZoomToSelectionRightEdge => {
+                        actions.push(Action::ZoomToSelectionRightEdge)
+                    }
+                    ShortcutAction::ZoomToFull => actions.push(Action::ZoomToFull),
+                    ShortcutAction::FillScreenHeight => {
+                        actions.push(Action::SetEqualHeightLayout(true))
+                    }
+                    ShortcutAction::RecenterYAll => actions.push(Action::RecenterYAll),
+                }
             }
         }
-    });
+        open_picker_requested
+    })
 }
 
 fn navigation_surface_hovered(ctx: &egui::Context, tracks: &Tracks) -> bool {
@@ -461,6 +495,15 @@ mod tests {
 
     #[test]
     fn default_global_bindings_match_expected() {
+        assert_eq!(
+            ShortcutConfig::default_binding_for(
+                ShortcutAction::OpenWavFiles,
+                ShortcutScope::Global,
+            ),
+            ShortcutBinding::new(ShortcutAction::OpenWavFiles, "O")
+                .with_scope(ShortcutScope::Global)
+                .with_command()
+        );
         assert_eq!(
             ShortcutConfig::default_binding_for(ShortcutAction::CloseAll, ShortcutScope::Global),
             ShortcutBinding::new(ShortcutAction::CloseAll, "W")
@@ -657,6 +700,38 @@ mod tests {
         );
 
         assert!(matches!(actions.as_slice(), [Action::CloseAll]));
+    }
+
+    #[test]
+    fn dispatch_open_shortcut_requests_file_picker() {
+        let ctx = Context::default();
+        let mut actions = Vec::new();
+        let shortcut_config = ShortcutConfig::default();
+        let tracks = Tracks::default();
+        let mut open_picker_requested = false;
+
+        let _ = ctx.run(
+            RawInput {
+                events: vec![Event::Key {
+                    key: Key::O,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers {
+                        command: true,
+                        ..Modifiers::NONE
+                    },
+                }],
+                ..Default::default()
+            },
+            |ctx| {
+                open_picker_requested =
+                    super::dispatch_shortcuts(ctx, &tracks, &shortcut_config, &mut actions);
+            },
+        );
+
+        assert!(open_picker_requested);
+        assert!(actions.is_empty());
     }
 
     #[test]

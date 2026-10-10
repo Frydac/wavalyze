@@ -117,12 +117,14 @@ impl View {
         self.model
             .actions
             .push(Action::SetHoverInfo(HoverInfoE::NotHovered));
-        shortcuts::dispatch_shortcuts(
+        if shortcuts::dispatch_shortcuts(
             ctx,
             &self.model.tracks,
             &self.model.user_config.shortcuts,
             &mut self.model.actions,
-        );
+        ) {
+            self.start_file_picker();
+        }
 
         // NOTE: order of panels is important
         self.ui_top_panel_menu_bar(ctx);
@@ -337,15 +339,59 @@ impl View {
             egui::menu::bar(ui, |ui| {
                 let is_web = cfg!(target_arch = "wasm32");
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open wav files...").clicked() {
+                    // Menus show global bindings; one-hand bindings only work over the
+                    // navigation surface, so showing them here would be misleading.
+                    let open_shortcut = self
+                        .model
+                        .user_config
+                        .shortcuts
+                        .binding_for(
+                            shortcuts::ShortcutAction::OpenWavFiles,
+                            shortcuts::ShortcutScope::Global,
+                        )
+                        .map(|binding| binding.formatted(ctx))
+                        .unwrap_or_default();
+                    if ui
+                        .add(
+                            egui::Button::new("Open wav files...")
+                                .shortcut_text(open_shortcut),
+                        )
+                        .clicked()
+                    {
                         self.start_file_picker();
                     }
-                    if ui.button("Close All").clicked() {
+                    let close_all_shortcut = self
+                        .model
+                        .user_config
+                        .shortcuts
+                        .binding_for(
+                            shortcuts::ShortcutAction::CloseAll,
+                            shortcuts::ShortcutScope::Global,
+                        )
+                        .map(|binding| binding.formatted(ctx))
+                        .unwrap_or_default();
+                    if ui
+                        .add(egui::Button::new("Close All").shortcut_text(close_all_shortcut))
+                        .clicked()
+                    {
                         self.model.actions.push(Action::CloseAll);
                         ui.close_menu();
                     }
-                    if !is_web && ui.button("Quit").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    if !is_web {
+                        // egui handles quitting itself; show its active bindings so the
+                        // label follows the platform and any future egui configuration.
+                        let quit_shortcuts = ctx.options(|options| options.quit_shortcuts.clone());
+                        let quit_shortcut_text = quit_shortcuts
+                            .iter()
+                            .map(|shortcut| ctx.format_shortcut(shortcut))
+                            .collect::<Vec<_>>()
+                            .join(" / ");
+                        if ui
+                            .add(egui::Button::new("Quit").shortcut_text(quit_shortcut_text))
+                            .clicked()
+                        {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                     }
                 });
                 ui.add_space(16.0);
