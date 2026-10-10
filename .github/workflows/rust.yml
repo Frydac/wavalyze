@@ -17,6 +17,16 @@ env:
     -C link-arg=--export=__tls_base
 
 jobs:
+  channel_definitions:
+    name: Channel definitions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal --component rustfmt
+      - run: sudo apt-get install ruby rake ruby-minitest
+      - run: ruby scripts/test_generate_channels.rb
+      - run: rake channels:check
+
   check:
     name: Check
     runs-on: ubuntu-latest

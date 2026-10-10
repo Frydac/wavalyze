@@ -1,0 +1,1348 @@
+[
+    {
+        "name": "0.1",
+        "channels": [
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "mono_0.1",
+            "mono0.1"
+        ]
+    },
+    {
+        "name": "1.0",
+        "channels": [
+            "Center"
+        ],
+        "synonyms": [
+            "TestMix1.0"
+        ],
+        "alternatives": [
+            "mono",
+            "mono_1.0",
+            "mono1.0",
+            "testmix1"
+        ]
+    },
+    {
+        "name": "1.1",
+        "channels": [
+            "Center",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "2.0",
+        "channels": [
+            "Left",
+            "Right"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "stereo",
+            "stereo_2.0",
+            "stereo2.0"
+        ]
+    },
+    {
+        "name": "2.1",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "stereo_2.1",
+            "stereo2.1"
+        ]
+    },
+    {
+        "name": "3.0",
+        "channels": [
+            "Left",
+            "Right",
+            "Center"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "lcr"
+        ]
+    },
+    {
+        "name": "3.1",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.0",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "quad",
+            "5.0_no_C"
+        ]
+    },
+    {
+        "name": "4.1",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_5.1_no_C",
+            "surround5.1_no_C",
+            "5.1_no_C"
+        ]
+    },
+    {
+        "name": "5.0",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_5.0",
+            "surround5.0"
+        ]
+    },
+    {
+        "name": "5.1",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_5.1",
+            "surround5.1"
+        ]
+    },
+    {
+        "name": "6.0",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "CenterSurround"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_6.0",
+            "surround6.0"
+        ]
+    },
+    {
+        "name": "6.1",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "CenterSurround",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_6.1",
+            "surround6.1"
+        ]
+    },
+    {
+        "name": "7.0",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_7.0",
+            "surround7.0"
+        ]
+    },
+    {
+        "name": "7.1",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "surround_7.1",
+            "surround7.1"
+        ]
+    },
+    {
+        "name": "7.0_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "LFE"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "2.0_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "2.1_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "3.0_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "3.1_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "3.0_3H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "3.1_3H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.0_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [
+            "Auro222"
+        ],
+        "alternatives": [
+            "Auro6.0",
+            "Auro_6.0",
+            "222"
+        ]
+    },
+    {
+        "name": "4.1_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LFE",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.0_4H",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [
+            "Auro8.0"
+        ],
+        "alternatives": [
+            "Auro_8.0",
+            "8.0"
+        ]
+    },
+    {
+        "name": "4.1_4H",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [
+            "Auro8.1"
+        ],
+        "alternatives": [
+            "Auro_8.1",
+            "8.1"
+        ]
+    },
+    {
+        "name": "4.0_5H",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.1_5H",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "5.0_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "5.1_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "5.0_4H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [
+            "Auro9.0"
+        ],
+        "alternatives": [
+            "Auro_9.0",
+            "9.0"
+        ]
+    },
+    {
+        "name": "5.1_4H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [
+            "Auro9.1"
+        ],
+        "alternatives": [
+            "Auro_9.1",
+            "9.1"
+        ]
+    },
+    {
+        "name": "5.0_5H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "5.1_5H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.0_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_2H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.0_4H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [
+            "Auro11.0_74"
+        ],
+        "alternatives": [
+            "Auro_11.0_74",
+            "Auro11.0b",
+            "Auro_11.0b",
+            "11.0b"
+        ]
+    },
+    {
+        "name": "7.1_4H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [
+            "Auro11.1_74"
+        ],
+        "alternatives": [
+            "Auro_11.1_74",
+            "Auro11.1_714",
+            "Auro11.1b",
+            "Auro_11.1b",
+            "11.1b"
+        ]
+    },
+    {
+        "name": "7.0_5H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_5H",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.0_2H_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_2H_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.0_4H_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_4H_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.0_5H_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_5H_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightCenter",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.0_4H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.1_4H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.0_5H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "4.1_5H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "5.0_4H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro10.0"
+        ],
+        "alternatives": [
+            "Auro_10.0",
+            "10.0"
+        ]
+    },
+    {
+        "name": "5.1_4H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro10.1"
+        ],
+        "alternatives": [
+            "Auro_10.1",
+            "10.1"
+        ]
+    },
+    {
+        "name": "5.0_5H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro11.0_551"
+        ],
+        "alternatives": [
+            "Auro_11.0_551",
+            "Auro11.0",
+            "Auro_11.0",
+            "11.0"
+        ]
+    },
+    {
+        "name": "5.1_5H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro11.1_551"
+        ],
+        "alternatives": [
+            "Auro_11.1_551",
+            "Auro11.1",
+            "Auro_11.1",
+            "11.1"
+        ]
+    },
+    {
+        "name": "7.0_4H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro12.0"
+        ],
+        "alternatives": [
+            "Auro_12.0",
+            "12.0"
+        ]
+    },
+    {
+        "name": "7.1_4H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro12.1"
+        ],
+        "alternatives": [
+            "Auro_12.1",
+            "12.1"
+        ]
+    },
+    {
+        "name": "7.0_5H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro13.0"
+        ],
+        "alternatives": [
+            "Auro_13.0",
+            "13.0"
+        ]
+    },
+    {
+        "name": "7.1_5H_1T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [
+            "Auro13.1"
+        ],
+        "alternatives": [
+            "Auro_13.1",
+            "13.1"
+        ]
+    },
+    {
+        "name": "7.0_4H_1T_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_4H_1T_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.0_5H_1T_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_5H_1T_no_C",
+        "channels": [
+            "Left",
+            "Right",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "LCRS",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "CenterSurround"
+        ],
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "TestMix2.0",
+        "channels": [
+            "Center",
+            "HeightCenter"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "testmix2"
+        ]
+    },
+    {
+        "name": "TestMix3.0",
+        "channels": [
+            "Center",
+            "HeightCenter",
+            "Top"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "testmix3"
+        ]
+    },
+    {
+        "name": "NHK_22.2",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "CenterSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top",
+            "LFE",
+            "LeftCenter",
+            "RightCenter",
+            "HeightCenterSurround",
+            "HeightLeftBack",
+            "HeightRightBack",
+            "BottomLeft",
+            "BottomRight",
+            "BottomCenter",
+            "LFE2"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "22.2"
+        ]
+    },
+    {
+        "name": "NHK_22.0",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LeftSurround",
+            "RightSurround",
+            "CenterSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "Top",
+            "LeftCenter",
+            "RightCenter",
+            "HeightCenterSurround",
+            "HeightLeftBack",
+            "HeightRightBack",
+            "BottomLeft",
+            "BottomRight",
+            "BottomCenter"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "22.0"
+        ]
+    },
+    {
+        "name": "Cube",
+        "channels": [
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "BottomLeft",
+            "BottomRight",
+            "BottomLeftSurround",
+            "BottomRightSurround"
+        ],
+        "synonyms": [],
+        "alternatives": [
+            "cube"
+        ]
+    },
+    {
+        "name": "5.1_4H_2T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "TopLeft",
+            "TopRight"
+        ],
+        
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_4H_2T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "TopLeft",
+            "TopRight"
+        ],
+        
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "9.1_4H_2T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "LeftWide",
+            "RightWide",
+            "HeightLeft",
+            "HeightRight",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "TopLeft",
+            "TopRight"
+        ],
+        
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "5.1_5H_2T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "TopLeft",
+            "TopRight"
+        ],
+        
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "7.1_5H_2T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "TopLeft",
+            "TopRight"
+        ],
+        
+        "synonyms": [],
+        "alternatives": []
+    },
+    {
+        "name": "9.1_5H_2T",
+        "channels": [
+            "Left",
+            "Right",
+            "Center",
+            "LFE",
+            "LeftSurround",
+            "RightSurround",
+            "LeftBack",
+            "RightBack",
+            "LeftWide",
+            "RightWide",
+            "HeightLeft",
+            "HeightRight",
+            "HeightCenter",
+            "HeightLeftSurround",
+            "HeightRightSurround",
+            "TopLeft",
+            "TopRight"
+        ],
+        
+        "synonyms": [],
+        "alternatives": []
+    }
+]

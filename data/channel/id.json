@@ -1,0 +1,157 @@
+[
+    {
+        "name": "Left",
+        "value": 0,
+        "short": "L"
+    },
+    {
+        "name": "Right",
+        "value": 1,
+        "short": "R"
+    },
+    {
+        "name": "Center",
+        "value": 2,
+        "short": "C"
+    },
+    {
+        "name": "LFE",
+        "value": 3,
+        "short": "LFE"
+    },
+    {
+        "name": "LeftSurround",
+        "value": 4,
+        "short": "Ls"
+    },
+    {
+        "name": "RightSurround",
+        "value": 5,
+        "short": "Rs"
+    },
+    {
+        "name": "CenterSurround",
+        "value": 6,
+        "short": "Cs"
+    },
+    {
+        "name": "LeftBack",
+        "value": 7,
+        "short": "Lb"
+    },
+    {
+        "name": "RightBack",
+        "value": 8,
+        "short": "Rb"
+    },
+    {
+        "name": "HeightLeft",
+        "value": 9,
+        "short": "HL"
+    },
+    {
+        "name": "HeightRight",
+        "value": 10,
+        "short": "HR"
+    },
+    {
+        "name": "HeightCenter",
+        "value": 11,
+        "short": "HC"
+    },
+    {
+        "name": "Top",
+        "value": 12,
+        "short": "T"
+    },
+    {
+        "name": "HeightLeftSurround",
+        "value": 13,
+        "short": "HLs"
+    },
+    {
+        "name": "HeightRightSurround",
+        "value": 14,
+        "short": "HRs"
+    },
+    {
+        "name": "HeightCenterSurround",
+        "value": 15,
+        "short": "HCs"
+    },
+    {
+        "name": "HeightLeftBack",
+        "value": 16,
+        "short": "HLb"
+    },
+    {
+        "name": "HeightRightBack",
+        "value": 17,
+        "short": "HRb"
+    },
+    {
+        "name": "LeftCenter",
+        "value": 18,
+        "short": "LC"
+    },
+    {
+        "name": "RightCenter",
+        "value": 19,
+        "short": "RC"
+    },
+    {
+        "name": "LFE2",
+        "value": 20,
+        "short": "LFE2"
+    },
+    {
+        "name": "BottomLeft",
+        "value": 21,
+        "short": "BL"
+    },
+    {
+        "name": "BottomRight",
+        "value": 22,
+        "short": "BR"
+    },
+    {
+        "name": "BottomCenter",
+        "value": 23,
+        "short": "BC"
+    },
+    {
+        "name": "BottomLeftSurround",
+        "value": 24,
+        "short": "BLs"
+    },
+    {
+        "name": "BottomRightSurround",
+        "value": 25,
+        "short": "BRs"
+    },
+    {
+        "name": "LeftWide",
+        "value": 26,
+        "short": "Lw"
+    },
+    {
+        "name": "RightWide",
+        "value": 27,
+        "short": "Rw"
+    },
+    {
+        "name": "TopLeft",
+        "value": 28,
+        "short": "TL"
+    },
+    {
+        "name": "TopRight",
+        "value": 29,
+        "short": "TR"
+    },
+    {
+        "name": "Mono",
+        "value": 30,
+        "short": "M"
+    }
+]

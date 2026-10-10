@@ -1,3 +1,6 @@
+// Generated from data/channel/id.json by scripts/generate_channels.rb.
+// Do not edit; run rake channels:generate instead.
+
 use strum_macros::{AsRefStr, EnumIter, EnumString};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, EnumString, AsRefStr)]
@@ -57,8 +60,8 @@ impl Id {
             Id::HeightCenterSurround => "HCs",
             Id::HeightLeftBack => "HLb",
             Id::HeightRightBack => "HRb",
-            Id::LeftCenter => "Lc",
-            Id::RightCenter => "Rc",
+            Id::LeftCenter => "LC",
+            Id::RightCenter => "RC",
             Id::LFE2 => "LFE2",
             Id::BottomLeft => "BL",
             Id::BottomRight => "BR",
@@ -73,43 +76,12 @@ impl Id {
         }
     }
 
-    /// Long name: same as enum variant name
+    /// Long name: same as enum variant name.
     pub fn long_name(&self) -> &str {
         self.as_ref()
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use strum::IntoEnumIterator;
-
-    #[test]
-    fn test_short_names() {
-        assert_eq!(Id::Left.short_name(), "L");
-        assert_eq!(Id::Right.short_name(), "R");
-        assert_eq!(Id::Center.short_name(), "C");
-        assert_eq!(Id::LFE.short_name(), "LFE");
-        assert_eq!(Id::Mono.short_name(), "M");
-    }
-
-    #[test]
-    fn test_long_names() {
-        assert_eq!(Id::Left.long_name(), "Left");
-        assert_eq!(Id::Right.long_name(), "Right");
-        assert_eq!(Id::Center.long_name(), "Center");
-        assert_eq!(Id::LFE.long_name(), "LFE");
-        assert_eq!(Id::Mono.long_name(), "Mono");
-    }
-
-    #[test]
-    fn test_iteration_covers_all() {
-        // Just check that we can iterate over all variants without panicking
-        let variants: Vec<_> = Id::iter().collect();
-        assert!(variants.contains(&Id::Left));
-        assert!(variants.contains(&Id::Mono));
-        // and that the numeric repr works
-        assert_eq!(Id::Left as u32, 0);
-        assert_eq!(Id::Mono as u32, 30);
-    }
-}
+#[path = "id_tests.rs"]
+mod tests;

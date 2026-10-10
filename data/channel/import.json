@@ -1,0 +1,12 @@
+{
+  "imported_on": "2026-10-10",
+  "source_directory": "/home/emile/repos/root-all/core/audio/data/channel",
+  "sha256": {
+    "id.json": "76e540379230162e5da6293e045a99e302725e2b86a58fa9742fce305f2e6d1f",
+    "layout.json": "fd6ea1a49c6e845eb749e951e5d7cb3c3c372e4c48171a70958ce94517e269d3"
+  },
+  "counts": {
+    "id.json": 31,
+    "layout.json": 75
+  }
+}

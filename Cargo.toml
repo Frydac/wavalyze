@@ -3,7 +3,11 @@ name = "wavalyze"
 version = "0.1.0"
 authors = ["Emile Vrijdags <emile.vrijdags@gmail.com"]
 edition = "2024"
-include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
+include = [
+    "LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml",
+    "data/channel/**", "scripts/generate_channels.rb",
+    "scripts/test_generate_channels.rb", "rakefile.rb",
+]
 rust-version = "1.92.0"
 autobins = false
 
