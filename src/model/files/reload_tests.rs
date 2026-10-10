@@ -131,6 +131,35 @@ fn data(model: &Model, id: BufferId) -> Vec<i16> {
 }
 
 #[test]
+fn reload_updates_and_clears_channel_mask_and_speaker_ids() {
+    let (mut model, dir) = fixture();
+    let path = dir.join("channel_mask.wav");
+    let bytes = crate::wav::channel_mask::tests::wav_bytes;
+    std::fs::write(&path, bytes(Some(0x60f), 6, &[])).unwrap();
+    let id = open(&mut model, &path);
+    assert_eq!(
+        model.files[id].channels[&4].channel_id,
+        Some(audio::Id::LeftSurround)
+    );
+
+    for mask in [Some(0x3f), Some(0), None] {
+        std::fs::write(&path, bytes(mask, 6, &[])).unwrap();
+        changed(&mut model, id);
+        let req = request(&mut model, &[id]);
+        finish(&mut model, req);
+        assert_eq!(model.files[id].channel_mask, mask);
+        assert_eq!(
+            model.files[id].channels[&4].channel_id,
+            (mask == Some(0x3f)).then_some(audio::Id::LeftBack)
+        );
+        assert_eq!(
+            model.files[id].layout,
+            crate::wav::channel_mask::layout(mask, 6)
+        );
+    }
+}
+
+#[test]
 fn batch_reloads_shared_and_chained_diffs_preserving_workspace() {
     let (mut model, dir) = fixture();
     let a_path = dir.join("a.wav");

@@ -246,7 +246,14 @@ fn metadata_rows(file: &wav::file::File) -> Vec<(&'static str, String)> {
             "layout",
             file.layout
                 .as_ref()
-                .map(|layout| format!("{layout:?}"))
+                .map(|layout| {
+                    let names = layout.names();
+                    if names.is_empty() {
+                        format!("{layout:?}")
+                    } else {
+                        format!("{}: {layout:?}", names.join(" / "))
+                    }
+                })
                 .unwrap_or_else(|| "unknown".to_string()),
         ),
     ]
@@ -453,6 +460,7 @@ mod tests {
             bit_depth: 32,
             sample_rate: 48_000,
             layout: None,
+            channel_mask: None,
             source: None,
             path: None,
             nr_samples: 16,

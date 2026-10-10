@@ -11,7 +11,7 @@ use crate::audio::thumbnail::ThumbnailE;
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::audio::SampleType;
 use crate::wav::file::{Channel, File};
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use hound;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -57,6 +57,7 @@ pub struct ReadConfigBytes {
 struct ReadOptions {
     ch_ixs: Option<Vec<ChIx>>,
     sample_range: sample::OptIxRange,
+    sample_ix_offset: sample::Ix,
 }
 
 /// Decoder output before channels receive model buffer IDs.
@@ -77,6 +78,8 @@ pub struct LoadedFile {
     pub bit_depth: u16,
     pub sample_rate: u32,
     pub layout: Option<crate::audio::Layout>,
+    /// Raw WAVEFORMATEXTENSIBLE mask; zero specifies no speaker assignment.
+    pub channel_mask: Option<u32>,
     pub path: Option<PathBuf>,
     /// Number of samples per channel
     pub nr_samples: u64,
@@ -190,6 +193,7 @@ impl From<&ReadConfig> for ReadOptions {
         Self {
             ch_ixs: value.ch_ixs.clone(),
             sample_range: value.sample_range,
+            sample_ix_offset: value.sample_ix_offset,
         }
     }
 }
@@ -199,6 +203,7 @@ impl From<&ReadConfigBytes> for ReadOptions {
         Self {
             ch_ixs: value.ch_ixs.clone(),
             sample_range: value.sample_range,
+            sample_ix_offset: value.sample_ix_offset,
         }
     }
 }
@@ -222,12 +227,18 @@ pub fn read_path_to_loaded_file_with_sink(
         return Err(anyhow::anyhow!("Invalid filepath"));
     };
     let options = ReadOptions::from(config);
-    let reader = hound::WavReader::open(&config.filepath)
+    let mut input = std::io::BufReader::new(
+        std::fs::File::open(&config.filepath)
+            .with_context(|| format!("Failed to open wav file '{filepath}'"))?,
+    );
+    let channel_mask = super::channel_mask::read_channel_mask(&mut input)
+        .with_context(|| format!("Failed to read wav header '{filepath}'"))?;
+    let reader = hound::WavReader::new(input)
         .map_err(|err| anyhow::anyhow!("Failed to open wav file '{}': {}", filepath, err))?;
     read_to_loaded_file_from_reader(
         reader,
+        channel_mask,
         &options,
-        config.sample_ix_offset,
         load_id,
         progress,
         filepath,
@@ -247,12 +258,15 @@ pub fn read_bytes_to_loaded_file_with_sink(
 ) -> Result<LoadedFile> {
     let options = ReadOptions::from(config);
     let label = config.name.as_deref().unwrap_or("bytes");
-    let reader = hound::WavReader::new(std::io::Cursor::new(&config.bytes))
+    let mut input = std::io::Cursor::new(&config.bytes);
+    let channel_mask = super::channel_mask::read_channel_mask(&mut input)
+        .with_context(|| format!("Failed to read wav header '{label}'"))?;
+    let reader = hound::WavReader::new(input)
         .map_err(|err| anyhow::anyhow!("Failed to open wav bytes '{}': {}", label, err))?;
     read_to_loaded_file_from_reader(
         reader,
+        channel_mask,
         &options,
-        config.sample_ix_offset,
         load_id,
         progress,
         label,
@@ -263,8 +277,8 @@ pub fn read_bytes_to_loaded_file_with_sink(
 // Shared implementation for file paths and byte buffers.
 fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
     mut reader: hound::WavReader<R>,
+    channel_mask: Option<u32>,
     options: &ReadOptions,
-    sample_ix_offset: sample::Ix,
     load_id: LoadId,
     progress: Option<&dyn LoadProgressSink>,
     source_label: &str,
@@ -329,13 +343,14 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
         channels: chix_buffers,
         total_nr_channels: spec.channels as usize,
         thumbnails: BTreeMap::new(),
-        layout: None, // TODO: first need to extend hound to 'publish' the wavextended channel mask?
+        layout: super::channel_mask::layout(channel_mask, spec.channels as usize),
+        channel_mask,
         sample_rate: spec.sample_rate,
         bit_depth: spec.bits_per_sample,
         sample_type: spec.sample_format.into(),
         path,
         nr_samples: reader.duration() as u64,
-        sample_ix_offset,
+        sample_ix_offset: options.sample_ix_offset,
     };
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -539,12 +554,17 @@ impl LoadedFile {
                         Channel {
                             ch_ix,
                             buffer_id: buffers.insert(std::sync::Arc::new(buffer)),
-                            channel_id: None,
+                            channel_id: super::channel_mask::channel_id(
+                                self.channel_mask,
+                                self.total_nr_channels,
+                                ch_ix,
+                            ),
                         },
                     )
                 })
                 .collect(),
             layout: self.layout,
+            channel_mask: self.channel_mask,
             sample_rate: self.sample_rate,
             bit_depth: self.bit_depth,
             sample_type: self.sample_type,

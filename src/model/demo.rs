@@ -133,6 +133,7 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
         bit_depth: BIT_DEPTH,
         sample_rate: SAMPLE_RATE,
         layout: Some(audio::Layout::LAYOUT_4_0),
+        channel_mask: None,
         source: None,
         path: None,
         nr_samples: nr_samples as u64,

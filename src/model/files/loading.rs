@@ -61,7 +61,11 @@ impl Model {
                 wav::file::Channel {
                     ch_ix,
                     buffer_id,
-                    channel_id: None,
+                    channel_id: wav::channel_mask::channel_id(
+                        loaded.channel_mask,
+                        loaded.total_nr_channels,
+                        ch_ix,
+                    ),
                 },
             );
         }
@@ -73,6 +77,7 @@ impl Model {
             bit_depth: loaded.bit_depth,
             sample_rate: loaded.sample_rate,
             layout: loaded.layout,
+            channel_mask: loaded.channel_mask,
             source: loaded.source,
             path: loaded.path,
             nr_samples: loaded.nr_samples,

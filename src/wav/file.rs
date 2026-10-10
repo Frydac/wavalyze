@@ -35,6 +35,8 @@ pub struct File {
     pub bit_depth: u16,
     pub sample_rate: u32,
     pub layout: Option<audio::Layout>,
+    /// Raw WAVEFORMATEXTENSIBLE mask; absent for ordinary WAV or generated audio.
+    pub channel_mask: Option<u32>,
     pub path: Option<PathBuf>,
     /// Number of samples per channel
     pub nr_samples: u64,

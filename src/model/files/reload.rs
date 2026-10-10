@@ -278,8 +278,14 @@ impl Model {
             file.sample_rate = loaded.sample_rate;
             file.nr_samples = loaded.nr_samples;
             file.layout = loaded.layout;
+            file.channel_mask = loaded.channel_mask;
             for (ch, buffer) in prepared.channels {
                 let old = file.channels.get_mut(&ch).unwrap();
+                old.channel_id = crate::wav::channel_mask::channel_id(
+                    loaded.channel_mask,
+                    loaded.total_nr_channels,
+                    ch,
+                );
                 let id = self.audio.buffers.insert(buffer);
                 self.audio
                     .thumbnails

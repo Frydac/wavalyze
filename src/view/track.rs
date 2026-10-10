@@ -162,7 +162,7 @@ pub(crate) fn header_hover_info(model: &Model, track_id: TrackId) -> Option<Head
 }
 
 /// One-line label for a track, matching the central-panel header text:
-/// `"<basename> - ch N"` for single tracks, `"Diff"` for diff tracks.
+/// `"[ID] <basename> - ch N"` for single tracks, `"Diff"` for diff tracks.
 pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
     if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
         let basename = file
@@ -171,7 +171,11 @@ pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
             .and_then(|p| p.file_name())
             .and_then(|name| name.to_str())
             .unwrap_or("Demo");
-        format!("{basename} - ch {}", channel.ch_ix)
+        format!(
+            "{}{basename} - ch {}",
+            channel_id_prefix(channel.channel_id),
+            channel.ch_ix
+        )
     } else if model
         .tracks
         .get_track(track_id)
@@ -181,6 +185,10 @@ pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
     } else {
         String::from("track")
     }
+}
+
+fn channel_id_prefix(id: Option<crate::audio::Id>) -> String {
+    format!("[{}] ", id.map(|id| id.short_name()).unwrap_or("?"))
 }
 
 /// Resolve a source buffer to a [`DiffSourceInfo`], falling back to "unknown" if the file/channel is
@@ -653,6 +661,7 @@ pub fn ui_header(
     let mut text = String::from("track header");
     let mut path_text = None;
     let mut channel_text = None;
+    let mut channel_prefix = String::new();
 
     // Build the hover data once per frame, while we still have both the file and the specific
     // channel for this track. The popup renderer below only formats it.
@@ -666,7 +675,7 @@ pub fn ui_header(
             .unwrap_or("unknown");
         path_text = Some(path.to_string());
         channel_text = Some(format!(" - ch {}", channel.ch_ix));
-        text = format!("{} - ch {}", path, channel.ch_ix);
+        channel_prefix = channel_id_prefix(channel.channel_id);
     } else if model
         .tracks
         .get_track(track_id)
@@ -716,7 +725,16 @@ pub fn ui_header(
         egui::pos2(label_right, header_rect.bottom()),
     );
     let display_text = if let (Some(path), Some(suffix)) = (path_text, channel_text) {
-        truncate_path_keep_basename_to_width(ui, &path, &suffix, label_rect.width())
+        let prefix_width = ui
+            .painter()
+            .layout_no_wrap(channel_prefix.clone(), font_id.clone(), color)
+            .size()
+            .x;
+        let path_width = (label_rect.width() - prefix_width - 2.0).max(0.0);
+        format!(
+            "{channel_prefix}{}",
+            truncate_path_keep_basename_to_width(ui, &path, &suffix, path_width)
+        )
     } else {
         text
     };
@@ -725,7 +743,9 @@ pub fn ui_header(
         label_rect.left() + 2.0,
         header_rect.center().y - galley.size().y / 2.0,
     );
-    ui.painter().galley(text_pos, galley, color);
+    ui.painter()
+        .with_clip_rect(ui.clip_rect().intersect(label_rect))
+        .galley(text_pos, galley, color);
 
     let response = ui.interact(
         label_rect,
