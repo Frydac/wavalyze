@@ -36,9 +36,36 @@ For another example, the internal `5.1` mask is `0x3F`, while its side-surround
 WAVEX mask is `0x60F`. Never cast an internal layout mask to a WAVEX mask; convert
 through an independently maintained WAVEX speaker mapping.
 
-The current reader recognizes the 18 standard WAVEX bits and preserves all raw
-mask bits. Correcting the Auro height assignments and adding the selected PDF's
-extended speaker bits are separate remaining implementation steps.
+The reader recognizes the 18 standard WAVEX bits plus the six extension bits
+proposed in `Auro-3D in WAV 20230317-1.pdf`, adopted as this project's convention.
+Its Auro identities follow that PDF: TopBackLeft (`0x008000`) and TopBackRight
+(`0x020000`) map to HeightLeftSurround and HeightRightSurround.
+
+| Extension bit | Auro identity |
+|---|---|
+| `0x040000` | HeightLeftBack |
+| `0x080000` | HeightRightBack |
+| `0x100000` | BottomLeft |
+| `0x200000` | BottomCenter |
+| `0x400000` | BottomRight |
+| `0x800000` | LFE2 |
+
+The resulting 22.2 mask is `0xFFFFFF`, with this interleaving order:
+
+```text
+L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLs HCs HRs HLb HRb BL BC BR LFE2
+```
+
+The PDF labels the bottom channels BtL/BtC/BtR; the imported IDs use BL/BC/BR.
+For 22.0, omit LFE and LFE2, giving mask `0x7FFFF7`. Both layouts resolve to
+their internal catalog definitions, independently of the WAVEX bit numbering.
+Unknown bits (24..31), zero masks, and channel-count mismatches retain their raw
+mask but leave layout and channel IDs unassigned.
+
+Legacy workplace 22.2 files can have the same `0xFFFFFF` mask with a different
+channel order. The reader consistently uses the selected PDF convention; it
+does not guess a legacy interpretation from that ambiguous mask. Migration
+requires source provenance and explicit sample reordering.
 
 ## Import and regeneration workflow
 

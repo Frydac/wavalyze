@@ -4,7 +4,9 @@ use crate::audio::{Id, Layout};
 use std::io::{self, Read, Seek, SeekFrom};
 
 // WAV speaker order differs from the discriminants of audio::Id.
-const SPEAKERS: [Id; 18] = [
+// Auro identities follow Auro-3D in WAV (2023-03-17): TopBackLeft/Right
+// are height surrounds (HLs/HRs); height backs use separate extension bits.
+const SPEAKERS: [Id; 24] = [
     Id::Left,
     Id::Right,
     Id::Center,
@@ -20,9 +22,16 @@ const SPEAKERS: [Id; 18] = [
     Id::HeightLeft,
     Id::HeightCenter,
     Id::HeightRight,
-    Id::HeightLeftBack,
+    Id::HeightLeftSurround,
     Id::HeightCenterSurround,
+    Id::HeightRightSurround,
+    // The PDF's proposed 22.2 extension (bits 18..23), adopted by this project.
+    Id::HeightLeftBack,
     Id::HeightRightBack,
+    Id::BottomLeft,
+    Id::BottomCenter,
+    Id::BottomRight,
+    Id::LFE2,
 ];
 
 fn invalid(message: &'static str) -> io::Error {
@@ -113,6 +122,7 @@ pub(crate) fn channel_id(mask: Option<u32>, channels: usize, index: usize) -> Op
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::audio::buffer::BufferE;
     use crate::wav::{
         ReadConfig, ReadConfigBytes, read_bytes_to_loaded_file_with_sink, read_to_loaded_file,
     };
@@ -215,13 +225,233 @@ pub(crate) mod tests {
                 Layout::TOP
                     | Layout::HEIGHT_FRONTS
                     | Layout::HEIGHT_CENTER
-                    | Layout::HEIGHT_BACKS
+                    | Layout::HEIGHT_SURROUNDS
                     | Layout::HEIGHT_CENTER_SURROUND
             ),
         );
         for mask in [None, Some(0), Some(3), Some(0x80000000)] {
             assert_eq!(layout(mask, 1), None);
             assert_eq!(channel_id(mask, 1, 0), None);
+        }
+    }
+
+    #[test]
+    fn top_back_bits_follow_pdf_height_surround_assignments() {
+        // Auro-3D in WAV (2023-03-17), speaker-position table:
+        // SPEAKER_TOP_BACK_LEFT / RIGHT are HLs / HRs, not HLb / HRb.
+        for (mask, id, expected_layout) in [
+            (
+                0x008000,
+                Id::HeightLeftSurround,
+                Layout::HEIGHT_LEFT_SURROUND,
+            ),
+            (
+                0x020000,
+                Id::HeightRightSurround,
+                Layout::HEIGHT_RIGHT_SURROUND,
+            ),
+        ] {
+            assert_eq!(channel_id(Some(mask), 1, 0), Some(id));
+            assert_eq!(layout(Some(mask), 1), Some(expected_layout));
+        }
+        assert_eq!(layout(Some(0x028000), 2), Some(Layout::HEIGHT_SURROUNDS));
+        assert_eq!(
+            channel_id(Some(0x028000), 2, 0),
+            Some(Id::HeightLeftSurround)
+        );
+        assert_eq!(
+            channel_id(Some(0x028000), 2, 1),
+            Some(Id::HeightRightSurround)
+        );
+        assert_eq!(channel_id(Some(0x028000), 2, 2), None);
+    }
+
+    #[test]
+    fn loading_auro_9_1_uses_pdf_channel_order_and_layout() {
+        // Literal PDF Auro 9.1 mask and order, independent of SPEAKERS.
+        let mask = 0x2d60f;
+        let expected = [
+            Id::Left,
+            Id::Right,
+            Id::Center,
+            Id::LFE,
+            Id::LeftSurround,
+            Id::RightSurround,
+            Id::HeightLeft,
+            Id::HeightRight,
+            Id::HeightLeftSurround,
+            Id::HeightRightSurround,
+        ];
+        let config = ReadConfigBytes::new(None, wav_bytes(Some(mask), 10, &[]));
+        let loaded = read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap();
+        assert_eq!(loaded.channel_mask, Some(mask));
+        assert_eq!(loaded.layout, Some(Layout::LAYOUT_AURO9_1));
+        let file = loaded.into_file(&mut crate::audio::manager::Buffers::default());
+        assert_eq!(file.layout, Some(Layout::LAYOUT_AURO9_1));
+        for (index, id) in expected.into_iter().enumerate() {
+            assert_eq!(file.channels[&index].channel_id, Some(id));
+        }
+    }
+
+    #[test]
+    fn pdf_extension_bits_have_distinct_auro_identities() {
+        // The PDF's proposed extension assignments, written independently of SPEAKERS.
+        for (mask, id, expected_layout) in [
+            (0x040000, Id::HeightLeftBack, Layout::HEIGHT_LEFT_BACK),
+            (0x080000, Id::HeightRightBack, Layout::HEIGHT_RIGHT_BACK),
+            (0x100000, Id::BottomLeft, Layout::BOTTOM_LEFT),
+            (0x200000, Id::BottomCenter, Layout::BOTTOM_CENTER),
+            (0x400000, Id::BottomRight, Layout::BOTTOM_RIGHT),
+            (0x800000, Id::LFE2, Layout::LFE2),
+        ] {
+            assert_eq!(channel_id(Some(mask), 1, 0), Some(id));
+            assert_eq!(layout(Some(mask), 1), Some(expected_layout));
+        }
+    }
+
+    #[test]
+    fn loading_nhk_layouts_preserves_pdf_order_and_channel_signals() {
+        // Literal PDF-convention orders. 22.0 omits LFE (bit 3) and LFE2 (bit 23).
+        let order_22_2 = [
+            Id::Left,
+            Id::Right,
+            Id::Center,
+            Id::LFE,
+            Id::LeftBack,
+            Id::RightBack,
+            Id::LeftCenter,
+            Id::RightCenter,
+            Id::CenterSurround,
+            Id::LeftSurround,
+            Id::RightSurround,
+            Id::Top,
+            Id::HeightLeft,
+            Id::HeightCenter,
+            Id::HeightRight,
+            Id::HeightLeftSurround,
+            Id::HeightCenterSurround,
+            Id::HeightRightSurround,
+            Id::HeightLeftBack,
+            Id::HeightRightBack,
+            Id::BottomLeft,
+            Id::BottomCenter,
+            Id::BottomRight,
+            Id::LFE2,
+        ];
+        let order_22_0 = [
+            Id::Left,
+            Id::Right,
+            Id::Center,
+            Id::LeftBack,
+            Id::RightBack,
+            Id::LeftCenter,
+            Id::RightCenter,
+            Id::CenterSurround,
+            Id::LeftSurround,
+            Id::RightSurround,
+            Id::Top,
+            Id::HeightLeft,
+            Id::HeightCenter,
+            Id::HeightRight,
+            Id::HeightLeftSurround,
+            Id::HeightCenterSurround,
+            Id::HeightRightSurround,
+            Id::HeightLeftBack,
+            Id::HeightRightBack,
+            Id::BottomLeft,
+            Id::BottomCenter,
+            Id::BottomRight,
+        ];
+        for (mask, expected, expected_layout) in [
+            (0xffffff, order_22_2.as_slice(), Layout::LAYOUT_NHK_22_2),
+            (0x7ffff7, order_22_0.as_slice(), Layout::LAYOUT_NHK_22_0),
+        ] {
+            let channels = expected.len();
+            let config = ReadConfigBytes::new(None, wav_bytes(Some(mask), channels as u16, &[]));
+            let loaded = read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap();
+            assert_eq!(loaded.channel_mask, Some(mask));
+            assert_eq!(loaded.total_nr_channels, channels);
+            assert_eq!(loaded.layout, Some(expected_layout.clone()));
+            let mut buffers = crate::audio::manager::Buffers::default();
+            let file = loaded.into_file(&mut buffers);
+            assert_eq!(file.channel_mask, Some(mask));
+            assert_eq!(file.layout, Some(expected_layout));
+            assert_eq!(file.channels.len(), channels);
+            for (index, id) in expected.iter().copied().enumerate() {
+                let channel = &file.channels[&index];
+                assert_eq!(channel.channel_id, Some(id));
+                let BufferE::I16(buffer) = buffers[channel.buffer_id].as_ref() else {
+                    panic!("expected i16 channel samples");
+                };
+                // The fixture interleaves two frames of distinct channel samples.
+                assert_eq!(buffer.data, [index as i16, (index + channels) as i16]);
+            }
+            assert_eq!(channel_id(Some(mask), channels, channels), None);
+        }
+    }
+
+    #[test]
+    fn sparse_pdf_mask_and_selected_channels_keep_wav_indices() {
+        // HLs, HRs, BL, BR, LFE2; skips intermediate bits, including BC.
+        let mask = 0xd28000;
+        let expected = [
+            Id::HeightLeftSurround,
+            Id::HeightRightSurround,
+            Id::BottomLeft,
+            Id::BottomRight,
+            Id::LFE2,
+        ];
+        for (index, id) in expected.into_iter().enumerate() {
+            assert_eq!(channel_id(Some(mask), 5, index), Some(id));
+        }
+        let config =
+            ReadConfigBytes::new(None, wav_bytes(Some(mask), 5, &[])).with_ch_ixs([1, 3, 4]);
+        let loaded = read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap();
+        assert_eq!(
+            loaded.layout,
+            Some(
+                Layout::HEIGHT_SURROUNDS
+                    | Layout::BOTTOM_LEFT
+                    | Layout::BOTTOM_RIGHT
+                    | Layout::LFE2
+            )
+        );
+        let mut buffers = crate::audio::manager::Buffers::default();
+        let file = loaded.into_file(&mut buffers);
+        assert_eq!(file.channels.len(), 3);
+        for (index, id) in [
+            (1, Id::HeightRightSurround),
+            (3, Id::BottomRight),
+            (4, Id::LFE2),
+        ] {
+            let channel = &file.channels[&index];
+            assert_eq!(channel.channel_id, Some(id));
+            let BufferE::I16(buffer) = buffers[channel.buffer_id].as_ref() else {
+                panic!("expected i16 channel samples");
+            };
+            assert_eq!(buffer.data, [index as i16, (index + 5) as i16]);
+        }
+    }
+
+    #[test]
+    fn unsupported_bits_and_count_mismatches_keep_raw_masks_without_assigning_ids() {
+        for (mask, channels) in (24..32).map(|bit| (1u32 << bit, 1)).chain([
+            (0xffffff, 23),
+            (0x7ffff7, 24),
+            (0x040000, 2),
+        ]) {
+            assert_eq!(layout(Some(mask), channels), None);
+            assert_eq!(channel_id(Some(mask), channels, 0), None);
+            let config = ReadConfigBytes::new(None, wav_bytes(Some(mask), channels as u16, &[]));
+            let loaded = read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap();
+            assert_eq!(loaded.channel_mask, Some(mask));
+            assert_eq!(loaded.layout, None);
+            let file = loaded.into_file(&mut crate::audio::manager::Buffers::default());
+            assert!(
+                file.channels
+                    .values()
+                    .all(|channel| channel.channel_id.is_none())
+            );
         }
     }
 

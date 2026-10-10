@@ -147,13 +147,40 @@ Important root files:
 - `check.sh`: local CI-like check script
 - `.typos.toml`: spell-check configuration
 
-Generated or local-only paths such as `target/`, `dist/`, `data/`, `perf.data*`, and `tags` are ignored by Git.
+Generated or local-only paths such as `target/`, `dist/`, `data/` (except the channel
+definition snapshots), `perf.data*`, and `tags` are ignored by Git.
 
 Optional Nix shell:
 
 ```bash
 nix develop ./dev/nix
 ```
+
+## Generating test audio
+
+```sh
+rake create_test_data      # Basic SoX fixtures plus WAVEX fixtures
+rake test_data:basic       # Basic fixtures only (requires SoX)
+rake test_data:wavex       # WAVEX fixtures only (Ruby, no SoX required)
+```
+
+The generation code lives in `scripts/generate_test_data.rb`. Basic fixtures keep
+their existing filenames in `data/`. WAVEX fixtures go into `data/wavex/` and cover
+stereo, quad, 5.1, Auro 9.1, Auro 13.1, NHK 22.0, and NHK 22.2. Open these WAVs
+in wavalyze to inspect channel titles and layout metadata.
+
+Each WAVEX file contains one second of 48 kHz, 16-bit PCM with an explicit
+WAVEFORMATEXTENSIBLE channel mask and PDF-convention interleaving. Every channel
+has a distinct sine frequency (`440 + 200 * channel_index` Hz). The generated
+`manifest.json` lists the layouts, masks, channel IDs in order, and frequencies.
+NHK 22.2 uses mask `0xFFFFFF`; NHK 22.0 uses `0x7FFFF7`. These follow the selected
+Auro PDF's proposed extension, including its bottom-channel and LFE2 positions.
+
+Generated WAVs and their manifest remain ignored by Git; the scripts are committed.
+For another output location, run
+`ruby scripts/generate_test_data.rb --kind wavex --output-dir /tmp/wavalyze-audio`.
+Run the header, order, signal, and determinism checks with
+`ruby scripts/test_generate_test_data.rb`.
 
 ## Reloading changed files
 
