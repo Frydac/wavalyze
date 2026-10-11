@@ -185,6 +185,11 @@ pub enum Action {
         track_id: TrackId,
         nr_pixels: PixelCoord,
     },
+    /// Set a track's numeric value window from an overview gesture.
+    SetTrackValueRange {
+        track_id: TrackId,
+        range: crate::audio::sample::ValRange<f64>,
+    },
     /// Zoom the _view_ of the given track, center_y should be absolute y-position of the
     /// mouse/center
     ZoomY {
@@ -556,6 +561,9 @@ impl Action {
                     nr_pixels,
                     model.user_config.value_display_scale,
                 )?;
+            }
+            Action::SetTrackValueRange { track_id, range } => {
+                model.tracks.set_track_value_range(track_id, range)?;
             }
             Action::AutoFitY { track_id } => {
                 let local_range = model

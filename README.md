@@ -38,6 +38,7 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 - Fast startup for quick file inspection
 - Zoom and pan over x and y axes with multiple types of controls
    - see [Mouse navigation](doc/mouse_navigation.md)
+- Per-track value overviews with draggable limits and fine vertical zoom adjustment
 - Sample-level hover details
   * Configure zoom level for when to show sample-level details
 - Calculate track statistics (dB-RMS, peak) over a selection

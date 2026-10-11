@@ -278,8 +278,8 @@ fn draw_viewport(ui: &mut egui::Ui, model: &model::Model, viewport_rect: egui::R
         ui.painter().rect(
             viewport_rect,
             2.0,
-            accent.gamma_multiply(0.18),
-            egui::Stroke::new(1.0, accent),
+            accent.gamma_multiply(0.12),
+            egui::Stroke::new(1.0, accent.gamma_multiply(0.55)),
             egui::epaint::StrokeKind::Inside,
         );
     }

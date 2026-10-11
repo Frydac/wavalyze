@@ -220,6 +220,34 @@ impl Tracks {
         }
     }
 
+    /// Set a numeric value window without changing the track's time window or offset.
+    pub fn set_track_value_range(
+        &mut self,
+        track_id: TrackId,
+        range: audio::sample::ValRange<f64>,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            range.min.is_finite()
+                && range.max.is_finite()
+                && range.max > range.min
+                && (range.max - range.min).is_finite(),
+            "value range must have finite, increasing limits"
+        );
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+        let mut rect = track
+            .single
+            .sample_rect_raw()
+            .ok_or_else(|| anyhow::anyhow!("sample_rect is missing"))?;
+        if rect.val_rng().is_some() {
+            rect.set_val_rng(range);
+            track.single.set_sample_rect(rect);
+        }
+        Ok(())
+    }
+
     // Updates sample_rect.val_rng
     pub fn pan_track_value_range(
         &mut self,
@@ -816,6 +844,53 @@ mod tests {
         sample_rect.set_val_rng(val_rng);
         track.single.set_sample_rect(sample_rect);
         track_id
+    }
+
+    #[test]
+    fn setting_a_value_window_preserves_other_track_state_and_rejects_invalid_limits() {
+        let mut tracks = Tracks::default();
+        let mut audio = audio::manager::AudioManager::default();
+        let track_id = track_with_value_range(
+            &mut tracks,
+            &mut audio,
+            audio::sample::ValRange {
+                min: -1.0,
+                max: 1.0,
+            },
+        );
+        tracks
+            .get_track_mut(track_id)
+            .unwrap()
+            .single
+            .sample_ix_offset = 7.0;
+        let original = tracks.get_track(track_id).unwrap().clone();
+        let range = audio::sample::ValRange {
+            min: 1.25,
+            max: 1.75,
+        };
+        tracks.set_track_value_range(track_id, range).unwrap();
+        let track = tracks.get_track(track_id).unwrap();
+        let mut expected_rect = original.single.sample_rect_raw().unwrap();
+        expected_rect.set_val_rng(range);
+        assert_eq!(track.single.sample_rect_raw(), Some(expected_rect));
+        assert_eq!(track.single.sample_ix_offset, 7.0);
+        assert_eq!(track.single.buffer_id, original.single.buffer_id);
+        assert_eq!(track.screen_rect, original.screen_rect);
+        let before_invalid = track.clone();
+        for (min, max) in [
+            (-f64::MAX, f64::MAX),
+            (0.0, 0.0),
+            (1.0, -1.0),
+            (f64::NAN, 1.0),
+            (-1.0, f64::INFINITY),
+        ] {
+            assert!(
+                tracks
+                    .set_track_value_range(track_id, audio::sample::ValRange { min, max })
+                    .is_err()
+            );
+            assert_eq!(tracks.get_track(track_id), Some(&before_invalid));
+        }
     }
 
     #[test]

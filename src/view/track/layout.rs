@@ -1,4 +1,7 @@
-use crate::model::{config::RULER_SLOT_WIDTH, track::HEADER_HEIGHT};
+use crate::model::{
+    config::{RULER_SLOT_WIDTH, VALUE_OVERVIEW_WIDTH},
+    track::HEADER_HEIGHT,
+};
 
 const RESIZE_HANDLE_HEIGHT: f32 = 3.0;
 
@@ -39,6 +42,7 @@ pub(super) struct TrackLayout {
     /// Ruler-aligned header slot shared by the reset and auto-fit Y buttons.
     pub y_zoom_controls: Option<egui::Rect>,
     pub stats_viewport: egui::Rect,
+    pub value_overview: Option<egui::Rect>,
     pub db_ruler: Option<egui::Rect>,
     pub amplitude_ruler: Option<egui::Rect>,
     pub waveform_header: egui::Rect,
@@ -76,6 +80,17 @@ impl TrackLayout {
         let db_ruler = show_db_ruler
             .then(|| take_ruler_slot(sidebar_body, &mut ruler_cursor_x))
             .flatten();
+
+        let value_overview = (amplitude_ruler.is_some() || db_ruler.is_some())
+            .then(|| take_slot(sidebar_body, &mut ruler_cursor_x, VALUE_OVERVIEW_WIDTH))
+            .flatten()
+            .map(|mut rect| {
+                // The track-height handle overlays the bottom of the body. Keep value
+                // edge resizing outside that interaction band.
+                rect.max.y = (rect.bottom() - RESIZE_HANDLE_HEIGHT).max(rect.top());
+                rect
+            })
+            .filter(|rect| rect.is_positive());
 
         let stats_viewport = egui::Rect::from_min_max(
             sidebar_body.min,
@@ -118,6 +133,7 @@ impl TrackLayout {
             sidebar_header_controls,
             y_zoom_controls,
             stats_viewport,
+            value_overview,
             db_ruler,
             amplitude_ruler,
             waveform_header,
@@ -138,8 +154,12 @@ fn non_negative_rect(rect: egui::Rect) -> egui::Rect {
 }
 
 fn take_ruler_slot(body: egui::Rect, cursor_x: &mut f32) -> Option<egui::Rect> {
+    take_slot(body, cursor_x, RULER_SLOT_WIDTH)
+}
+
+fn take_slot(body: egui::Rect, cursor_x: &mut f32, slot_width: f32) -> Option<egui::Rect> {
     let available_width = (*cursor_x - body.left()).max(0.0);
-    let width = RULER_SLOT_WIDTH.min(available_width);
+    let width = slot_width.min(available_width);
     if width <= 0.0 || body.height() <= 0.0 {
         return None;
     }
@@ -179,7 +199,10 @@ mod tests {
         assert_eq!(db.width(), RULER_SLOT_WIDTH);
         assert_eq!(amplitude.right(), layout.columns.sidebar.right());
         assert_eq!(db.right(), amplitude.left());
-        assert_eq!(layout.stats_viewport.right(), db.left());
+        let overview = layout.value_overview.unwrap();
+        assert_eq!(overview.width(), VALUE_OVERVIEW_WIDTH);
+        assert_eq!(overview.right(), db.left());
+        assert_eq!(layout.stats_viewport.right(), overview.left());
         assert_eq!(
             layout.y_zoom_controls.unwrap().x_range(),
             amplitude.x_range()
@@ -199,7 +222,10 @@ mod tests {
 
             assert_eq!(ruler.width(), RULER_SLOT_WIDTH);
             assert_eq!(ruler.right(), layout.columns.sidebar.right());
-            assert_eq!(layout.stats_viewport.right(), ruler.left());
+            let overview = layout.value_overview.unwrap();
+            assert_eq!(overview.width(), VALUE_OVERVIEW_WIDTH);
+            assert_eq!(overview.right(), ruler.left());
+            assert_eq!(layout.stats_viewport.right(), overview.left());
             assert_eq!(layout.y_zoom_controls.unwrap().x_range(), ruler.x_range());
             assert_eq!(layout.amplitude_ruler.is_some(), show_amplitude);
             assert_eq!(layout.db_ruler.is_some(), show_db);
@@ -217,6 +243,7 @@ mod tests {
         );
         assert_eq!(layout.sidebar_header_controls.width(), 250.0);
         assert!(layout.y_zoom_controls.is_none());
+        assert!(layout.value_overview.is_none());
     }
 
     #[test]
@@ -237,6 +264,8 @@ mod tests {
         }
         assert_eq!(layout.waveform_header.height(), HEADER_HEIGHT);
         assert_eq!(layout.waveform_canvas.height(), 25.0 - HEADER_HEIGHT);
+        // This body is entirely occupied by the track-height handle.
+        assert!(layout.value_overview.is_none());
     }
 
     #[test]
@@ -250,6 +279,10 @@ mod tests {
             assert_eq!(layout.stats_viewport.height(), body_height);
             assert_eq!(layout.amplitude_ruler.unwrap().height(), body_height);
             assert_eq!(layout.db_ruler.unwrap().height(), body_height);
+            assert_eq!(
+                layout.value_overview.unwrap().bottom(),
+                layout.resize_handle.top()
+            );
         }
     }
 
@@ -327,6 +360,7 @@ mod tests {
                 layout.resize_handle,
             ];
             regions.extend(layout.y_zoom_controls);
+            regions.extend(layout.value_overview);
             regions.extend(layout.db_ruler);
             regions.extend(layout.amplitude_ruler);
 

@@ -47,6 +47,9 @@ fn default_true() -> bool {
 /// Width of a single value/dB ruler column inside a track's side panel.
 pub const RULER_SLOT_WIDTH: f32 = 80.0;
 
+/// Width of the shared vertical value overview beside a track's rulers.
+pub const VALUE_OVERVIEW_WIDTH: f32 = 14.0;
+
 /// Minimum width for non-ruler controls in the per-track side panel.
 pub const TRACK_SIDE_CONTROLS_MIN_WIDTH: f32 = 170.0;
 
@@ -292,8 +295,14 @@ impl Config {
     /// Total width the per-track side panel should claim, given the enabled rulers.
     pub fn effective_tracks_width_info(&self) -> f32 {
         let ruler_count = self.show_amplitude_ruler as u32 + self.show_db_ruler as u32;
-        let min_width = TRACK_SIDE_CONTROLS_MIN_WIDTH + RULER_SLOT_WIDTH * ruler_count as f32;
-        (self.tracks_width_info + self.ruler_stack_extra_width()).max(min_width)
+        let overview_width = if ruler_count > 0 {
+            VALUE_OVERVIEW_WIDTH
+        } else {
+            0.0
+        };
+        let min_width =
+            TRACK_SIDE_CONTROLS_MIN_WIDTH + RULER_SLOT_WIDTH * ruler_count as f32 + overview_width;
+        (self.tracks_width_info + self.ruler_stack_extra_width() + overview_width).max(min_width)
     }
 
     /// Load config from file or use default
@@ -597,19 +606,25 @@ selection_fill = [1, 2, 3, 4]
 
         assert_eq!(
             config.effective_tracks_width_info(),
-            super::TRACK_SIDE_CONTROLS_MIN_WIDTH + super::RULER_SLOT_WIDTH
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH
+                + super::RULER_SLOT_WIDTH
+                + super::VALUE_OVERVIEW_WIDTH
         );
 
         config.show_db_ruler = true;
         assert_eq!(
             config.effective_tracks_width_info(),
-            super::TRACK_SIDE_CONTROLS_MIN_WIDTH + 2.0 * super::RULER_SLOT_WIDTH
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH
+                + 2.0 * super::RULER_SLOT_WIDTH
+                + super::VALUE_OVERVIEW_WIDTH
         );
 
         config.show_amplitude_ruler = false;
         assert_eq!(
             config.effective_tracks_width_info(),
-            super::TRACK_SIDE_CONTROLS_MIN_WIDTH + super::RULER_SLOT_WIDTH
+            super::TRACK_SIDE_CONTROLS_MIN_WIDTH
+                + super::RULER_SLOT_WIDTH
+                + super::VALUE_OVERVIEW_WIDTH
         );
 
         config.show_db_ruler = false;
@@ -626,6 +641,9 @@ selection_fill = [1, 2, 3, 4]
             ..Config::default()
         };
 
-        assert_eq!(config.effective_tracks_width_info(), 300.0);
+        assert_eq!(
+            config.effective_tracks_width_info(),
+            300.0 + super::VALUE_OVERVIEW_WIDTH
+        );
     }
 }

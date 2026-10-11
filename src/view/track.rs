@@ -21,6 +21,7 @@ mod hover;
 #[allow(dead_code)]
 pub(super) mod layout;
 mod selection;
+mod value_overview;
 mod waveform;
 
 use layout::TrackLayout;
@@ -366,6 +367,24 @@ fn ui_side(ui: &mut egui::Ui, model: &mut Model, track_id: TrackId, layout: &Tra
 
     ui_stats_viewport(ui, model, track_id, layout.stats_viewport);
 
+    if let Some(rect) = layout.value_overview
+        && let Some(track) = model.tracks.get_track(track_id)
+    {
+        let range = track
+            .single
+            .sample_rect_raw()
+            .and_then(|rect| rect.val_rng());
+        let accent = model.user_config.active_theme_colors(ui.visuals()).accent;
+        value_overview::ui(
+            ui,
+            rect,
+            range,
+            accent,
+            track_id,
+            &mut model.actions,
+            model.user_config.navigation.zoom_y_mult(),
+        );
+    }
     ui_rulers(ui, model, track_id, layout.db_ruler, layout.amplitude_ruler);
 }
 
