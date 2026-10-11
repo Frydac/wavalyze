@@ -14,6 +14,7 @@ mod file_loader;
 pub mod fps;
 pub mod grid;
 pub mod jobs;
+mod overview;
 pub mod perf;
 pub mod ruler;
 pub mod selection_info;

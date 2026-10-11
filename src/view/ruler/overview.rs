@@ -10,6 +10,7 @@
 //! `ruler_rect`; if those widths diverge, edge-resizing will no longer visually track the pointer.
 
 use crate::model::{self, Action, selection_info::SelectionInfoE, time_camera};
+use crate::view::overview::{self, DragMotion};
 
 pub(crate) const HEIGHT: f32 = 18.0;
 
@@ -204,17 +205,18 @@ fn handle_interaction(ui: &mut egui::Ui, model: &mut model::Model, geometry: Geo
         egui::CursorIcon::PointingHand,
     );
 
-    let action = if left_response.as_ref().is_some_and(egui::Response::dragged) {
-        Some(DragAction::ResizeLeft)
-    } else if right_response.as_ref().is_some_and(egui::Response::dragged) {
-        Some(DragAction::ResizeRight)
-    } else if pan_response.as_ref().is_some_and(egui::Response::dragged) {
-        Some(DragAction::Pan)
-    } else {
-        None
-    };
-
-    let Some(action) = action else {
+    let active = [
+        (DragAction::ResizeLeft, left_response.as_ref()),
+        (DragAction::ResizeRight, right_response.as_ref()),
+        (DragAction::Pan, pan_response.as_ref()),
+    ]
+    .into_iter()
+    .find_map(|(action, response)| {
+        response
+            .filter(|response| response.dragged() || response.drag_stopped())
+            .map(|response| (action, response))
+    });
+    let Some((action, response)) = active else {
         return;
     };
 
@@ -223,14 +225,40 @@ fn handle_interaction(ui: &mut egui::Ui, model: &mut model::Model, geometry: Geo
         return;
     }
 
-    let delta_x = ui.input(|i| i.pointer.delta().x);
-    if delta_x == 0.0 {
+    if response.drag_started()
+        && let Some(origin) = ui.input(|input| input.pointer.press_origin())
+    {
+        let span = seconds_per_pixel * geometry.ruler_rect.width() as f64;
+        let unit = geometry.total_duration_s / geometry.inner_rect.width() as f64;
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(
+                response.id,
+                DragMotion::new(unit, span, geometry.inner_rect.width(), origin.x),
+            )
+        });
+    }
+    let Some(mut motion) = ui
+        .ctx()
+        .data(|data| data.get_temp::<DragMotion>(response.id))
+    else {
+        return;
+    };
+    let Some(pos) = response.interact_pointer_pos() else {
+        return;
+    };
+    let delta_s = motion.advance(pos.x, ui.input(|input| input.modifiers.shift));
+    if response.drag_stopped() {
+        ui.ctx()
+            .data_mut(|data| data.remove::<DragMotion>(response.id));
+    } else {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(response.id, motion));
+    }
+    if delta_s == 0.0 {
         return;
     }
 
-    // Convert overview-pixels -> seconds -> ruler-pixels so existing navigation actions can be
-    // reused. The sign/anchor choice makes the dragged overview edge follow the pointer.
-    let delta_s = delta_x as f64 / geometry.inner_rect.width() as f64 * geometry.total_duration_s;
+    // Convert overview movement to the current ruler scale to reuse existing model actions.
     let nr_pixels = delta_s / seconds_per_pixel;
     match action {
         DragAction::Pan => {
@@ -269,19 +297,14 @@ fn interact_if_positive(
     rect.is_positive().then(|| {
         ui.interact(rect, ui.id().with(id), egui::Sense::click_and_drag())
             .on_hover_cursor(cursor_icon)
+            .on_hover_text("Drag to adjust the visible time range; hold Shift for fine adjustment")
     })
 }
 
 fn draw_viewport(ui: &mut egui::Ui, model: &model::Model, viewport_rect: egui::Rect) {
     if viewport_rect.is_positive() {
         let accent = model.user_config.active_theme_colors(ui.visuals()).accent;
-        ui.painter().rect(
-            viewport_rect,
-            2.0,
-            accent.gamma_multiply(0.12),
-            egui::Stroke::new(1.0, accent.gamma_multiply(0.55)),
-            egui::epaint::StrokeKind::Inside,
-        );
+        overview::draw_viewport(ui.painter(), viewport_rect, 2, accent);
     }
 }
 
@@ -371,4 +394,142 @@ fn visible_tracks_duration_s(model: &model::Model) -> Option<f64> {
 fn time_to_overview_x(time_s: f64, total_duration_s: f64, overview_rect: egui::Rect) -> f32 {
     let t = (time_s / total_duration_s).clamp(0.0, 1.0) as f32;
     overview_rect.left() + t * overview_rect.width()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shift_slows_pan_and_both_edges_and_can_be_toggled_without_jumps() {
+        for kind in [
+            DragAction::Pan,
+            DragAction::ResizeLeft,
+            DragAction::ResizeRight,
+        ] {
+            for fine in [false, true] {
+                let mut model = model::Model::new();
+                #[cfg(not(target_arch = "wasm32"))]
+                model.files.changes.disable_watcher();
+                let buffer = crate::audio::buffer::BufferE::F32(
+                    crate::audio::buffer::Buffer::<f32>::with_size(1000, 32, 16000),
+                );
+                let buffer_id = model.audio.buffers.insert(std::sync::Arc::new(buffer));
+                model
+                    .tracks
+                    .add_track_to_end(buffer_id, 1000, &model.user_config.track)
+                    .unwrap();
+                let overview =
+                    egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(400.0, HEIGHT));
+                let ruler =
+                    egui::Rect::from_min_size(egui::pos2(20.0, 38.0), egui::vec2(400.0, 50.0));
+                model.tracks.ruler.set_screen_rect(ruler.into());
+                model.tracks.time_camera.time_start = 2.0;
+                model.tracks.time_camera.set_seconds_per_pixel(0.01);
+                let geo = geometry(&model, overview, ruler).unwrap();
+                let origin = match kind {
+                    DragAction::Pan => geo.pan_rect.center(),
+                    DragAction::ResizeLeft => geo.left_resize_rect.center(),
+                    DragAction::ResizeRight => geo.right_resize_rect.center(),
+                };
+                let ctx = egui::Context::default();
+                let mut time = 0.0;
+                let mut frame = |model: &mut model::Model, events, shift| {
+                    time += 0.1;
+                    let _ = ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(600.0, 200.0),
+                            )),
+                            time: Some(time),
+                            events,
+                            modifiers: egui::Modifiers {
+                                shift,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            egui::CentralPanel::default()
+                                .show(ctx, |ui| super::ui(ui, model, overview, ruler));
+                        },
+                    );
+                    for action in std::mem::take(&mut model.actions) {
+                        action.process(model).unwrap();
+                    }
+                    model.tracks.time_camera.time_range(ruler.width() as f64)
+                };
+                let button = |pos, pressed, shift| egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers {
+                        shift,
+                        ..Default::default()
+                    },
+                };
+                frame(&mut model, vec![], fine);
+                frame(
+                    &mut model,
+                    vec![
+                        egui::Event::PointerMoved(origin),
+                        button(origin, true, fine),
+                    ],
+                    fine,
+                );
+                let end = origin + egui::vec2(8.0, 0.0);
+                let moved = frame(&mut model, vec![egui::Event::PointerMoved(end)], fine);
+                let delta =
+                    if fine { 4.0 * 0.1 } else { 16.0 } / geo.inner_rect.width() as f64 * 8.0;
+                let expected_start = 2.0
+                    + if kind == DragAction::ResizeRight {
+                        0.0
+                    } else {
+                        delta
+                    };
+                let expected_end = 6.0
+                    + if kind == DragAction::ResizeLeft {
+                        0.0
+                    } else {
+                        delta
+                    };
+                assert!(
+                    (moved.start - expected_start).abs() < 1e-6,
+                    "{kind:?}, fine={fine}: {moved:?}"
+                );
+                assert!((moved.end - expected_end).abs() < 1e-6);
+                assert_eq!(frame(&mut model, vec![], true), moved);
+                let final_pos = end + egui::vec2(8.0, 0.0);
+                let refined = frame(&mut model, vec![egui::Event::PointerMoved(final_pos)], true);
+                let fine_delta = 4.0 * 0.1 / geo.inner_rect.width() as f64 * 8.0;
+                assert!(
+                    (refined.start
+                        - moved.start
+                        - if kind == DragAction::ResizeRight {
+                            0.0
+                        } else {
+                            fine_delta
+                        })
+                    .abs()
+                        < 1e-6
+                );
+                assert!(
+                    (refined.end
+                        - moved.end
+                        - if kind == DragAction::ResizeLeft {
+                            0.0
+                        } else {
+                            fine_delta
+                        })
+                    .abs()
+                        < 1e-6
+                );
+                assert_eq!(
+                    frame(&mut model, vec![button(final_pos, false, true)], true),
+                    refined
+                );
+            }
+        }
+    }
 }

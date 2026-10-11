@@ -53,7 +53,13 @@ Overview strip sits above time ruler. Highlighted viewport represents visible ti
 |---|---|
 | Drag viewport center | Pan time |
 | Drag left or right viewport edge | Zoom time by resizing visible range |
+| Hold Shift while dragging | Make finer pan or edge-resize adjustments |
 | Double-click strip | Fit full visible duration |
+
+Fine adjustment uses the visible time span captured at the start of the drag.
+Holding Shift limits sensitivity to one tenth of that span across the overview
+width (or less when already zoomed out beyond the overview). Pressing or releasing
+Shift during a drag changes sensitivity without moving the viewport suddenly.
 
 ## Amplitude and dB rulers
 
@@ -103,6 +109,6 @@ settings, and does not also scroll the track list.
 
 ## Direction and sensitivity
 
-Settings under **Navigation (scroll wheel)** configure sensitivity and inversion independently for Pan X, Pan Y, Zoom X, and Zoom Y. These settings affect scrolling only. Value overview drags use the reference and fine-adjustment behavior described above; other drag gestures remain direct 1:1 movement.
+Settings under **Navigation (scroll wheel)** configure sensitivity and inversion independently for Pan X, Pan Y, Zoom X, and Zoom Y. These settings affect scrolling only. Overview drags use the reference and fine-adjustment behavior described above; other drag gestures remain direct 1:1 movement.
 
 Trackpads may report Shift + wheel gestures as horizontal scroll. Value-ruler scrolling accepts vertical or horizontal scroll input; waveform and time-ruler X panning requires horizontal scroll input.

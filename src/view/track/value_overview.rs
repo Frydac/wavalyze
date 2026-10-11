@@ -4,6 +4,7 @@
 
 use crate::audio::sample::ValRange;
 use crate::model::{Action, track::TrackId};
+use crate::view::overview::{self, DragMotion};
 
 const RELATIVE_RESIZE_THRESHOLD_HEIGHT: f32 = 18.0;
 const MIN_VISIBLE_THUMB_HEIGHT: f32 = 2.0;
@@ -33,10 +34,7 @@ impl DragKind {
 struct ValueDrag {
     range: ValRange<f64>,
     kind: DragKind,
-    units_per_pixel: f64,
-    fine_units_per_pixel: f64,
-    previous_y: f32,
-    delta: f64,
+    motion: DragMotion,
 }
 
 impl ValueDrag {
@@ -53,21 +51,13 @@ impl ValueDrag {
         Self {
             range,
             kind,
-            units_per_pixel,
-            fine_units_per_pixel: units_per_pixel.min(span / geometry.inner.height() as f64) * 0.1,
-            previous_y: origin_y,
-            delta: 0.0,
+            motion: DragMotion::new(-units_per_pixel, span, geometry.inner.height(), origin_y),
         }
     }
 
     fn move_to(&mut self, y: f32, fine: bool) -> Option<ValRange<f64>> {
-        let unit = if fine {
-            self.fine_units_per_pixel
-        } else {
-            self.units_per_pixel
-        };
-        self.delta -= (y - self.previous_y) as f64 * unit;
-        self.previous_y = y;
+        self.motion.advance(y, fine);
+        let delta = self.motion.total();
         let span = self.range.max - self.range.min;
         // Prevent inverted/collapsed windows, including rounding at large offsets.
         let minimum_span = (span * 1e-6).max(
@@ -81,15 +71,15 @@ impl ValueDrag {
         );
         let range = match self.kind {
             DragKind::Pan => ValRange {
-                min: self.range.min + self.delta,
-                max: self.range.max + self.delta,
+                min: self.range.min + delta,
+                max: self.range.max + delta,
             },
             DragKind::Top => ValRange {
                 min: self.range.min,
-                max: (self.range.max + self.delta).max(self.range.min + minimum_span),
+                max: (self.range.max + delta).max(self.range.min + minimum_span),
             },
             DragKind::Bottom => ValRange {
-                min: (self.range.min + self.delta).min(self.range.max - minimum_span),
+                min: (self.range.min + delta).min(self.range.max - minimum_span),
                 max: self.range.max,
             },
         };
@@ -194,14 +184,8 @@ pub(super) fn ui(
         actions,
         zoom_mult,
     );
-    let color = accent.gamma_multiply(0.55);
-    painter.rect(
-        geometry.thumb,
-        1.0,
-        accent.gamma_multiply(0.12),
-        egui::Stroke::new(1.0, color),
-        egui::epaint::StrokeKind::Inside,
-    );
+    let color = overview::viewport_stroke(accent).color;
+    overview::draw_viewport(&painter, geometry.thumb, 1, accent);
     painter.hline(
         geometry.inner.x_range(),
         geometry.inner.center().y,
