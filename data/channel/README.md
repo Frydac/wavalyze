@@ -70,9 +70,13 @@ For sparse masks, project policy is to use ordinary context rather than infer
 22.x from extension bits. Top-side extensions can represent height surrounds,
 but two file channels must not resolve to the same identity. For example,
 `0x088000` combines TopBackLeft and TopSideLeft, both HeightLeftSurround in
-ordinary context, so speaker metadata is unassigned. Unknown bits (24..31), zero
-masks, and channel-count mismatches also retain their raw mask and decoded samples
-but leave layout and all channel IDs unassigned. An absent mask gives no metadata.
+ordinary context, so speaker metadata is unassigned. Unknown bits (24..31) and
+channel-count mismatches also retain their raw mask and decoded samples but leave
+layout and all channel IDs unassigned in Automatic mode. Absent or zero masks
+instead assume Auro ID order, with no active layout inferred. Explicit Auro ID
+order can override a mask, and Unassigned suppresses role assignment. See
+[channel orders and active layouts](../../doc/channel_orders.md) for the selectors
+and padded-channel convention.
 
 The original workplace mapping agrees with the published convention. Earlier
 wavalyze versions followed the provisional March 17, 2023 memo instead, with
@@ -113,7 +117,11 @@ the snapshot but do not create constants or name lookup.
 mask match returns its catalog names and synonyms (for example, `5.1_4H` and
 `Auro9.1`). Equal-mask definitions share one list of names; unmatched masks return
 an empty slice. This does not add parsing of input names or alternatives. The
-Files panel displays these names before the existing channel-list metadata.
+Files panel uses these names in its active-layout metadata cell.
+
+`Layout::catalog()` lists distinct imported layout masks for compatible-layout
+selection, sorted by mask. Equal-mask names share an entry; supplemental group
+masks are excluded unless their membership also appears in the imported catalog.
 
 Generation rejects unknown/repeated channel references and constant-name
 collisions across IDs, layouts, synonyms, and supplemental masks. Both generated

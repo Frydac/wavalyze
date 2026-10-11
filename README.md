@@ -28,6 +28,7 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 
 - [Mouse navigation](doc/mouse_navigation.md)
 - [CLI arguments](doc/cli_args.md)
+- [Channel orders and active layouts](doc/channel_orders.md)
 - [Cloudflare deploy notes](doc/cloudflare_deploy.md)
 - [Cargo and desktop distribution plan](doc/dev/distribution-plan.md)
 
@@ -42,6 +43,7 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 - Calculate track statistics (dB-RMS, peak) over a selection
   - Visual indication of peak value in selection
 - Diff files/tracks, with offset adjustment
+- WAVEX and Auro ID channel roles, with per-file order and active-layout selection
 - Native file-change notifications with individual or batch reload and automatic diff recomputation
 - Show/hide tracks with auto adjusting track height for filling the screen
 - Native and browser builds
