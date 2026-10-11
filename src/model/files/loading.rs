@@ -48,6 +48,9 @@ impl Model {
     /// tracks. Callers that want the default one-track-per-channel layout use [`Self::add_loaded_file`];
     /// the diff path uses this to control track order itself.
     pub(crate) fn register_loaded_file(&mut self, loaded: wav::read::LoadedFile) -> Result<FileId> {
+        let resolved = loaded
+            .channel_interpretation
+            .resolve(loaded.channel_mask, loaded.total_nr_channels);
         let mut channels = std::collections::BTreeMap::new();
         let mut thumbnails = loaded.thumbnails;
         for (ch_ix, buffer) in loaded.channels {
@@ -61,16 +64,13 @@ impl Model {
                 wav::file::Channel {
                     ch_ix,
                     buffer_id,
-                    channel_id: wav::channel_mask::channel_id(
-                        loaded.channel_mask,
-                        loaded.total_nr_channels,
-                        ch_ix,
-                    ),
+                    channel_id: resolved.channels[ch_ix].id,
                 },
             );
         }
 
         let file = wav::file::File {
+            channel_interpretation: loaded.channel_interpretation,
             channels,
             total_nr_channels: loaded.total_nr_channels,
             sample_type: loaded.sample_type,
@@ -168,6 +168,7 @@ mod tests {
         assert_eq!(file.channels.keys().copied().collect::<Vec<_>>(), [1, 3]);
 
         let bytes_config = wav::ReadConfigBytes {
+            channel_interpretation: Default::default(),
             name: Some("selective.wav".to_string()),
             bytes: std::fs::read(path).unwrap(),
             ch_ixs: Some(vec![1, 3]),

@@ -23,6 +23,9 @@ struct FileRow {
     sample_ix_offset: crate::audio::sample::Ix,
     metadata: Vec<(&'static str, String)>,
     channels: Vec<ChannelRow>,
+    interpretation: wav::channel_interpretation::ChannelInterpretation,
+    channel_mask: Option<u32>,
+    total_nr_channels: usize,
 }
 
 /// Distinguish visible, hidden, closed, and never-loaded channels in the file tree.
@@ -64,6 +67,9 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                 sample_ix_offset: file.sample_ix_offset,
                 metadata: metadata_rows(file),
                 channels: channel_rows(model, file),
+                interpretation: file.channel_interpretation.clone(),
+                channel_mask: file.channel_mask,
+                total_nr_channels: file.total_nr_channels,
             })
             .collect();
 
@@ -133,6 +139,9 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                         }
                     });
 
+                    let mut interpretation = row.interpretation.clone();
+                    let mut interpretation_changed = super::channel_interpretation::order_controls(ui, &mut interpretation, row.channel_mask, row.total_nr_channels);
+
                     egui::CollapsingHeader::new("Metadata")
                         .id_salt("metadata")
                         .default_open(false)
@@ -146,8 +155,16 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                                     grid.row(*key, value.clone());
                                 }
                             }
-                            grid.show(ui);
+                            grid.show_with(ui, |ui| {
+                                ui.label("active layout");
+                                interpretation_changed |= super::channel_interpretation::layout_selector(ui, &mut interpretation, row.channel_mask, row.total_nr_channels);
+                                ui.end_row();
+                            });
                         });
+
+                    if interpretation_changed {
+                        model.actions.push(Action::SetFileChannelInterpretation { file_id: row.file_id, interpretation });
+                    }
 
                     egui::CollapsingHeader::new("Channels")
                         .id_salt("channels")
@@ -214,7 +231,31 @@ fn ui_channels(ui: &mut egui::Ui, model: &mut Model, channels: &[ChannelRow]) {
 }
 
 fn metadata_rows(file: &wav::file::File) -> Vec<(&'static str, String)> {
+    let resolved = file.resolved_channel_interpretation();
     vec![
+        (
+            "channel order",
+            super::channel_interpretation::source_label(resolved.source).into(),
+        ),
+        (
+            "WAVEX mask",
+            file.channel_mask
+                .map(|mask| format!("0x{mask:08X}"))
+                .unwrap_or_else(|| "absent".into()),
+        ),
+        (
+            "layout source",
+            if file.layout.is_none() {
+                "unknown"
+            } else if resolved.source == wav::channel_interpretation::InterpretationSource::Wavex {
+                "WAVEX"
+            } else if file.channel_interpretation.active_layout.is_some() {
+                "selected"
+            } else {
+                "provided"
+            }
+            .into(),
+        ),
         (
             PATH_METADATA_KEY,
             file.path
@@ -242,24 +283,11 @@ fn metadata_rows(file: &wav::file::File) -> Vec<(&'static str, String)> {
                 format!("{:.3} s", file.nr_samples as f64 / file.sample_rate as f64)
             },
         ),
-        (
-            "layout",
-            file.layout
-                .as_ref()
-                .map(|layout| {
-                    let names = layout.names();
-                    if names.is_empty() {
-                        format!("{layout:?}")
-                    } else {
-                        format!("{}: {layout:?}", names.join(" / "))
-                    }
-                })
-                .unwrap_or_else(|| "unknown".to_string()),
-        ),
     ]
 }
 
 fn channel_rows(model: &Model, file: &wav::file::File) -> Vec<ChannelRow> {
+    let resolved = file.resolved_channel_interpretation();
     (0..file.total_nr_channels)
         .map(|ch_ix| {
             let channel = file.channels.get(&ch_ix);
@@ -270,9 +298,13 @@ fn channel_rows(model: &Model, file: &wav::file::File) -> Vec<ChannelRow> {
             });
             ChannelRow {
                 buffer_id: channel.map(|channel| channel.buffer_id),
-                label: channel
-                    .map(channel_label)
-                    .unwrap_or_else(|| format!("ch {ch_ix}")),
+                label: channel_label(
+                    ch_ix,
+                    channel
+                        .map(|ch| ch.channel_id)
+                        .unwrap_or(resolved.channels[ch_ix].id),
+                    resolved.channels[ch_ix].padding,
+                ),
                 visible: track.is_some_and(|track| track.visible),
                 missing_track: track.is_none(),
             }
@@ -289,11 +321,12 @@ fn file_title(file: &wav::file::File) -> String {
         .unwrap_or_else(|| "Demo".to_string())
 }
 
-fn channel_label(channel: &wav::file::Channel) -> String {
-    match channel.channel_id {
-        Some(channel_id) => format!("ch {} - {}", channel.ch_ix, channel_id.long_name()),
-        None => format!("ch {}", channel.ch_ix),
-    }
+fn channel_label(ch_ix: usize, id: Option<crate::audio::Id>, padding: bool) -> String {
+    let role = id
+        .map(|id| format!(" - {}", id.long_name()))
+        .unwrap_or_default();
+    let padding = if padding { " (padding)" } else { "" };
+    format!("ch {ch_ix}{role}{padding}")
 }
 
 /// Keep notification controls separate from the existing file tree; both enqueue model actions.
@@ -436,7 +469,8 @@ mod tests {
                 .insert(Arc::new(BufferE::F32(audio::buffer::Buffer::with_size(
                     48_000, 32, 16,
                 ))));
-        let file = wav::file::File {
+        let mut file = wav::file::File {
+            channel_interpretation: Default::default(),
             channels: BTreeMap::from([
                 (
                     0,
@@ -467,6 +501,7 @@ mod tests {
             sample_ix_offset: 0,
         };
 
+        file.set_channel_interpretation(Default::default());
         let rows = channel_rows(&model, &file);
         let metadata = metadata_rows(&file);
 
@@ -479,16 +514,80 @@ mod tests {
             "2 / 4 loaded"
         );
         assert_eq!(rows.len(), 4);
-        assert_eq!(rows[0].label, "ch 0");
+        assert_eq!(rows[0].label, "ch 0 - Left");
         assert!(rows[0].buffer_id.is_some());
-        assert_eq!(rows[1].label, "ch 1");
+        assert_eq!(rows[1].label, "ch 1 - Right");
         assert!(rows[1].buffer_id.is_none());
         assert!(rows[1].missing_track);
-        assert_eq!(rows[2].label, "ch 2");
+        assert_eq!(rows[2].label, "ch 2 - Center");
         assert!(rows[2].buffer_id.is_some());
-        assert_eq!(rows[3].label, "ch 3");
+        assert_eq!(rows[3].label, "ch 3 - LFE");
         assert!(rows[3].buffer_id.is_none());
     }
+    #[test]
+    fn interpretation_action_updates_sidebar_metadata_padding_and_track_titles() {
+        use wav::channel_interpretation::{ChannelInterpretation, ChannelOrderPreset};
+        let mut model = Model::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        model.files.changes.disable_watcher();
+        let config = wav::ReadConfigBytes::new(
+            Some("mono.wav".into()),
+            wav::channel_mask::tests::wav_bytes(None, 3, &[]),
+        )
+        .with_ch_ixs([0, 2]);
+        let id = model
+            .add_loaded_file(wav::read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap())
+            .unwrap();
+        let track = model
+            .find_track_id_for_buffer(model.files[id].channels[&0].buffer_id)
+            .unwrap();
+        let metadata = metadata_rows(&model.files[id]);
+        assert!(model.files[id].layout.is_none());
+        assert!(metadata.contains(&("channel order", "Auro ID order (assumed)".into())));
+        assert_eq!(
+            super::super::track::track_label(&model, track),
+            "0 L mono.wav"
+        );
+        Action::SetFileChannelInterpretation {
+            file_id: id,
+            interpretation: ChannelInterpretation {
+                preset: ChannelOrderPreset::Automatic,
+                active_layout: Some(audio::Layout::LAYOUT_1_0),
+            },
+        }
+        .process(&mut model)
+        .unwrap();
+        let file = &model.files[id];
+        let rows = channel_rows(&model, file);
+        assert_eq!(rows[0].label, "ch 0 - Left (padding)");
+        assert_eq!(rows[1].label, "ch 1 - Right (padding)");
+        assert!(rows[1].buffer_id.is_none());
+        assert_eq!(rows[2].label, "ch 2 - Center");
+        let metadata = metadata_rows(file);
+        assert_eq!(file.layout, Some(audio::Layout::LAYOUT_1_0));
+        assert!(metadata.contains(&("layout source", "selected".into())));
+        assert!(metadata.contains(&("WAVEX mask", "absent".into())));
+        assert_eq!(
+            super::super::track::track_label(&model, track),
+            "0 L* mono.wav"
+        );
+        Action::SetFileChannelInterpretation {
+            file_id: id,
+            interpretation: ChannelInterpretation {
+                preset: ChannelOrderPreset::Unassigned,
+                active_layout: Some(audio::Layout::LAYOUT_1_0),
+            },
+        }
+        .process(&mut model)
+        .unwrap();
+        assert_eq!(channel_rows(&model, &model.files[id])[0].label, "ch 0");
+        assert_eq!(
+            super::super::track::track_label(&model, track),
+            "0 mono.wav"
+        );
+        assert!(model.files[id].layout.is_none());
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn notification_controls_enqueue_single_and_batch_actions() {

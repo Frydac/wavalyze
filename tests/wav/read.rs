@@ -58,6 +58,7 @@ fn test_read_options_i16() {
     let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
+        channel_interpretation: Default::default(),
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
         // sample_range: Some(sample::IxRange::from(1..3)),
@@ -111,6 +112,7 @@ fn test_read_options_i24() {
     let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
+        channel_interpretation: Default::default(),
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
         // sample_range: Some(wavalyze::audio::sample::IxRange::from(1..3)),
@@ -145,6 +147,7 @@ fn test_read_options_i32() {
     let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
+        channel_interpretation: Default::default(),
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
         // sample_range: Some(wavalyze::audio::sample::IxRange::from(1..3)),
@@ -179,6 +182,7 @@ fn test_read_options_f32() {
     let file_path = std::path::PathBuf::from(file_path);
 
     let config = ReadConfig {
+        channel_interpretation: Default::default(),
         filepath: file_path,
         ch_ixs: Some(vec![0, 2]),
         // sample_range: Some(wavalyze::audio::sample::IxRange::from(1..3)),

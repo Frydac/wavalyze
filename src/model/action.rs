@@ -37,6 +37,11 @@ pub enum Action {
     CloseFile {
         file_id: FileId,
     },
+    /// Change speaker interpretation without changing samples or channel indices.
+    SetFileChannelInterpretation {
+        file_id: FileId,
+        interpretation: wav::channel_interpretation::ChannelInterpretation,
+    },
     /// Request one atomic reload batch; both individual and Update all controls use this action.
     #[cfg(not(target_arch = "wasm32"))]
     ReloadFiles(Vec<FileId>),
@@ -351,6 +356,14 @@ impl Action {
             }
             Action::SetBlockSize(block_size) => {
                 model.set_block_size(block_size);
+            }
+            Action::SetFileChannelInterpretation {
+                file_id,
+                interpretation,
+            } => {
+                if let Some(file) = model.files.get_mut(file_id) {
+                    file.set_channel_interpretation(interpretation);
+                }
             }
             Action::SetFileSampleIxOffset {
                 file_id,

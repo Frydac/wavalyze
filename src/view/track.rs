@@ -162,7 +162,7 @@ pub(crate) fn header_hover_info(model: &Model, track_id: TrackId) -> Option<Head
 }
 
 /// One-line label for a track, matching the central-panel header text:
-/// `"[ID] <basename> - ch N"` for single tracks, `"Diff"` for diff tracks.
+/// `"N ID <basename>"` for single tracks, `"Diff"` for diff tracks.
 pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
     if let Some((file, channel)) = model.get_file_channel_for_track(track_id) {
         let basename = file
@@ -171,11 +171,12 @@ pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
             .and_then(|p| p.file_name())
             .and_then(|name| name.to_str())
             .unwrap_or("Demo");
-        format!(
-            "{}{basename} - ch {}",
-            channel_id_prefix(channel.channel_id),
-            channel.ch_ix
-        )
+        let role = channel_role(file, channel);
+        if role.is_empty() {
+            format!("{} {basename}", channel.ch_ix)
+        } else {
+            format!("{} {role} {basename}", channel.ch_ix)
+        }
     } else if model
         .tracks
         .get_track(track_id)
@@ -187,8 +188,10 @@ pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
     }
 }
 
-fn channel_id_prefix(id: Option<crate::audio::Id>) -> String {
-    format!("[{}] ", id.map(|id| id.short_name()).unwrap_or("?"))
+fn channel_role(file: &crate::wav::file::File, channel: &crate::wav::file::Channel) -> String {
+    let short = channel.channel_id.map(|id| id.short_name()).unwrap_or("");
+    let padding = file.resolved_channel_interpretation().channels[channel.ch_ix].padding;
+    format!("{short}{}", if padding { "*" } else { "" })
 }
 
 /// Resolve a source buffer to a [`DiffSourceInfo`], falling back to "unknown" if the file/channel is
@@ -659,9 +662,7 @@ pub fn ui_header(
     }
 
     let mut text = String::from("track header");
-    let mut path_text = None;
-    let mut channel_text = None;
-    let mut channel_prefix = String::new();
+    let mut file_title = None;
 
     // Build the hover data once per frame, while we still have both the file and the specific
     // channel for this track. The popup renderer below only formats it.
@@ -673,9 +674,7 @@ pub fn ui_header(
             .as_ref()
             .and_then(|p| p.to_str())
             .unwrap_or("unknown");
-        path_text = Some(path.to_string());
-        channel_text = Some(format!(" - ch {}", channel.ch_ix));
-        channel_prefix = channel_id_prefix(channel.channel_id);
+        file_title = Some((path.to_string(), channel.ch_ix, channel_role(file, channel)));
     } else if model
         .tracks
         .get_track(track_id)
@@ -724,28 +723,18 @@ pub fn ui_header(
         header_rect.left_top(),
         egui::pos2(label_right, header_rect.bottom()),
     );
-    let display_text = if let (Some(path), Some(suffix)) = (path_text, channel_text) {
-        let prefix_width = ui
-            .painter()
-            .layout_no_wrap(channel_prefix.clone(), font_id.clone(), color)
-            .size()
-            .x;
-        let path_width = (label_rect.width() - prefix_width - 2.0).max(0.0);
-        format!(
-            "{channel_prefix}{}",
-            super::util::truncate_path_keep_basename_to_width(ui, &path, &suffix, path_width)
-        )
+    if let Some((path, index, role)) = file_title {
+        paint_file_title(ui, label_rect, index, &role, &path, font_id, color);
     } else {
-        text
-    };
-    let galley = ui.painter().layout_no_wrap(display_text, font_id, color);
-    let text_pos = egui::pos2(
-        label_rect.left() + 2.0,
-        header_rect.center().y - galley.size().y / 2.0,
-    );
-    ui.painter()
-        .with_clip_rect(ui.clip_rect().intersect(label_rect))
-        .galley(text_pos, galley, color);
+        let galley = ui.painter().layout_no_wrap(text, font_id, color);
+        let text_pos = egui::pos2(
+            label_rect.left() + 2.0,
+            header_rect.center().y - galley.size().y / 2.0,
+        );
+        ui.painter()
+            .with_clip_rect(ui.clip_rect().intersect(label_rect))
+            .galley(text_pos, galley, color);
+    }
 
     let response = ui.interact(
         label_rect,
@@ -759,6 +748,60 @@ pub fn ui_header(
     }
 
     Ok(())
+}
+
+/// Paint independent fixed-width fields, so long roles cannot shift the path.
+fn paint_file_title(
+    ui: &egui::Ui,
+    rect: egui::Rect,
+    index: usize,
+    role: &str,
+    path: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+) {
+    let field_font = egui::FontId::monospace(font.size);
+    let field_width = ui
+        .painter()
+        .layout_no_wrap("00000".into(), field_font.clone(), color)
+        .size()
+        .x;
+    let gap = ui.spacing().item_spacing.x.max(2.0);
+    let index_rect = egui::Rect::from_min_size(
+        rect.left_top() + egui::vec2(2.0, 0.0),
+        egui::vec2(field_width, rect.height()),
+    );
+    let role_rect = index_rect.translate(egui::vec2(field_width + gap, 0.0));
+    let path_left = role_rect.right() + gap;
+    let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
+    painter
+        .with_clip_rect(painter.clip_rect().intersect(index_rect))
+        .text(
+            index_rect.right_center(),
+            egui::Align2::RIGHT_CENTER,
+            index.to_string(),
+            field_font.clone(),
+            color,
+        );
+    painter
+        .with_clip_rect(painter.clip_rect().intersect(role_rect))
+        .text(
+            role_rect.left_center(),
+            egui::Align2::LEFT_CENTER,
+            role,
+            field_font,
+            color,
+        );
+    let path_rect = egui::Rect::from_min_max(
+        egui::pos2(path_left.min(rect.right()), rect.top()),
+        rect.right_bottom(),
+    );
+    let text = super::util::truncate_path_keep_basename_to_width(ui, path, "", path_rect.width());
+    let galley = painter.layout_no_wrap(text, font, color);
+    let pos = egui::pos2(path_rect.left(), rect.center().y - galley.size().y / 2.0);
+    painter
+        .with_clip_rect(painter.clip_rect().intersect(path_rect))
+        .galley(pos, galley, color);
 }
 
 pub(crate) fn select_track_on_click(
@@ -786,4 +829,75 @@ fn resize_handle(ui: &mut egui::Ui, id: egui::Id, rect: egui::Rect) -> egui::Res
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
     }
     response
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::*;
+
+    #[test]
+    fn title_fields_align_paths_and_clip_without_changing_channel_labels() {
+        for font_size in [13.0, 18.0] {
+            let ctx = egui::Context::default();
+            ctx.style_mut(|style| {
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(font_size));
+            });
+            for width in [140.0, 450.0] {
+                let cases = [(0, "L"), (18, "LFE2"), (2, "L*"), (65534, "")];
+                let path = format!("/home/emile/{}recording.wav", "long-directory/".repeat(12));
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        for (row, (index, role)) in cases.iter().enumerate() {
+                            paint_file_title(
+                                ui,
+                                egui::Rect::from_min_size(
+                                    egui::pos2(10.0, 10.0 + row as f32 * 30.0),
+                                    egui::vec2(width, 25.0),
+                                ),
+                                *index,
+                                role,
+                                &path,
+                                egui::TextStyle::Body.resolve(ui.style()),
+                                ui.visuals().text_color(),
+                            );
+                        }
+                    });
+                });
+                let paths: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text().starts_with("...") => {
+                            Some((shape, text))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(paths.len(), cases.len());
+                for (shape, text) in &paths {
+                    assert!((text.pos.x - paths[0].1.pos.x).abs() < 0.1);
+                    assert!(shape.clip_rect.right() <= 10.0 + width);
+                    assert!(
+                        text.galley.size().x <= shape.clip_rect.width() + 0.1
+                            || text.galley.text() == "..."
+                    );
+                    if width == 450.0 {
+                        assert!(text.galley.text().ends_with("recording.wav"));
+                    }
+                }
+                for (index, role) in cases {
+                    for label in [index.to_string(), role.to_string()] {
+                        if label.is_empty() {
+                            continue;
+                        }
+                        let shape = output.shapes.iter().find(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == label))
+                            .unwrap_or_else(|| panic!("missing {label}"));
+                        assert!(shape.clip_rect.right() < paths[0].1.pos.x);
+                    }
+                }
+            }
+        }
+    }
 }

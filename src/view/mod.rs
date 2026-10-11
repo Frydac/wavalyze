@@ -4,6 +4,7 @@
 //! and dispatches queued model actions after drawing. Individual panels live in submodules;
 //! platform-specific input handling stays here so the native and browser views share a model.
 
+pub mod channel_interpretation;
 pub mod config;
 pub mod db_ruler;
 pub mod diff_pairing;

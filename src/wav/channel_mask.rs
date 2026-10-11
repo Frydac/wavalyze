@@ -544,6 +544,7 @@ pub(crate) mod tests {
     fn loading_preserves_raw_masks_and_selected_speaker_indices() {
         for mask in [None, Some(0), Some(0x60f), Some(3), Some(0x80000000)] {
             let config = ReadConfigBytes {
+                channel_interpretation: Default::default(),
                 name: None,
                 bytes: wav_bytes(mask, 6, &[1, 2]),
                 ch_ixs: Some(vec![2, 4]),
@@ -565,11 +566,11 @@ pub(crate) mod tests {
             assert_eq!(file.channel_mask, mask);
             assert_eq!(
                 file.channels[&2].channel_id,
-                (mask == Some(0x60f)).then_some(Id::Center)
+                (mask.is_none() || matches!(mask, Some(0 | 0x60f))).then_some(Id::Center)
             );
             assert_eq!(
                 file.channels[&4].channel_id,
-                (mask == Some(0x60f)).then_some(Id::LeftSurround)
+                (mask.is_none() || matches!(mask, Some(0 | 0x60f))).then_some(Id::LeftSurround)
             );
         }
     }

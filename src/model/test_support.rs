@@ -33,6 +33,7 @@ pub(crate) fn make_file(buffers: &[audio::BufferId]) -> file::File {
         .collect::<BTreeMap<_, _>>();
 
     file::File {
+        channel_interpretation: Default::default(),
         total_nr_channels: channels.len(),
         channels,
         sample_type: audio::SampleType::Float,
@@ -67,6 +68,7 @@ pub(crate) fn loaded_file_with_buffers(
         nr_samples = buffer.nr_samples() as u64;
     }
     wav::read::LoadedFile {
+        channel_interpretation: Default::default(),
         load_id: 0,
         total_nr_channels: channels.len(),
         channels,

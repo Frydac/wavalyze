@@ -14,6 +14,9 @@ use crate::{
 pub struct PendingDiffPairing {
     pub file_a: wav::ReadConfig,
     pub file_b: wav::ReadConfig,
+    /// Complete header metadata, independent of the channels selected for comparison.
+    pub metadata_a: wav::WavChannelMetadata,
+    pub metadata_b: wav::WavChannelMetadata,
     /// Optional automatic offset detection. Manual offsets remain stored as silence fallback.
     pub offset_detection_a: Option<OffsetDetectionMode>,
     pub offset_detection_b: Option<OffsetDetectionMode>,
@@ -28,15 +31,25 @@ pub struct PendingDiffPairing {
 impl PendingDiffPairing {
     /// The diagonal (same position in the row/col lists) starts checked.
     pub fn new(
-        file_a: wav::ReadConfig,
-        file_b: wav::ReadConfig,
+        mut file_a: wav::ReadConfig,
+        mut file_b: wav::ReadConfig,
+        metadata_a: wav::WavChannelMetadata,
+        metadata_b: wav::WavChannelMetadata,
         ch_ixs_a: Vec<ChIx>,
         ch_ixs_b: Vec<ChIx>,
     ) -> Self {
+        file_a
+            .channel_interpretation
+            .resolve_and_validate(metadata_a.channel_mask, metadata_a.total_nr_channels);
+        file_b
+            .channel_interpretation
+            .resolve_and_validate(metadata_b.channel_mask, metadata_b.total_nr_channels);
         let checked = Self::default_pairing(ch_ixs_a.len(), ch_ixs_b.len());
         Self {
             file_a,
             file_b,
+            metadata_a,
+            metadata_b,
             offset_detection_a: None,
             offset_detection_b: None,
             ch_ixs_a,
@@ -106,6 +119,14 @@ mod tests {
         PendingDiffPairing::new(
             wav::ReadConfig::new("a.wav"),
             wav::ReadConfig::new("b.wav"),
+            wav::WavChannelMetadata {
+                total_nr_channels: ch_ixs_a.iter().max().map_or(0, |ix| ix + 1),
+                channel_mask: None,
+            },
+            wav::WavChannelMetadata {
+                total_nr_channels: ch_ixs_b.iter().max().map_or(0, |ix| ix + 1),
+                channel_mask: None,
+            },
             ch_ixs_a,
             ch_ixs_b,
         )
@@ -116,6 +137,14 @@ mod tests {
         let pairing = PendingDiffPairing::new(
             wav::ReadConfig::new("a.wav").with_sample_ix_offset(-12),
             wav::ReadConfig::new("b.wav").with_sample_ix_offset(34),
+            wav::WavChannelMetadata {
+                total_nr_channels: 1,
+                channel_mask: None,
+            },
+            wav::WavChannelMetadata {
+                total_nr_channels: 1,
+                channel_mask: None,
+            },
             vec![0],
             vec![0],
         );
@@ -149,6 +178,14 @@ mod tests {
         let mut pairing = PendingDiffPairing::new(
             wav::ReadConfig::new("a.wav").with_sample_ix_offset(12),
             wav::ReadConfig::new("b.wav").with_sample_ix_offset(-4),
+            wav::WavChannelMetadata {
+                total_nr_channels: 1,
+                channel_mask: None,
+            },
+            wav::WavChannelMetadata {
+                total_nr_channels: 1,
+                channel_mask: None,
+            },
             vec![0],
             vec![0],
         );

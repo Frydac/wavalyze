@@ -81,6 +81,7 @@ impl ReloadRequest {
                         .clone()
                         .expect("reload source has a disk recipe");
                     config.filepath = source.path.clone();
+                    config.channel_interpretation = source.file.channel_interpretation.clone();
                     config.ch_ixs = Some(source.file.channels.keys().copied().collect());
                     config.sample_ix_offset = source.file.sample_ix_offset;
                     ReloadSourceInput {
@@ -271,7 +272,14 @@ impl Model {
         let mut replacements = HashMap::new();
         for (source, prepared) in request.sources.iter().zip(prepared.sources) {
             let mut loaded = prepared.loaded;
+            let resolved = loaded
+                .channel_interpretation
+                .resolve(loaded.channel_mask, loaded.total_nr_channels);
             let file = self.files.get_mut(source.id).unwrap();
+            file.channel_interpretation = loaded.channel_interpretation;
+            if let Some(source) = &mut file.source {
+                source.channel_interpretation = file.channel_interpretation.clone();
+            }
             file.total_nr_channels = loaded.total_nr_channels;
             file.sample_type = loaded.sample_type;
             file.bit_depth = loaded.bit_depth;
@@ -281,11 +289,7 @@ impl Model {
             file.channel_mask = loaded.channel_mask;
             for (ch, buffer) in prepared.channels {
                 let old = file.channels.get_mut(&ch).unwrap();
-                old.channel_id = crate::wav::channel_mask::channel_id(
-                    loaded.channel_mask,
-                    loaded.total_nr_channels,
-                    ch,
-                );
+                old.channel_id = resolved.channels[ch].id;
                 let id = self.audio.buffers.insert(buffer);
                 self.audio
                     .thumbnails

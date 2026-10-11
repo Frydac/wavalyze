@@ -151,6 +151,7 @@ impl std::str::FromStr for ReadConfig {
         }
 
         Ok(ReadConfig {
+            channel_interpretation: Default::default(),
             filepath,
             ch_ixs,
             sample_range,
@@ -174,6 +175,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     sample_range: sample::OptIxRange::default(),
@@ -192,6 +194,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: Some(vec![0, 2, 4]),
                     sample_range: sample::OptIxRange::default(),
@@ -210,6 +213,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     // sample_range: Some(IxRange::from(1000..5000)),
@@ -232,6 +236,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: Some(vec![0, 2]),
                     // sample_range: Some(IxRange::from(1000..5000)),
@@ -254,6 +259,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: Some(vec![0, 2]),
                     // sample_range: Some(IxRange::from(1000..5000)),
@@ -276,6 +282,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     // sample_range: Some(IxRange::from(1000..i64::MAX)),
@@ -298,6 +305,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     // sample_range: Some(IxRange::from(0..5000)),
@@ -320,6 +328,7 @@ mod tests {
                 log_level: None,
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: Some(vec![2]),
                     sample_range: sample::OptIxRange::default(),
@@ -360,12 +369,14 @@ mod tests {
                 command: Some(Commands::Open {
                     files: vec![
                         ReadConfig {
+                            channel_interpretation: Default::default(),
                             filepath: PathBuf::from("file1.wav"),
                             ch_ixs: None,
                             sample_range: sample::OptIxRange::default(),
                             sample_ix_offset: 0,
                         },
                         ReadConfig {
+                            channel_interpretation: Default::default(),
                             filepath: PathBuf::from("file2.wav"),
                             ch_ixs: Some(vec![1]),
                             sample_range: sample::OptIxRange {
@@ -390,12 +401,14 @@ mod tests {
                 log_level: None,
                 command: Some(Commands::Diff {
                     file1: ReadConfig {
+                        channel_interpretation: Default::default(),
                         filepath: PathBuf::from("file1.wav"),
                         ch_ixs: Some(vec![0]),
                         sample_range: sample::OptIxRange::default(),
                         sample_ix_offset: 0,
                     },
                     file2: ReadConfig {
+                        channel_interpretation: Default::default(),
                         filepath: PathBuf::from("file2.wav"),
                         ch_ixs: Some(vec![1]),
                         sample_range: sample::OptIxRange::default(),
@@ -434,6 +447,7 @@ mod tests {
                 log_level: Some("debug".to_string()),
                 command: None,
                 files: vec![ReadConfig {
+                    channel_interpretation: Default::default(),
                     filepath: PathBuf::from("song.wav"),
                     ch_ixs: None,
                     sample_range: sample::OptIxRange::default(),

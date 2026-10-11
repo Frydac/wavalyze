@@ -165,8 +165,8 @@ fn reload_updates_and_clears_channel_mask_and_speaker_ids() {
             ),
         ),
         (Some(0x08800f), None, None), // Six channels, but duplicate height-surround identities.
-        (Some(0), None, None),
-        (None, None, None),
+        (Some(0), Some(audio::Id::LeftSurround), None),
+        (None, Some(audio::Id::LeftSurround), None),
     ] {
         std::fs::write(&path, bytes(mask, 6, &[])).unwrap();
         changed(&mut model, id);
@@ -523,4 +523,147 @@ fn prepare(
     events: &std::sync::mpsc::Sender<JobEvent>,
 ) -> Result<PreparedReload> {
     jobs::reload::prepare(request.0.job_id, &request.1, events)
+}
+
+#[test]
+fn reload_preserves_explicit_presets_and_revalidates_selected_layout() {
+    use wav::channel_interpretation::{ChannelInterpretation, ChannelOrderPreset};
+    for preset in [
+        ChannelOrderPreset::AuroIdOrder,
+        ChannelOrderPreset::Unassigned,
+    ] {
+        let (mut model, dir) = fixture();
+        let path = dir.join("preset.wav");
+        let interpretation = ChannelInterpretation {
+            preset,
+            active_layout: (preset == ChannelOrderPreset::AuroIdOrder)
+                .then_some(audio::Layout::LAYOUT_1_0),
+        };
+        write(&path, 3, 48000, &[1, 2, 3, 4, 5, 6]);
+        model
+            .load_wav(
+                &wav::ReadConfig::new(&path)
+                    .with_channel_interpretation(interpretation.clone())
+                    .with_ch_ixs([2])
+                    .with_sample_ix_offset(7),
+            )
+            .unwrap();
+        let id = *model.files.order().last().unwrap();
+        let buffer_id = model.files[id].channels[&2].buffer_id;
+        let track_id = model.find_track_id_for_buffer(buffer_id).unwrap();
+        assert_eq!(model.files[id].channel_interpretation, interpretation);
+        assert_eq!(
+            model.files[id]
+                .source
+                .as_ref()
+                .unwrap()
+                .channel_interpretation,
+            interpretation
+        );
+        assert_eq!(data(&model, buffer_id), [3, 6]);
+
+        // A newly supplied WAVEX mask must not replace an explicit user preset.
+        std::fs::write(
+            &path,
+            wav::channel_mask::tests::wav_bytes(Some(0x1c0), 3, &[]),
+        )
+        .unwrap();
+        changed(&mut model, id);
+        let req = request(&mut model, &[id]);
+        finish(&mut model, req);
+        let file = &model.files[id];
+        assert_eq!(file.channel_interpretation, interpretation);
+        assert_eq!(file.channel_mask, Some(0x1c0));
+        assert_eq!(
+            file.channels[&2].channel_id,
+            (preset == ChannelOrderPreset::AuroIdOrder).then_some(audio::Id::Center)
+        );
+        assert_eq!(data(&model, file.channels[&2].buffer_id), [2, 5]);
+        assert_eq!(file.sample_ix_offset, 7);
+        assert_eq!(
+            model.find_track_id_for_buffer(file.channels[&2].buffer_id),
+            Some(track_id)
+        );
+
+        // The old 1.0 selection no longer matches minimal padded storage at count four.
+        write(&path, 4, 48000, &[9, 8, 7, 6]);
+        changed(&mut model, id);
+        let req = request(&mut model, &[id]);
+        finish(&mut model, req);
+        let file = &model.files[id];
+        assert_eq!(file.total_nr_channels, 4);
+        assert_eq!(file.channel_interpretation.preset, preset);
+        assert_eq!(file.channel_interpretation.active_layout, None);
+        assert_eq!(file.layout, None);
+        assert_eq!(
+            file.source.as_ref().unwrap().channel_interpretation,
+            file.channel_interpretation
+        );
+        assert_eq!(file.channels.keys().copied().collect::<Vec<_>>(), [2]);
+        assert_eq!(data(&model, file.channels[&2].buffer_id), [7]);
+        assert_eq!(file.sample_ix_offset, 7);
+        assert_eq!(
+            model.find_track_id_for_buffer(file.channels[&2].buffer_id),
+            Some(track_id)
+        );
+        assert_eq!(
+            model
+                .tracks
+                .get_track(track_id)
+                .unwrap()
+                .single
+                .sample_ix_offset,
+            7.0
+        );
+    }
+}
+
+#[test]
+fn changing_interpretation_invalidates_an_in_flight_reload() {
+    use wav::channel_interpretation::{ChannelInterpretation, ChannelOrderPreset};
+    let (mut model, dir) = fixture();
+    let path = dir.join("preset_during_reload.wav");
+    write(&path, 3, 48000, &[1, 2, 3]);
+    let id = open(&mut model, &path);
+    let old = buffer(&model, id);
+    write(&path, 3, 48000, &[4, 5, 6]);
+    changed(&mut model, id);
+    let req = request(&mut model, &[id]);
+    let interpretation = ChannelInterpretation {
+        preset: ChannelOrderPreset::Unassigned,
+        active_layout: None,
+    };
+    model
+        .files
+        .get_mut(id)
+        .unwrap()
+        .set_channel_interpretation(interpretation.clone());
+    finish(&mut model, req);
+    assert_eq!(buffer(&model, id), old);
+    assert_eq!(data(&model, old), [1]);
+    assert_eq!(model.files[id].channel_interpretation, interpretation);
+    assert_eq!(
+        model.files[id]
+            .source
+            .as_ref()
+            .unwrap()
+            .channel_interpretation,
+        interpretation
+    );
+    assert!(
+        model.files[id]
+            .channels
+            .values()
+            .all(|ch| ch.channel_id.is_none())
+    );
+    assert!(
+        model
+            .files
+            .change_for(id)
+            .unwrap()
+            .error
+            .as_ref()
+            .unwrap()
+            .contains("File or offset changed")
+    );
 }

@@ -25,6 +25,7 @@ pub type Channels = BTreeMap<ChIx, Channel>;
 /// Reload updates this record in place so file identity and user-controlled offsets survive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
+    pub channel_interpretation: super::channel_interpretation::ChannelInterpretation,
     /// Retained reload recipe, absent for browser bytes and generated audio.
     pub source: Option<Box<crate::wav::ReadConfig>>,
     /// Loaded channel buffers, which can be a subset of the WAV's channels.
@@ -68,6 +69,30 @@ impl std::fmt::Display for File {
 new_key_type! { pub struct FileId; }
 
 impl File {
+    pub fn resolved_channel_interpretation(
+        &self,
+    ) -> super::channel_interpretation::ResolvedChannelInterpretation {
+        self.channel_interpretation
+            .resolve(self.channel_mask, self.total_nr_channels)
+    }
+
+    /// Update roles and the reload recipe without changing buffers, indices, or offsets.
+    pub fn set_channel_interpretation(
+        &mut self,
+        mut interpretation: super::channel_interpretation::ChannelInterpretation,
+    ) {
+        let resolved =
+            interpretation.resolve_and_validate(self.channel_mask, self.total_nr_channels);
+        for channel in self.channels.values_mut() {
+            channel.channel_id = resolved.channels[channel.ch_ix].id;
+        }
+        self.layout = resolved.active_layout;
+        if let Some(source) = &mut self.source {
+            source.channel_interpretation = interpretation.clone();
+        }
+        self.channel_interpretation = interpretation;
+    }
+
     pub fn get_channel(&self, buffer_id: BufferId) -> Option<&Channel> {
         self.channels
             .iter()

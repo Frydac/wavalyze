@@ -37,6 +37,11 @@ impl KeyValueGrid {
     }
 
     pub fn show(self, ui: &mut Ui) {
+        self.show_with(ui, |_| {});
+    }
+
+    /// Append rows containing controls to the same grid as the text metadata.
+    pub fn show_with(self, ui: &mut Ui, add_rows: impl FnOnce(&mut Ui)) {
         let mut grid = egui::Grid::new(egui::Id::new(self.id_source))
             .num_columns(2)
             .spacing([10.0, 4.0])
@@ -55,6 +60,7 @@ impl KeyValueGrid {
                 }
                 ui.end_row();
             }
+            add_rows(ui);
         });
     }
 

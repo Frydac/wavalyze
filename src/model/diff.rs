@@ -129,7 +129,7 @@ impl Model {
             .ok_or_else(|| anyhow::anyhow!("file {:?} has no channel {ch_ix}", file_id))
     }
 
-    /// Open the channel-pairing matrix dialog for diffing two files. Channel counts are peeked
+    /// Open the channel-pairing matrix dialog for diffing two files. Channel counts and masks are peeked
     /// from the WAV headers without loading samples.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn open_diff_pairing_dialog(
@@ -138,16 +138,29 @@ impl Model {
         file_b: wav::ReadConfig,
     ) -> Result<()> {
         use anyhow::Context;
-        let effective_ch_ixs = |config: &wav::ReadConfig| -> Result<Vec<wav::read::ChIx>> {
-            match &config.ch_ixs {
-                Some(ch_ixs) => Ok(ch_ixs.clone()),
-                None => Ok((0..wav::read::peek_nr_channels(&config.filepath)?).collect()),
-            }
+        let metadata_a =
+            wav::peek_channel_metadata(&file_a.filepath).context("invalid first diff input")?;
+        let metadata_b =
+            wav::peek_channel_metadata(&file_b.filepath).context("invalid second diff input")?;
+        let effective_ch_ixs = |config: &wav::ReadConfig,
+                                metadata: wav::WavChannelMetadata|
+         -> Result<Vec<wav::read::ChIx>> {
+            let channels = config
+                .ch_ixs
+                .clone()
+                .unwrap_or_else(|| (0..metadata.total_nr_channels).collect());
+            anyhow::ensure!(
+                channels.iter().all(|ix| *ix < metadata.total_nr_channels),
+                "selected channel is outside the file's {} channels",
+                metadata.total_nr_channels
+            );
+            Ok(channels)
         };
-        let ch_ixs_a = effective_ch_ixs(&file_a).context("invalid first diff input")?;
-        let ch_ixs_b = effective_ch_ixs(&file_b).context("invalid second diff input")?;
+        let ch_ixs_a = effective_ch_ixs(&file_a, metadata_a).context("invalid first diff input")?;
+        let ch_ixs_b =
+            effective_ch_ixs(&file_b, metadata_b).context("invalid second diff input")?;
         self.pending_diff_pairing = Some(crate::model::diff_pairing::PendingDiffPairing::new(
-            file_a, file_b, ch_ixs_a, ch_ixs_b,
+            file_a, file_b, metadata_a, metadata_b, ch_ixs_a, ch_ixs_b,
         ));
         Ok(())
     }
@@ -483,6 +496,169 @@ mod tests {
             .open_diff_pairing_dialog(wav::ReadConfig::new(&path_a), wav::ReadConfig::new(&path_b))
             .unwrap();
         Action::CancelDiffPairing.process(&mut model).unwrap();
+        assert!(model.pending_diff_pairing.is_none());
+    }
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn diff_dialog_presets_survive_confirmation_and_reload() {
+        use std::time::Duration;
+        use wav::channel_interpretation::{ChannelInterpretation, ChannelOrderPreset};
+        let bytes = wav::channel_mask::tests::wav_bytes;
+        for preset_b in [
+            ChannelOrderPreset::Automatic,
+            ChannelOrderPreset::AuroIdOrder,
+            ChannelOrderPreset::Unassigned,
+        ] {
+            let path_a = write_test_wav(&format!("preset_a_{preset_b:?}.wav"), 3);
+            let path_b = write_test_wav(&format!("preset_b_{preset_b:?}.wav"), 6);
+            std::fs::write(&path_a, bytes(None, 3, &[])).unwrap();
+            std::fs::write(&path_b, bytes(Some(0x3f), 6, &[])).unwrap();
+            let mut model = Model::new();
+            model.files.changes.disable_watcher();
+            model
+                .open_diff_pairing_dialog(
+                    wav::ReadConfig::new(&path_a).with_ch_ixs([0, 2]),
+                    wav::ReadConfig::new(&path_b).with_ch_ixs([4, 5]),
+                )
+                .unwrap();
+            let pending = model.pending_diff_pairing.as_mut().unwrap();
+            assert_eq!(
+                pending.metadata_a,
+                wav::WavChannelMetadata {
+                    total_nr_channels: 3,
+                    channel_mask: None
+                }
+            );
+            assert_eq!(
+                pending.metadata_b,
+                wav::WavChannelMetadata {
+                    total_nr_channels: 6,
+                    channel_mask: Some(0x3f)
+                }
+            );
+            assert_eq!(pending.ch_ixs_a, [0, 2]);
+            assert_eq!(pending.ch_ixs_b, [4, 5]);
+            let interpretation_a = ChannelInterpretation {
+                preset: ChannelOrderPreset::Automatic,
+                active_layout: Some(audio::Layout::LAYOUT_1_0),
+            };
+            let interpretation_b = ChannelInterpretation {
+                preset: preset_b,
+                active_layout: (preset_b == ChannelOrderPreset::AuroIdOrder)
+                    .then_some(audio::Layout::LAYOUT_5_1),
+            };
+            pending.clear();
+            pending.checked[1][0] = true;
+            pending.file_a.channel_interpretation = interpretation_a.clone();
+            pending.file_b.channel_interpretation = interpretation_b.clone();
+            assert_eq!(pending.selected_pairs(), [(2, 4)]);
+            Action::ConfirmDiffPairing.process(&mut model).unwrap();
+            let action = model
+                .actions_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            action.process(&mut model).unwrap();
+            model.drain_job_events();
+            assert!(model.pending_diff_pairing.is_none());
+            assert_eq!(model.files.len(), 2);
+            let id_a = model.files.order()[0];
+            let id_b = model.files.order()[1];
+            let file_a = &model.files[id_a];
+            let file_b = &model.files[id_b];
+            assert_eq!(file_a.channel_interpretation, interpretation_a);
+            assert_eq!(file_b.channel_interpretation, interpretation_b);
+            assert_eq!(file_a.total_nr_channels, 3);
+            assert_eq!(file_b.total_nr_channels, 6);
+            assert_eq!(file_a.channels.keys().copied().collect::<Vec<_>>(), [2]);
+            assert_eq!(file_b.channels.keys().copied().collect::<Vec<_>>(), [4]);
+            assert_eq!(file_a.channels[&2].channel_id, Some(audio::Id::Center));
+            let expected_b = match preset_b {
+                ChannelOrderPreset::Automatic => Some(audio::Id::LeftBack),
+                ChannelOrderPreset::AuroIdOrder => Some(audio::Id::LeftSurround),
+                ChannelOrderPreset::Unassigned => None,
+            };
+            assert_eq!(file_b.channels[&4].channel_id, expected_b);
+            let diff = model
+                .tracks
+                .tracks_order
+                .iter()
+                .find_map(|id| model.tracks.get_track(*id).unwrap().diff.as_ref())
+                .unwrap();
+            assert_eq!(diff.buffer_id_a, file_a.channels[&2].buffer_id);
+            assert_eq!(diff.buffer_id_b, file_b.channels[&4].buffer_id);
+            match model.audio.get_buffer(diff.buffer_id_diff).unwrap() {
+                audio::buffer::BufferE::I16(buffer) => assert_eq!(buffer.data, [-2, -5]),
+                _ => panic!("expected PCM16 diff"),
+            }
+
+            for id in [id_a, id_b] {
+                assert_eq!(
+                    model.files[id]
+                        .source
+                        .as_ref()
+                        .unwrap()
+                        .channel_interpretation,
+                    model.files[id].channel_interpretation
+                );
+            }
+            let order = model.tracks.tracks_order.clone();
+            let track_b = model
+                .find_track_id_for_buffer(file_b.channels[&4].buffer_id)
+                .unwrap();
+            // Reload B with an unspecified mask. Explicit choices remain; Automatic re-resolves.
+            std::fs::write(&path_b, bytes(Some(0), 6, &[])).unwrap();
+            let path = crate::model::files::disk::absolute_path(
+                &model.files[id_b].source.as_ref().unwrap().filepath,
+            );
+            let change = model.files.changes.paths.get_mut(&path).unwrap();
+            change.changed = true;
+            change.revision += 1;
+            change.last_event_time = None;
+            Action::ReloadFiles(vec![id_b]).process(&mut model).unwrap();
+            model
+                .actions_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .process(&mut model)
+                .unwrap();
+            model.drain_job_events();
+            assert!(model.files.reload.active_job.is_none());
+            assert_eq!(model.files[id_a].channel_interpretation, interpretation_a);
+            assert_eq!(model.files[id_b].channel_interpretation, interpretation_b);
+            assert_eq!(model.files[id_b].channel_mask, Some(0));
+            assert_eq!(
+                model.files[id_b].channels[&4].channel_id,
+                (preset_b != ChannelOrderPreset::Unassigned).then_some(audio::Id::LeftSurround)
+            );
+            assert_eq!(
+                model.find_track_id_for_buffer(model.files[id_b].channels[&4].buffer_id),
+                Some(track_b)
+            );
+            assert_eq!(model.tracks.tracks_order, order);
+            assert_eq!(
+                model.files[id_b]
+                    .source
+                    .as_ref()
+                    .unwrap()
+                    .channel_interpretation,
+                interpretation_b
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn diff_dialog_rejects_selected_indices_outside_the_peeked_header() {
+        let a = write_test_wav("preset_invalid_a.wav", 3);
+        let b = write_test_wav("preset_invalid_b.wav", 3);
+        let mut model = Model::new();
+        let error = model
+            .open_diff_pairing_dialog(
+                wav::ReadConfig::new(a).with_ch_ixs([3]),
+                wav::ReadConfig::new(b),
+            )
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("selected channel is outside"));
         assert!(model.pending_diff_pairing.is_none());
     }
 }

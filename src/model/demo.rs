@@ -127,12 +127,16 @@ pub fn load_demo_waveform(model: &mut crate::model::Model) -> Result<()> {
     );
 
     let file = wav::file::File {
+        channel_interpretation: wav::channel_interpretation::ChannelInterpretation {
+            preset: wav::channel_interpretation::ChannelOrderPreset::AuroIdOrder,
+            active_layout: Some(audio::Layout::LAYOUT_3_1),
+        },
         total_nr_channels: channels.len(),
         channels,
         sample_type: audio::SampleType::Float,
         bit_depth: BIT_DEPTH,
         sample_rate: SAMPLE_RATE,
-        layout: Some(audio::Layout::LAYOUT_4_0),
+        layout: Some(audio::Layout::LAYOUT_3_1),
         channel_mask: None,
         source: None,
         path: None,

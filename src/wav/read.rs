@@ -10,6 +10,7 @@ use crate::audio::sample;
 use crate::audio::thumbnail::ThumbnailE;
 // use crate::audio::{BufferPool, SampleBuffer};
 use crate::audio::SampleType;
+use crate::wav::channel_interpretation::ChannelInterpretation;
 use crate::wav::file::{Channel, File};
 use anyhow::{Context, Result, ensure};
 use hound;
@@ -24,6 +25,7 @@ pub type ChIx = usize; // Channel index
 /// Disk source and read selection, retained as the recipe for subsequent native reloads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadConfig {
+    pub channel_interpretation: ChannelInterpretation,
     /// Path to wav file to read
     pub filepath: PathBuf,
 
@@ -43,6 +45,8 @@ pub struct ReadConfig {
 /// The optional name is a display label, not a reloadable filesystem path.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReadConfigBytes {
+    #[serde(default)]
+    pub channel_interpretation: ChannelInterpretation,
     // Optional filename for UI labels; bytes hold the entire file content.
     pub name: Option<String>,
     pub bytes: Vec<u8>,
@@ -55,6 +59,7 @@ pub struct ReadConfigBytes {
 /// Shared subset of read options for both file and byte sources.
 #[derive(Debug, Clone)]
 struct ReadOptions {
+    channel_interpretation: ChannelInterpretation,
     ch_ixs: Option<Vec<ChIx>>,
     sample_range: sample::OptIxRange,
     sample_ix_offset: sample::Ix,
@@ -65,6 +70,7 @@ struct ReadOptions {
 /// finish successfully before committing anything to the live workspace.
 #[derive(Debug)]
 pub struct LoadedFile {
+    pub channel_interpretation: ChannelInterpretation,
     /// Real filesystem origin and read selection; byte-source names are only labels.
     pub source: Option<Box<ReadConfig>>,
     pub load_id: LoadId,
@@ -121,6 +127,17 @@ impl ReadConfig {
             ch_ixs: None,
             sample_range: sample::OptIxRange::default(),
             sample_ix_offset: 0,
+            channel_interpretation: Default::default(),
+        }
+    }
+
+    pub fn with_channel_interpretation(
+        self,
+        channel_interpretation: ChannelInterpretation,
+    ) -> Self {
+        Self {
+            channel_interpretation,
+            ..self
         }
     }
 
@@ -154,6 +171,17 @@ impl ReadConfigBytes {
             ch_ixs: None,
             sample_range: sample::OptIxRange::default(),
             sample_ix_offset: 0,
+            channel_interpretation: Default::default(),
+        }
+    }
+
+    pub fn with_channel_interpretation(
+        self,
+        channel_interpretation: ChannelInterpretation,
+    ) -> Self {
+        Self {
+            channel_interpretation,
+            ..self
         }
     }
 
@@ -179,6 +207,30 @@ impl ReadConfigBytes {
     }
 }
 
+/// Raw channel metadata used to interpret indices before sample loading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WavChannelMetadata {
+    pub total_nr_channels: usize,
+    pub channel_mask: Option<u32>,
+}
+
+/// Inspect channel count and the raw WAVEX mask without decoding audio samples.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn peek_channel_metadata(filepath: &std::path::Path) -> Result<WavChannelMetadata> {
+    let mut input = std::io::BufReader::new(
+        std::fs::File::open(filepath)
+            .with_context(|| format!("failed to open wav file '{}'", filepath.display()))?,
+    );
+    let channel_mask = super::channel_mask::read_channel_mask(&mut input)
+        .with_context(|| format!("failed to read wav header '{}'", filepath.display()))?;
+    let reader = hound::WavReader::new(input)
+        .with_context(|| format!("failed to read wav header '{}'", filepath.display()))?;
+    Ok(WavChannelMetadata {
+        total_nr_channels: reader.spec().channels as usize,
+        channel_mask,
+    })
+}
+
 /// Read the number of channels from a WAV header without loading any samples.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn peek_nr_channels(filepath: &std::path::Path) -> Result<usize> {
@@ -194,6 +246,7 @@ impl From<&ReadConfig> for ReadOptions {
             ch_ixs: value.ch_ixs.clone(),
             sample_range: value.sample_range,
             sample_ix_offset: value.sample_ix_offset,
+            channel_interpretation: value.channel_interpretation.clone(),
         }
     }
 }
@@ -204,6 +257,7 @@ impl From<&ReadConfigBytes> for ReadOptions {
             ch_ixs: value.ch_ixs.clone(),
             sample_range: value.sample_range,
             sample_ix_offset: value.sample_ix_offset,
+            channel_interpretation: value.channel_interpretation.clone(),
         }
     }
 }
@@ -245,7 +299,9 @@ pub fn read_path_to_loaded_file_with_sink(
         Some(PathBuf::from(&config.filepath)),
     )
     .map(|mut loaded| {
-        loaded.source = Some(Box::new(config.clone()));
+        let mut source = config.clone();
+        source.channel_interpretation = loaded.channel_interpretation.clone();
+        loaded.source = Some(Box::new(source));
         loaded
     })
 }
@@ -337,13 +393,17 @@ fn read_to_loaded_file_from_reader<R: std::io::Read + std::io::Seek>(
         progress.set_current(1);
     }
 
+    let mut channel_interpretation = options.channel_interpretation.clone();
+    let resolved =
+        channel_interpretation.resolve_and_validate(channel_mask, spec.channels as usize);
     let file = LoadedFile {
+        channel_interpretation,
         source: None,
         load_id,
         channels: chix_buffers,
         total_nr_channels: spec.channels as usize,
         thumbnails: BTreeMap::new(),
-        layout: super::channel_mask::layout(channel_mask, spec.channels as usize),
+        layout: resolved.active_layout,
         channel_mask,
         sample_rate: spec.sample_rate,
         bit_depth: spec.bits_per_sample,
@@ -542,7 +602,11 @@ impl std::fmt::Display for LoadedFile {
 
 impl LoadedFile {
     pub fn into_file(self, buffers: &mut Buffers) -> File {
+        let resolved = self
+            .channel_interpretation
+            .resolve(self.channel_mask, self.total_nr_channels);
         File {
+            channel_interpretation: self.channel_interpretation,
             source: self.source, // move buffers to storage and store it's id in file
             total_nr_channels: self.total_nr_channels,
             channels: self
@@ -554,11 +618,7 @@ impl LoadedFile {
                         Channel {
                             ch_ix,
                             buffer_id: buffers.insert(std::sync::Arc::new(buffer)),
-                            channel_id: super::channel_mask::channel_id(
-                                self.channel_mask,
-                                self.total_nr_channels,
-                                ch_ix,
-                            ),
+                            channel_id: resolved.channels[ch_ix].id,
                         },
                     )
                 })
@@ -937,3 +997,7 @@ mod tests {
     //     assert!(matches!(sample_buffer_f32, SampleBuffer::F32(_)));
     // }
 }
+
+#[cfg(test)]
+#[path = "read_interpretation_tests.rs"]
+mod interpretation_tests;
