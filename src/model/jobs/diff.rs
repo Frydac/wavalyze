@@ -16,12 +16,91 @@ use crate::audio::{
 use crate::model::Action;
 use crate::wav;
 
+#[cfg(not(target_arch = "wasm32"))]
+use super::load_wav;
 use super::{
     JobCompletionEvent, JobEvent, JobFailureEvent, JobId, JobProgress, JobProgressEvent,
-    spawn_worker,
+    detect_offset, spawn_worker,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use super::{detect_offset, load_wav};
+
+/// Compare selected channels from already-loaded files as one worker result.
+pub(crate) fn spawn_file_diff_job(
+    job_id: JobId,
+    generation: u64,
+    input: crate::model::file_diff::FileDiffJobInput,
+    events_tx: Sender<JobEvent>,
+    actions_tx: Sender<Action>,
+) {
+    spawn_worker(move || {
+        let result = compute_file_diff(job_id, input, &events_tx);
+        match result {
+            Ok(result) => {
+                let count = result.pairs.len();
+                let _ = actions_tx.send(Action::IntegrateFileDiff {
+                    generation,
+                    result: Box::new(result),
+                });
+                let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent {
+                    job_id,
+                    summary: format!("Computed {count} diff(s) from loaded files"),
+                }));
+            }
+            Err(error) => {
+                let _ = events_tx.send(JobEvent::Failed(JobFailureEvent {
+                    job_id,
+                    error: format!("Failed to compare loaded files: {error:#}"),
+                }));
+            }
+        }
+    });
+}
+
+pub(crate) fn compute_file_diff(
+    job_id: JobId,
+    input: crate::model::file_diff::FileDiffJobInput,
+    events_tx: &Sender<JobEvent>,
+) -> Result<crate::model::file_diff::FileDiffResult> {
+    let mut offsets = input.request.offsets;
+    for (side, offset) in offsets.iter_mut().enumerate() {
+        if let Some(mode) = input.request.detection[side]
+            && let Some(detected) = input.buffers[side]
+                .values()
+                .filter_map(|buffer| detect_offset::detect_offset(buffer, mode))
+                .min()
+        {
+            *offset = detected;
+        }
+    }
+    let count = input.request.pairs.len();
+    let mut pairs = Vec::with_capacity(count);
+    for (position, &(ch_a, ch_b)) in input.request.pairs.iter().enumerate() {
+        let diff = compute_diff_buffer_with_progress(
+            job_id,
+            &input.buffers[0][&ch_a],
+            &input.buffers[1][&ch_b],
+            offsets[0],
+            offsets[1],
+            events_tx,
+            ProgressRange {
+                start: position as f32 / count as f32,
+                end: (position + 1) as f32 / count as f32,
+            },
+        )?;
+        let diff_thumbnail = ThumbnailE::from_buffer_e(&diff.buffer, None);
+        pairs.push(LoadedDiffPair {
+            ch_a,
+            ch_b,
+            sample_ix_offset_diff: diff.sample_ix_offset_diff,
+            diff_buffer: diff.buffer,
+            diff_thumbnail,
+        });
+    }
+    Ok(crate::model::file_diff::FileDiffResult {
+        request: input.request,
+        offsets,
+        pairs,
+    })
+}
 
 const CHUNK: usize = 64 * 1024;
 

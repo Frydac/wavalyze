@@ -12,6 +12,8 @@ use crate::{
 /// be checked (many-to-many); each checked cell will produce one diff track.
 #[derive(Debug)]
 pub struct PendingDiffPairing {
+    /// Loaded-file snapshots when the dialog was opened from the Files sidebar.
+    pub(crate) existing_files: Option<[super::file_diff::FileDiffSource; 2]>,
     pub file_a: wav::ReadConfig,
     pub file_b: wav::ReadConfig,
     /// Complete header metadata, independent of the channels selected for comparison.
@@ -46,6 +48,7 @@ impl PendingDiffPairing {
             .resolve_and_validate(metadata_b.channel_mask, metadata_b.total_nr_channels);
         let checked = Self::default_pairing(ch_ixs_a.len(), ch_ixs_b.len());
         Self {
+            existing_files: None,
             file_a,
             file_b,
             metadata_a,

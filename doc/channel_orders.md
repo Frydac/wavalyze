@@ -59,7 +59,38 @@ Active layout is chosen in Files, rather than in the pairing window.
 Changing channel order or active layout updates labels and metadata. It preserves
 audio samples, WAV indices, offsets, loaded channel selections, and checked diff
 pairs; it does not pair channels by role automatically. Pairing-window choices
-are carried into the files loaded when you confirm.
+are applied to the compared files when you confirm.
+
+## Starting a diff from Files
+
+Drag an open file's header onto another header in the Files sidebar to open
+channel pairing. The dragged file is A, the target is B, and the diff is A minus
+B. This compares the currently loaded audio, including browser uploads; it does
+not reread either file from disk. Only loaded channels are offered, using their
+original WAV indices and full header metadata.
+
+You can also drop one new WAV onto an open file's header. The new file loads
+and becomes A; the existing file is B. Canceling pairing leaves the newly opened
+file available. Dropping elsewhere retains the normal open behavior. Drops of
+multiple files retain the existing open/two-file chooser behavior.
+Drop targets span the padded header row across the sidebar. External file drags
+reveal the available targets; the hovered row receives a stronger highlight when
+pointer coordinates are available.
+
+After confirming, the selected pairs appear as A channel, B channel, diff. A
+source channel used in multiple pairs appears once. Source tracks for channels
+not used by any selected pair are removed from the two files' track groups.
+Their audio remains loaded and can be restored using **Load track** in Files.
+Unrelated tracks and earlier diff tracks retain their relative order.
+
+Existing source tracks keep their identities, visibility, height, selection, and
+custom offsets. Dialog offsets update the compared files and tracks that inherit
+file offsets; a track with its own offset keeps it. Previously closed channels
+are restored only if selected for a pair. Source tracks and new diffs are grouped
+at the first existing source track's position, or appended if no source tracks
+remain open. Canceling or failing the comparison does not remove or reorder
+existing tracks. Closing, reloading, or changing an input during computation
+invalidates the result; reopen pairing to retry.
 
 Native reload retains each file's choices and resolves them against the new
 header. If an explicit active layout is no longer compatible, it is cleared.

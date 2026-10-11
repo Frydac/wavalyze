@@ -13,6 +13,10 @@ use crate::{
 
 const PATH_METADATA_KEY: &str = "path";
 
+pub(super) fn take_external_drop_target(ctx: &egui::Context) -> Option<FileId> {
+    ctx.data_mut(|data| data.remove_temp::<FileId>(egui::Id::new("files_external_drop_target")))
+}
+
 /// File-tree presentation snapshot, allowing rendering to enqueue actions without holding file borrows.
 #[derive(Debug, Clone)]
 struct FileRow {
@@ -77,7 +81,8 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
             ui.push_id(("file_tree", row.file_id), |ui| {
                 let mut root_checked = row.visibility == FileVisibilityState::AllVisible;
                 let id = ui.make_persistent_id(("file_header", row.file_id));
-                egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.add_space(4.0);
+                let (_, header, _) = egui::collapsing_header::CollapsingState::load_with_default_open(
                     ui.ctx(),
                     id,
                     true,
@@ -91,7 +96,10 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                         let make_visible = row.visibility != FileVisibilityState::AllVisible;
                         model.set_file_visible_for(row.file_id, make_visible);
                     }
-                    add_row_label(ui, &row.title)
+                    let drag = ui.dnd_drag_source(ui.id().with("file_drag"), row.file_id, |ui| {
+                        add_row_label(ui, &row.title)
+                    });
+                    drag.inner
                         .on_hover_text(row.hover_text)
                         .context_menu(|ui| {
                             if ui.button("Close file").clicked() {
@@ -101,8 +109,10 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                                 ui.close_menu();
                             }
                         });
+
                 })
                 .body(|ui| {
+                    ui.add_space(4.0);
                     ui.horizontal(|ui| {
                         ui.label("offset:");
                         let mut sample_ix_offset = row.sample_ix_offset;
@@ -171,10 +181,72 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                         .default_open(true)
                         .show(ui, |ui| ui_channels(ui, model, &row.channels));
                 });
+                file_drop_target(ui, model, row.file_id, header.response.rect);
             });
-            ui.add_space(2.0);
+            ui.add_space(4.0);
         }
     });
+}
+
+fn file_drop_target(ui: &mut egui::Ui, model: &mut Model, file_id: FileId, header: egui::Rect) {
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(ui.max_rect().left(), header.top() - 4.0),
+        egui::pos2(ui.max_rect().right(), header.bottom() + 4.0),
+    )
+    .intersect(ui.clip_rect());
+    if !rect.is_positive() {
+        return;
+    }
+    let response = ui.interact(rect, ui.id().with("file_drop"), egui::Sense::hover());
+    let external = ui
+        .input(|input| !input.raw.hovered_files.is_empty() || !input.raw.dropped_files.is_empty());
+    // OS file drags may stop normal pointer-hover events. Always expose the targets,
+    // and use available coordinates rather than widget hover state to emphasize one.
+    let external_on = external
+        && ui
+            .input(|input| input.pointer.hover_pos())
+            .is_some_and(|pos| {
+                rect.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())
+            });
+    if external_on {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("files_external_drop_target"), file_id)
+        });
+    }
+    let internal_on = response
+        .dnd_hover_payload::<FileId>()
+        .is_some_and(|source| *source != file_id);
+    if external || internal_on {
+        let active = external_on || internal_on;
+        let fill = ui
+            .visuals()
+            .selection
+            .bg_fill
+            .linear_multiply(if active { 0.3 } else { 0.12 });
+        let stroke = egui::Stroke::new(
+            if active { 2.0 } else { 1.0 },
+            ui.visuals()
+                .selection
+                .stroke
+                .color
+                .gamma_multiply(if active { 1.0 } else { 0.6 }),
+        );
+        ui.painter().rect(
+            rect.shrink(1.0),
+            2.0,
+            fill,
+            stroke,
+            egui::epaint::StrokeKind::Inside,
+        );
+    }
+    if let Some(source) = response.dnd_release_payload::<FileId>()
+        && *source != file_id
+    {
+        model.actions.push(Action::DiffFiles {
+            file_a: *source,
+            file_b: file_id,
+        });
+    }
 }
 
 fn ui_channels(ui: &mut egui::Ui, model: &mut Model, channels: &[ChannelRow]) {
@@ -458,6 +530,87 @@ mod tests {
     use super::*;
     use crate::audio::{self, buffer::BufferE};
     use std::{collections::BTreeMap, sync::Arc};
+
+    #[test]
+    fn dragging_a_file_header_onto_another_opens_loaded_channel_pairing() {
+        let mut model = Model::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        model.files.changes.disable_watcher();
+        let mut files = Vec::new();
+        for name in ["source.wav", "target.wav"] {
+            let config = wav::ReadConfigBytes::new(
+                Some(name.into()),
+                wav::channel_mask::tests::wav_bytes(None, 3, &[]),
+            )
+            .with_ch_ixs([2]);
+            files.push(
+                model
+                    .add_loaded_file(
+                        wav::read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap(),
+                    )
+                    .unwrap(),
+            );
+        }
+        let original_order = model.tracks.tracks_order.clone();
+        let ctx = egui::Context::default();
+        let frame = |model: &mut Model, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(500.0, 900.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| super::ui(ui, model));
+                },
+            )
+        };
+        let _ = frame(&mut model, vec![]);
+        let output = frame(&mut model, vec![]);
+        let label_center = |name: &str| {
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == name => {
+                        Some(text.pos + text.galley.size() / 2.0)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("missing file header {name}"))
+        };
+        let source = label_center("source.wav");
+        let target = label_center("target.wav");
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        let _ = frame(
+            &mut model,
+            vec![egui::Event::PointerMoved(source), button(source, true)],
+        );
+        let _ = frame(&mut model, vec![egui::Event::PointerMoved(target)]);
+        let output = frame(&mut model, vec![]);
+        assert!(egui::DragAndDrop::payload::<FileId>(&ctx).is_some());
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Rect(rect) if rect.stroke.width == 2.0 && rect.stroke.color == ctx.style().visuals.selection.stroke.color)));
+        let _ = frame(&mut model, vec![button(target, false)]);
+        let action = model.actions.pop().expect("file drop should queue pairing");
+        assert!(
+            matches!(action, Action::DiffFiles { file_a, file_b } if file_a == files[0] && file_b == files[1])
+        );
+        action.process(&mut model).unwrap();
+        let pending = model.pending_diff_pairing.as_ref().unwrap();
+        assert_eq!(pending.ch_ixs_a, [2]);
+        assert_eq!(pending.ch_ixs_b, [2]);
+        assert!(pending.existing_files.is_some());
+        assert_eq!(model.files.len(), 2);
+        assert_eq!(model.tracks.tracks_order, original_order);
+    }
 
     #[test]
     fn channel_rows_include_channels_excluded_from_load() {

@@ -29,6 +29,7 @@ pub mod view_buffer;
 // Domain modules own their state; cross-collection operations remain small Model coordinators.
 // See test_support for fixtures shared by collection and coordination tests.
 mod diff;
+pub(crate) mod file_diff;
 pub mod files;
 #[cfg(test)]
 pub(crate) mod test_support;

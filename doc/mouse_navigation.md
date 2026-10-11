@@ -26,6 +26,15 @@ Start inside waveform with Ctrl + left-button press, then drag. Rectangle is cli
 - Selection and right-drag panning are blocked while gesture owns pointer, including after cancellation.
 - Click without dragging, or rectangle with zero width or height, does nothing.
 
+## Files sidebar
+
+Drag an open file header onto another to choose channel pairs for a diff.
+The dragged file is A and the target is B (A minus B). Dropping one new WAV onto
+an open file loads it and opens the same pairing dialog. On confirmation, selected
+source tracks and diffs are grouped together, and unpaired source tracks are
+removed from the view. See [channel orders and active layouts](channel_orders.md)
+for loaded-channel behavior and restoring removed tracks.
+
 ## Time ruler
 
 | Input | Action |

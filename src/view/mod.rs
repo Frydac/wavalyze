@@ -278,6 +278,7 @@ impl View {
     /// Handle drag-and-drop wav files
     /// TODO: use actions
     fn handle_drag_and_drop_into_app(&mut self, ctx: &egui::Context) -> bool {
+        let target = file::take_external_drop_target(ctx);
         let mut had_dropped_files = false;
         let mut dropped_bytes = Vec::new();
         #[cfg(not(target_arch = "wasm32"))]
@@ -285,7 +286,7 @@ impl View {
         ctx.input(|i| {
             for file in &i.raw.dropped_files {
                 had_dropped_files = true;
-                if cfg!(target_arch = "wasm32") {
+                if cfg!(target_arch = "wasm32") || file.path.is_none() {
                     if let Some(bytes) = &file.bytes {
                         let name = if file.name.is_empty() {
                             None
@@ -305,13 +306,46 @@ impl View {
                         }
                     }
                 } else if let Some(path) = &file.path
-                    && path.extension() == Some(std::ffi::OsStr::new("wav"))
+                    && path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("wav"))
                 {
                     #[cfg(not(target_arch = "wasm32"))]
                     dropped_paths.push(path.clone());
                 }
             }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(target) = target
+            && dropped_paths.len() == 1
+            && dropped_bytes.is_empty()
+        {
+            self.model.actions.push(Action::OpenDroppedFileForDiff {
+                target,
+                input: model::jobs::load_wav::WavLoadInput::Path(wav::ReadConfig::new(
+                    dropped_paths.remove(0),
+                )),
+            });
+            ctx.request_repaint();
+            return had_dropped_files;
+        }
+        if let Some(target) = target
+            && dropped_bytes.len() == 1
+        {
+            #[cfg(not(target_arch = "wasm32"))]
+            let no_paths = dropped_paths.is_empty();
+            #[cfg(target_arch = "wasm32")]
+            let no_paths = true;
+            if no_paths {
+                self.model.actions.push(Action::OpenDroppedFileForDiff {
+                    target,
+                    input: model::jobs::load_wav::WavLoadInput::Bytes(dropped_bytes.remove(0)),
+                });
+                ctx.request_repaint();
+                return had_dropped_files;
+            }
+        }
         if !dropped_bytes.is_empty() {
             for config in dropped_bytes {
                 self.model.actions.push(Action::OpenFileBytes(config));
@@ -687,3 +721,7 @@ impl View {
         self.model.actions.extend(actions);
     }
 }
+
+#[cfg(test)]
+#[path = "file_drop_tests.rs"]
+mod file_drop_tests;

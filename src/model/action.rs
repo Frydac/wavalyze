@@ -80,6 +80,24 @@ pub enum Action {
         file_a: wav::ReadConfig,
         file_b: wav::ReadConfig,
     },
+    /// Open channel pairing for two already-loaded files, without reading disk.
+    DiffFiles {
+        file_a: FileId,
+        file_b: FileId,
+    },
+    OpenDroppedFileForDiff {
+        target: FileId,
+        input: jobs::load_wav::WavLoadInput,
+    },
+    IntegrateDroppedFileForDiff {
+        generation: u64,
+        target: FileId,
+        loaded: wav::read::LoadedFile,
+    },
+    IntegrateFileDiff {
+        generation: u64,
+        result: Box<super::file_diff::FileDiffResult>,
+    },
     /// OK in the channel-pairing dialog: take the pending pairing and start the selected diffs.
     ConfirmDiffPairing,
     /// Cancel in the channel-pairing dialog: discard the pending pairing.
@@ -291,6 +309,12 @@ impl Action {
             }
             Action::ConfirmDiffPairing => {
                 if let Some(pending) = model.pending_diff_pairing.take() {
+                    if pending.existing_files.is_some() {
+                        model
+                            .start_existing_file_diff(pending)
+                            .context("could not compare loaded files")?;
+                        return Ok(());
+                    }
                     let pairs = pending.selected_pairs();
                     model.start_diff_pairs(
                         pending.file_a,
@@ -303,6 +327,38 @@ impl Action {
             }
             Action::CancelDiffPairing => {
                 model.pending_diff_pairing = None;
+            }
+            Action::DiffFiles { file_a, file_b } => {
+                model
+                    .open_existing_file_pairing(file_a, file_b)
+                    .context("could not open loaded-file pairing")?;
+            }
+            Action::OpenDroppedFileForDiff { target, input } => {
+                model.start_dropped_file_diff(target, input)?;
+            }
+            Action::IntegrateDroppedFileForDiff {
+                generation,
+                target,
+                loaded,
+            } => {
+                if model.is_current_generation(generation) && model.files.contains_key(target) {
+                    model.integrate_dropped_file_for_diff(target, loaded)?;
+                    model.actions.push(Action::ZoomToFull);
+                    if model.tracks.equal_height_layout {
+                        model.actions.push(Action::SetEqualHeightLayout(true));
+                    }
+                }
+            }
+            Action::IntegrateFileDiff { generation, result } => {
+                if model.is_current_generation(generation) {
+                    model
+                        .integrate_existing_file_diff(*result)
+                        .context("could not integrate loaded-file diff")?;
+                    model.actions.push(Action::ZoomToFull);
+                    if model.tracks.equal_height_layout {
+                        model.actions.push(Action::SetEqualHeightLayout(true));
+                    }
+                }
             }
             Action::StartDemoJob(config) => {
                 model.start_demo_job(config);

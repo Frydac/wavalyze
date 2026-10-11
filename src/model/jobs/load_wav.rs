@@ -17,6 +17,51 @@ use super::{
     spawn_worker,
 };
 
+/// Native paths and browser byte snapshots share the dropped-file diff workflow.
+#[derive(Debug)]
+pub enum WavLoadInput {
+    #[cfg(not(target_arch = "wasm32"))]
+    Path(wav::ReadConfig),
+    Bytes(wav::ReadConfigBytes),
+}
+
+pub(crate) fn spawn_load_file_for_diff(
+    job_id: JobId,
+    generation: u64,
+    target: crate::wav::file::FileId,
+    input: WavLoadInput,
+    events_tx: Sender<JobEvent>,
+    actions_tx: Sender<Action>,
+) {
+    spawn_worker(move || {
+        let sink = ThreadedLoadJobProgressSink::new(job_id, events_tx.clone());
+        let result = match input {
+            #[cfg(not(target_arch = "wasm32"))]
+            WavLoadInput::Path(config) => load_wav_path_for_job(job_id, &config, &sink),
+            WavLoadInput::Bytes(config) => load_wav_bytes_for_job(job_id, &config, &sink),
+        };
+        match result {
+            Ok(loaded) => {
+                let _ = actions_tx.send(Action::IntegrateDroppedFileForDiff {
+                    generation,
+                    target,
+                    loaded,
+                });
+                let _ = events_tx.send(JobEvent::Completed(JobCompletionEvent {
+                    job_id,
+                    summary: "Loaded dropped WAV for channel pairing".into(),
+                }));
+            }
+            Err(error) => {
+                let _ = events_tx.send(JobEvent::Failed(JobFailureEvent {
+                    job_id,
+                    error: format!("Failed to load dropped WAV: {error:#}"),
+                }));
+            }
+        }
+    });
+}
+
 /// Internal sink state — the WAV reader speaks `LoadStage` + (current, total), and we hold the
 /// latest such triple so `set_current` can re-publish with the existing stage. Translated into a
 /// generic `JobProgress` at publish time; no caller outside this module sees this type.

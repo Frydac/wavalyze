@@ -127,6 +127,9 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
                     });
                     ui.end_row();
                 });
+            if pending.existing_files.is_some() {
+                ui.small("Comparing loaded audio; only loaded channels are available.");
+            }
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Clear").clicked() {
