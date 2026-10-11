@@ -2,6 +2,7 @@ use crate::audio::db;
 use crate::audio::sample::{self, Sample};
 use crate::model::config::ThemeColors;
 use crate::model::hover_info::HoverInfoE;
+use crate::model::ruler::db_lattice::{FRACTIONAL_STEPS_DB, is_multiple_of_db};
 use crate::model::ruler::{
     DbLattice, TickType, ValueDisplayScale, sample_value_to_screen_y, screen_y_to_sample_value,
 };
@@ -225,7 +226,7 @@ fn format_db_label(db: f64, step: f64) -> String {
     } else {
         // Same idea as the amplitude ruler: precision tracks the active step.
         let exp = (-step.log10()).ceil().max(0.0) as usize;
-        exp.min(3)
+        exp.min(6)
     };
     let mut text = format!("{db:.decimals$}");
     if text.contains('.') {
@@ -245,13 +246,23 @@ fn format_db_label(db: f64, step: f64) -> String {
 
 fn draw_db_label(ui: &egui::Ui, rect: Rect, y: f32, text: String) -> Rect {
     let (text_rect, galleys, color) = layout_db_label(ui, rect, y, &text);
+    paint_db_label(ui, text_rect, galleys, color);
+    text_rect
+}
+
+fn paint_db_label(
+    ui: &egui::Ui,
+    text_rect: Rect,
+    galleys: Vec<std::sync::Arc<egui::Galley>>,
+    color: Color32,
+) {
     let mut cur_y = text_rect.top();
     for galley in galleys {
+        let height = galley.size().y;
         ui.painter()
-            .galley(Pos2::new(text_rect.left(), cur_y), galley.clone(), color);
-        cur_y += galley.size().y;
+            .galley(Pos2::new(text_rect.left(), cur_y), galley, color);
+        cur_y += height;
     }
-    text_rect
 }
 
 fn draw_hover_label(ui: &egui::Ui, rect: Rect, y: f32, text: String, tick_color: Color32) -> Rect {
@@ -464,40 +475,266 @@ fn draw_hover_db_from_y(
 }
 
 fn draw_lattice_labels(ui: &egui::Ui, rect: Rect, lattice: &DbLattice, occupied: &mut Vec<Rect>) {
-    // Coarse-to-fine sweep: Big ticks get first refusal on screen real estate, then Mid, then
-    // Small fill remaining gaps. In linear mode the Big cadence usually saturates and the
-    // later passes silently collide; under skew, the blown-up central region accepts them.
-    let passes: [(TickType, f64); 3] = [
-        (TickType::Big, lattice.label_step_db),
-        (
-            TickType::Mid,
-            lattice.mid_step_db.unwrap_or(lattice.label_step_db),
-        ),
-        (TickType::Small, lattice.minor_step_db),
+    // Keep the established anchors first, then fill gaps with familiar intermediate values.
+    // Each candidate is measured at most once; rejection remains final as occupied space grows.
+    let passes = [
+        lattice.label_step_db,
+        lattice.mid_step_db.unwrap_or(lattice.label_step_db),
+        lattice.minor_step_db,
+        6.0,
+        3.0,
+        2.0,
+        1.0,
     ];
-
-    for (kind, step) in passes {
-        for tick in lattice.ticks.iter().filter(|t| t.tick_type == kind) {
-            let text = format_db_label(tick.db, step);
-            let (label_rect, _galleys, _color) = layout_db_label(ui, rect, tick.screen_y, &text);
-            if occupied.iter().any(|r| r.intersects(label_rect)) {
+    let mut visited = vec![false; lattice.label_candidates.len()];
+    for step in passes.into_iter().chain(
+        FRACTIONAL_STEPS_DB
+            .iter()
+            .copied()
+            .filter(|step| *step >= lattice.finest_label_step_db),
+    ) {
+        for (index, tick) in lattice.label_candidates.iter().enumerate() {
+            if visited[index] || !is_multiple_of_db(tick.db, step) {
                 continue;
             }
-            draw_db_label(ui, rect, tick.screen_y, text);
+            visited[index] = true;
+            let text = format_db_label(tick.db, step);
+            let (label_rect, galleys, color) = layout_db_label(ui, rect, tick.screen_y, &text);
+            if !rect.contains_rect(label_rect)
+                || occupied
+                    .iter()
+                    .any(|r| r.expand(2.0).intersects(label_rect.expand(2.0)))
+            {
+                continue;
+            }
+            paint_db_label(ui, label_rect, galleys, color);
+            if !is_multiple_of_db(tick.db, lattice.minor_step_db) {
+                ui.painter().line_segment(
+                    [
+                        Pos2::new(rect.right() - 6.0, tick.screen_y),
+                        Pos2::new(rect.right(), tick.screen_y),
+                    ],
+                    Stroke::new(1.0, color),
+                );
+            }
             occupied.push(label_rect);
         }
     }
 }
 
 #[cfg(test)]
+#[path = "db_ruler_checks.rs"]
+mod checks;
+
+#[cfg(test)]
 mod tests {
     use super::format_db_label;
+
+    #[test]
+    fn asymmetric_range_fills_readable_gaps_in_linear_and_skewed_rulers() {
+        use crate::{
+            audio::sample,
+            model::ruler::{DbLattice, ValueDisplayScale},
+        };
+        let range = sample::ValRange {
+            min: -0.75,
+            max: 0.45,
+        };
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(80.0, 350.0));
+        for (skew_factor, added_db, old_count) in [(0.0, -6.0, 5), (1.0, -9.0, 8), (2.0, -18.0, 12)]
+        {
+            let scale = ValueDisplayScale { skew_factor };
+            let mut lattice = DbLattice::default();
+            lattice
+                .compute_ticks(range, rect.into(), super::NR_PIXELS_PER_DB_TICK, scale)
+                .unwrap();
+            assert!(
+                lattice
+                    .label_candidates
+                    .iter()
+                    .any(|tick| tick.db == added_db && tick.sample_value < 0.0)
+            );
+            let ctx = egui::Context::default();
+            let mut occupied = Vec::new();
+            let mut expected_label = egui::Rect::NOTHING;
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(200.0, 400.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let y = lattice
+                            .label_candidates
+                            .iter()
+                            .find(|tick| tick.db == added_db && tick.sample_value < 0.0)
+                            .unwrap()
+                            .screen_y;
+                        expected_label =
+                            super::layout_db_label(ui, rect, y, &format_db_label(added_db, 1.0)).0;
+                        super::draw_lattice_labels(ui, rect, &lattice, &mut occupied);
+                    });
+                },
+            );
+            assert!(
+                occupied.contains(&expected_label),
+                "skew={skew_factor}: expected {added_db} dB to fill its gap"
+            );
+            assert!(
+                occupied.len() > old_count,
+                "skew={skew_factor}: {} labels, baseline {old_count}",
+                occupied.len()
+            );
+            let text_count = output
+                .shapes
+                .iter()
+                .filter(|shape| matches!(shape.shape, egui::Shape::Text(_)))
+                .count();
+            assert_eq!(text_count, occupied.len());
+            for (index, label) in occupied.iter().enumerate() {
+                assert!(rect.contains_rect(*label));
+                assert!(
+                    occupied[..index]
+                        .iter()
+                        .all(|other| !other.expand(2.0).intersects(label.expand(2.0)))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn finer_labels_respect_space_reserved_for_hover_information() {
+        use crate::{
+            audio::{db, sample},
+            model::ruler::{DbLattice, ValueDisplayScale, sample_value_to_screen_y},
+        };
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(80.0, 350.0));
+        let range = sample::ValRange {
+            min: -0.75,
+            max: 0.45,
+        };
+        let scale = ValueDisplayScale::default();
+        let mut lattice = DbLattice::default();
+        lattice
+            .compute_ticks(range, rect.into(), super::NR_PIXELS_PER_DB_TICK, scale)
+            .unwrap();
+        let ctx = egui::Context::default();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(200.0, 400.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let y = sample_value_to_screen_y(
+                        -(db::db_to_gain(-6.0) as f64),
+                        range,
+                        rect.into(),
+                        scale,
+                    )
+                    .unwrap();
+                    let reserved = super::layout_db_label(ui, rect, y, "hover information").0;
+                    let mut occupied = vec![reserved];
+                    super::draw_lattice_labels(ui, rect, &lattice, &mut occupied);
+                    assert!(occupied.len() > 1);
+                    assert!(
+                        occupied[1..]
+                            .iter()
+                            .all(|label| !reserved.expand(2.0).intersects(label.expand(2.0)))
+                    );
+                });
+            },
+        );
+        assert!(!output.shapes.iter().any(
+            |shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == "-6")
+        ));
+    }
 
     #[test]
     fn integer_step_drops_decimals() {
         assert_eq!(format_db_label(0.0, 6.0), "0");
         assert_eq!(format_db_label(-6.0, 6.0), "-6");
         assert_eq!(format_db_label(-24.0, 12.0), "-24");
+    }
+
+    #[test]
+    fn fractional_labels_fill_narrow_ranges_with_readable_precision() {
+        use crate::{
+            audio::sample,
+            model::ruler::{DbLattice, ValueDisplayScale},
+        };
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(80.0, 350.0));
+        for sign in [-1.0, 1.0] {
+            for skew_factor in [0.0, 1.0, 3.0, 5.0] {
+                let scale = ValueDisplayScale { skew_factor };
+                for (low_db, high_db) in [(-7.0, -5.0), (-6.004, -5.996)] {
+                    let a = scale.sample_to_axis(sign * 10.0_f64.powf(low_db / 20.0));
+                    let b = scale.sample_to_axis(sign * 10.0_f64.powf(high_db / 20.0));
+                    let range = sample::ValRange {
+                        min: a.min(b),
+                        max: a.max(b),
+                    };
+                    let mut lattice = DbLattice::default();
+                    lattice
+                        .compute_ticks(range, rect.into(), super::NR_PIXELS_PER_DB_TICK, scale)
+                        .unwrap();
+                    let ctx = egui::Context::default();
+                    let mut occupied = Vec::new();
+                    let output = ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(200.0, 400.0),
+                            )),
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            egui::CentralPanel::default().show(ctx, |ui| {
+                                super::draw_lattice_labels(ui, rect, &lattice, &mut occupied);
+                            });
+                        },
+                    );
+                    let labels: Vec<_> = output
+                        .shapes
+                        .iter()
+                        .filter_map(|shape| match &shape.shape {
+                            egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                            _ => None,
+                        })
+                        .collect();
+                    assert!(
+                        labels.iter().any(|label| label.contains('.')),
+                        "range={low_db}..{high_db}, sign={sign}: {labels:?}"
+                    );
+                    assert!(labels.iter().any(|label| label == "-6"));
+                    assert!(labels.len() > 3);
+                    for (index, label) in occupied.iter().enumerate() {
+                        assert!(rect.contains_rect(*label));
+                        assert!(
+                            occupied[..index]
+                                .iter()
+                                .all(|other| !other.expand(2.0).intersects(label.expand(2.0)))
+                        );
+                    }
+                    let mut unique = labels.clone();
+                    unique.sort();
+                    unique.dedup();
+                    assert_eq!(
+                        unique.len(),
+                        labels.len(),
+                        "fractional labels must not round to duplicates"
+                    );
+                }
+            }
+        }
+        assert_eq!(format_db_label(-6.002, 0.002), "-6.002");
+        assert_eq!(format_db_label(-5.999999, 0.000001), "-5.999999");
     }
 
     #[test]

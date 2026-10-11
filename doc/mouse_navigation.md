@@ -65,6 +65,12 @@ Shift during a drag changes sensitivity without moving the viewport suddenly.
 
 Both vertical rulers use same navigation controls.
 
+The dB ruler fills available space with intermediate labels as you zoom or change
+the display skew. Familiar integer values take priority; narrow ranges also show
+fractional dB values, with up to six decimal places. Labels stay inside the ruler
+and leave room for hover readouts. Positive and negative sample values show their
+magnitude in dB, so the labels are mirrored around zero.
+
 | Input | Action |
 |---|---|
 | Drag vertically | Pan sample value for track |
