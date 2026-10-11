@@ -124,6 +124,7 @@ class ChannelGeneratorTest < Minitest::Test
     assert_includes original, 'const LAYOUT_SINGLE = Self::LAYOUT_1_0.bits();'
     assert_includes original, 'const LEGACY_ALIAS = Self::GROUP.bits();'
     refute_includes original, 'LAYOUT_MONO'
+    assert_equal ['0x1', '0x40001'], original.scan(/Layout::from_bits_retain\((0x[0-9a-f]+)\)/).flatten
 
     File.write(@layout_input, JSON.generate(@layouts.reverse.map { |layout| layout.merge('channels' => layout['channels'].reverse) }))
     File.write(@supplemental_input, JSON.generate(supplements.reverse.map { |entry| entry.merge('members' => entry['members'].reverse) }))
@@ -188,6 +189,7 @@ class ChannelGeneratorTest < Minitest::Test
     run_generator
     assert_includes File.read(@layout_output), 'const LAYOUT_OTHER = Self::LEFT.bits();'
     assert_includes File.read(@layout_output), '0x1 => &["1.0", "Single", "Other"],'
+    assert_equal ['0x1'], File.read(@layout_output).scan(/Layout::from_bits_retain\((0x[0-9a-f]+)\)/).flatten
   end
 
   def source_directory

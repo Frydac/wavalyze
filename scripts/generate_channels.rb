@@ -130,6 +130,7 @@ class ChannelGenerator
       labels = entries.flat_map { |entry| [entry.fetch('name')] + entry.fetch('synonyms').sort }
       "            0x#{mask.to_s(16)} => &[#{labels.map { |label| rust_string(label) }.join(', ')}],"
     end.join("\n")
+    catalog = groups.keys.sort.map { |mask| "                  Layout::from_bits_retain(0x#{mask.to_s(16)})," }.join("\n")
     <<~RUST
       // Generated from data/channel/{id,layout,supplemental}.json by scripts/generate_channels.rb.
       // Do not edit; run rake channels:generate instead.
@@ -145,6 +146,14 @@ class ChannelGenerator
       }
 
       impl Layout {
+          /// Distinct layouts from the imported catalog, ordered by mask.
+          pub fn catalog() -> &'static [Self] {
+              const CATALOG: &[Layout] = &[
+      #{catalog}
+              ];
+              CATALOG
+          }
+
           /// Catalog names and synonyms for an exact mask match, or an empty slice.
           pub fn names(&self) -> &'static [&'static str] {
               match self.bits() {
