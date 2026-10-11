@@ -11,14 +11,18 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
     let Some(pending) = model.pending_diff_pairing.as_mut() else {
         return;
     };
+    // Leave room for the row labels, offset controls, and window margins.
+    let path_width = (ctx.content_rect().width() - 240.0).clamp(80.0, 480.0);
     let mut ok = false;
     let mut cancel = false;
     egui::Window::new("Pair channels for diff")
         .id(egui::Id::new("diff_pairing_window_v3"))
         .collapsible(false)
-        .resizable(false)
+        .auto_sized()
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
+            // Avoid retaining an old window width through separators and horizontal rows.
+            ui.set_max_width(path_width + 200.0);
             egui::Grid::new("diff_pairing_files")
                 .num_columns(3)
                 .show(ui, |ui| {
@@ -28,7 +32,7 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
                     ui.end_row();
 
                     ui.label("A");
-                    ui.label(pending.file_a.filepath.display().to_string());
+                    path_label(ui, &pending.file_a.filepath, path_width);
                     ui.horizontal(|ui| {
                         ui.add_enabled(
                             pending.offset_detection_a.is_none(),
@@ -60,7 +64,7 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
                     ui.end_row();
 
                     ui.label("B");
-                    ui.label(pending.file_b.filepath.display().to_string());
+                    path_label(ui, &pending.file_b.filepath, path_width);
                     ui.horizontal(|ui| {
                         ui.add_enabled(
                             pending.offset_detection_b.is_none(),
@@ -138,5 +142,69 @@ pub fn ui_modal(ctx: &egui::Context, model: &mut model::Model) {
     }
     if cancel {
         model.actions.push(Action::CancelDiffPairing);
+    }
+}
+
+fn path_label(ui: &mut egui::Ui, path: &std::path::Path, width: f32) {
+    let full_path = path.display().to_string();
+    let text = super::util::truncate_path_keep_basename_to_width(ui, &full_path, "", width);
+    ui.add_sized(
+        [width, ui.spacing().interact_size.y],
+        egui::Label::new(text).truncate(),
+    )
+    .on_hover_text(full_path);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pairing_window_shrinks_after_full_paths_made_it_wide() {
+        let ctx = egui::Context::default();
+        let window_id = egui::Id::new("diff_pairing_window_v3");
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(2400.0, 900.0),
+            )),
+            ..Default::default()
+        };
+        // Simulate the width retained from the old dialog with unshortened paths.
+        for _ in 0..3 {
+            let _ = ctx.run(input(), |ctx| {
+                egui::Window::new("Pair channels for diff")
+                    .id(window_id)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        ui.add(egui::Label::new("long-directory/".repeat(20)).extend());
+                        ui.separator();
+                    });
+            });
+        }
+        let old_width = egui::containers::AreaState::load(&ctx, window_id)
+            .unwrap()
+            .rect()
+            .width();
+        assert!(old_width > 1000.0);
+
+        let mut model = model::Model::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        model.files.changes.disable_watcher();
+        let directory = format!("/home/emile/{}", "long-directory/".repeat(20));
+        model.pending_diff_pairing = Some(model::diff_pairing::PendingDiffPairing::new(
+            crate::wav::ReadConfig::new(format!("{directory}reference.wav")),
+            crate::wav::ReadConfig::new(format!("{directory}decode_cx_to_ac_orig_layout.wav")),
+            vec![0, 1, 2],
+            vec![0, 1, 2],
+        ));
+        for _ in 0..3 {
+            let _ = ctx.run(input(), |ctx| ui_modal(ctx, &mut model));
+        }
+        let width = egui::containers::AreaState::load(&ctx, window_id)
+            .unwrap()
+            .rect()
+            .width();
+        assert!(width < 750.0, "pairing window remained {width} points wide");
     }
 }

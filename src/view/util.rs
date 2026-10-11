@@ -49,6 +49,101 @@ pub fn add_row_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> eg
     .inner
 }
 
+/// Shorten a path to fit, preserving its filename and suffix where possible.
+pub fn truncate_path_keep_basename_to_width(
+    ui: &egui::Ui,
+    path: &str,
+    suffix: &str,
+    max_width: f32,
+) -> String {
+    let font_id = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .cloned()
+        .unwrap_or_else(|| egui::FontId::proportional(14.0));
+    let color = ui.style().visuals.text_color();
+
+    let measure = |text: &str| -> f32 {
+        ui.painter()
+            .layout_no_wrap(text.to_string(), font_id.clone(), color)
+            .size()
+            .x
+    };
+
+    let full = format!("{path}{suffix}");
+    if measure(&full) <= max_width {
+        return full;
+    }
+
+    let base = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let base_with_suffix = format!("{base}{suffix}");
+    if measure(&base_with_suffix) > max_width {
+        return truncate_basename_to_width(&measure, base, suffix, max_width);
+    }
+
+    let parent_len = path.len().saturating_sub(base.len());
+    let parent = &path[..parent_len];
+    truncate_parent_to_width(&measure, parent, base, suffix, max_width)
+}
+
+fn truncate_basename_to_width(
+    measure: &dyn Fn(&str) -> f32,
+    base: &str,
+    suffix: &str,
+    max_width: f32,
+) -> String {
+    let ellipsis = "...";
+    let base_chars: Vec<char> = base.chars().collect();
+    let mut lo = 0usize;
+    let mut hi = base_chars.len();
+
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let tail: String = base_chars[base_chars.len() - mid..].iter().collect();
+        let candidate = format!("{ellipsis}{tail}{suffix}");
+        if measure(&candidate) <= max_width {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    if lo == 0 {
+        return format!("{ellipsis}{suffix}");
+    }
+
+    let tail: String = base_chars[base_chars.len() - lo..].iter().collect();
+    format!("{ellipsis}{tail}{suffix}")
+}
+
+fn truncate_parent_to_width(
+    measure: &dyn Fn(&str) -> f32,
+    parent: &str,
+    base: &str,
+    suffix: &str,
+    max_width: f32,
+) -> String {
+    let ellipsis = "...";
+    let parent_chars: Vec<char> = parent.chars().collect();
+    let mut lo = 0usize;
+    let mut hi = parent_chars.len();
+
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let tail: String = parent_chars[parent_chars.len() - mid..].iter().collect();
+        let candidate = format!("{ellipsis}{tail}{base}{suffix}");
+        if measure(&candidate) <= max_width {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    let tail: String = parent_chars[parent_chars.len() - lo..].iter().collect();
+    format!("{ellipsis}{tail}{base}{suffix}")
+}
+
 /// Build the visible part of a ruler's zero-centered zoom deadzone.
 pub fn ruler_zero_deadzone(rect: egui::Rect, zero_y: f32, height: f32) -> Option<egui::Rect> {
     if height <= 0.0 || !height.is_finite() || zero_y < rect.top() || zero_y > rect.bottom() {
