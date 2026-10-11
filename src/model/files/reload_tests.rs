@@ -142,20 +142,47 @@ fn reload_updates_and_clears_channel_mask_and_speaker_ids() {
         Some(audio::Id::LeftSurround)
     );
 
-    for mask in [Some(0x3f), Some(0), None] {
+    for (mask, expected_id, expected_layout) in [
+        (
+            Some(0x3f),
+            Some(audio::Id::LeftBack),
+            Some(
+                audio::Layout::LOWER_FRONTS
+                    | audio::Layout::CENTER
+                    | audio::Layout::LFE
+                    | audio::Layout::LOWER_BACKS,
+            ),
+        ),
+        (
+            Some(0xa68001),
+            Some(audio::Id::BottomLeft),
+            Some(
+                audio::Layout::LEFT
+                    | audio::Layout::HEIGHT_SURROUNDS
+                    | audio::Layout::LFE2
+                    | audio::Layout::BOTTOM_LEFT
+                    | audio::Layout::BOTTOM_RIGHT,
+            ),
+        ),
+        (Some(0x08800f), None, None), // Six channels, but duplicate height-surround identities.
+        (Some(0), None, None),
+        (None, None, None),
+    ] {
         std::fs::write(&path, bytes(mask, 6, &[])).unwrap();
         changed(&mut model, id);
         let req = request(&mut model, &[id]);
         finish(&mut model, req);
         assert_eq!(model.files[id].channel_mask, mask);
-        assert_eq!(
-            model.files[id].channels[&4].channel_id,
-            (mask == Some(0x3f)).then_some(audio::Id::LeftBack)
-        );
-        assert_eq!(
-            model.files[id].layout,
-            crate::wav::channel_mask::layout(mask, 6)
-        );
+        assert_eq!(model.files[id].channels[&4].channel_id, expected_id);
+        assert_eq!(model.files[id].layout, expected_layout);
+        if expected_id.is_none() {
+            assert!(
+                model.files[id]
+                    .channels
+                    .values()
+                    .all(|channel| channel.channel_id.is_none())
+            );
+        }
     }
 }
 

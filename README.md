@@ -166,15 +166,24 @@ rake test_data:wavex       # WAVEX fixtures only (Ruby, no SoX required)
 
 The generation code lives in `scripts/generate_test_data.rb`. Basic fixtures keep
 their existing filenames in `data/`. WAVEX fixtures go into `data/wavex/` and cover
-stereo, quad, 5.1, Auro 9.1, Auro 13.1, NHK 22.0, and NHK 22.2. Open these WAVs
+stereo, quad, 5.1, Auro 9.1, Auro 13.1, 22.0, and 22.2. Open these WAVs
 in wavalyze to inspect channel titles and layout metadata.
 
 Each WAVEX file contains one second of 48 kHz, 16-bit PCM with an explicit
 WAVEFORMATEXTENSIBLE channel mask and PDF-convention interleaving. Every channel
 has a distinct sine frequency (`440 + 200 * channel_index` Hz). The generated
 `manifest.json` lists the layouts, masks, channel IDs in order, and frequencies.
-NHK 22.2 uses mask `0xFFFFFF`; NHK 22.0 uses `0x7FFFF7`. These follow the selected
-Auro PDF's proposed extension, including its bottom-channel and LFE2 positions.
+22.2 uses mask `0xFFFFFF`; 22.0 uses `0xFBFFF7`. Channel order follows
+[Auro-3D in multi-channel WAV, Revision 2 (2024-04-19)](https://www.auro-3d.com/wp-content/uploads/2024/04/Auro-3D-in-multi-channel-WAV-White-Paper-20240419.pdf),
+pages 1–2; 22.0 is derived by removing both LFE channels. The six extension bits
+are Auro assignments, distinct from FFmpeg's numeric mask convention.
+
+The 22.x files are now named `wavex_22_0.wav` and `wavex_22_2.wav`; layout metadata
+retains the catalog names `NHK_22.0` and `NHK_22.2`. Regeneration replaces the files
+listed in the manifest and leaves other files in the output directory untouched.
+Older `wavex_nhk_22_*` fixtures follow the provisional March 17 memo and are stale.
+See [channel mapping details](data/channel/README.md) for decoding context and
+ambiguous-mask behavior.
 
 Generated WAVs and their manifest remain ignored by Git; the scripts are committed.
 For another output location, run

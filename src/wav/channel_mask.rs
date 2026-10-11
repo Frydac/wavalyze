@@ -4,8 +4,9 @@ use crate::audio::{Id, Layout};
 use std::io::{self, Read, Seek, SeekFrom};
 
 // WAV speaker order differs from the discriminants of audio::Id.
-// Auro identities follow Auro-3D in WAV (2023-03-17): TopBackLeft/Right
-// are height surrounds (HLs/HRs); height backs use separate extension bits.
+// Ordinary Auro mapping from Revision 2 (2024-04-19), pages 1-2:
+// https://www.auro-3d.com/wp-content/uploads/2024/04/Auro-3D-in-multi-channel-WAV-White-Paper-20240419.pdf
+// Complete 22_x masks override TopBackLeft/Right to height backs below.
 const SPEAKERS: [Id; 24] = [
     Id::Left,
     Id::Right,
@@ -25,13 +26,13 @@ const SPEAKERS: [Id; 24] = [
     Id::HeightLeftSurround,
     Id::HeightCenterSurround,
     Id::HeightRightSurround,
-    // The PDF's proposed 22.2 extension (bits 18..23), adopted by this project.
-    Id::HeightLeftBack,
-    Id::HeightRightBack,
+    // Published Auro extension bits, not Microsoft-standard WAVEX positions.
+    Id::LFE2,
+    Id::HeightLeftSurround,
+    Id::HeightRightSurround,
     Id::BottomLeft,
     Id::BottomCenter,
     Id::BottomRight,
-    Id::LFE2,
 ];
 
 fn invalid(message: &'static str) -> io::Error {
@@ -101,12 +102,27 @@ fn speakers(mask: Option<u32>, channels: usize) -> Option<impl Iterator<Item = I
     if mask == 0 || mask >> SPEAKERS.len() != 0 || mask.count_ones() as usize != channels {
         return None;
     }
-    Some(
-        SPEAKERS
-            .into_iter()
-            .enumerate()
-            .filter_map(move |(bit, id)| (mask & (1 << bit) != 0).then_some(id)),
-    )
+    // The channel count has been validated. 22.0 is derived by removing
+    // LFE (bit 3) and LFE2 (bit 18) from the paper's complete 22.2 mask.
+    let is_22_x = matches!(mask, 0xffffff | 0xfbfff7);
+    let mut order = SPEAKERS;
+    if is_22_x {
+        order[15] = Id::HeightLeftBack;
+        order[17] = Id::HeightRightBack;
+    }
+    let speakers = order
+        .into_iter()
+        .enumerate()
+        .filter_map(move |(bit, id)| (mask & (1 << bit) != 0).then_some(id));
+    // Ordinary top-back/top-side aliases must not assign two file channels
+    // to the same identity. Validate the whole map before exposing any IDs.
+    let identities = speakers
+        .clone()
+        .fold(0u32, |bits, id| bits | (1 << id as u32));
+    if identities.count_ones() as usize != channels {
+        return None;
+    }
+    Some(speakers)
 }
 
 pub(crate) fn layout(mask: Option<u32>, channels: usize) -> Option<Layout> {
@@ -236,9 +252,9 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn top_back_bits_follow_pdf_height_surround_assignments() {
-        // Auro-3D in WAV (2023-03-17), speaker-position table:
-        // SPEAKER_TOP_BACK_LEFT / RIGHT are HLs / HRs, not HLb / HRb.
+    fn ordinary_top_back_bits_are_height_surrounds() {
+        // Revision 2 (2024-04-19): ordinary context uses HLs / HRs.
+        // Complete 22_x masks use HLb / HRb instead (tested separately).
         for (mask, id, expected_layout) in [
             (
                 0x008000,
@@ -295,23 +311,30 @@ pub(crate) mod tests {
 
     #[test]
     fn pdf_extension_bits_have_distinct_auro_identities() {
-        // The PDF's proposed extension assignments, written independently of SPEAKERS.
+        // Revision 2 Auro extension assignments, independent of SPEAKERS.
         for (mask, id, expected_layout) in [
-            (0x040000, Id::HeightLeftBack, Layout::HEIGHT_LEFT_BACK),
-            (0x080000, Id::HeightRightBack, Layout::HEIGHT_RIGHT_BACK),
-            (0x100000, Id::BottomLeft, Layout::BOTTOM_LEFT),
-            (0x200000, Id::BottomCenter, Layout::BOTTOM_CENTER),
-            (0x400000, Id::BottomRight, Layout::BOTTOM_RIGHT),
-            (0x800000, Id::LFE2, Layout::LFE2),
+            (0x040000, Id::LFE2, Layout::LFE2),
+            (
+                0x080000,
+                Id::HeightLeftSurround,
+                Layout::HEIGHT_LEFT_SURROUND,
+            ),
+            (
+                0x100000,
+                Id::HeightRightSurround,
+                Layout::HEIGHT_RIGHT_SURROUND,
+            ),
+            (0x200000, Id::BottomLeft, Layout::BOTTOM_LEFT),
+            (0x400000, Id::BottomCenter, Layout::BOTTOM_CENTER),
+            (0x800000, Id::BottomRight, Layout::BOTTOM_RIGHT),
         ] {
             assert_eq!(channel_id(Some(mask), 1, 0), Some(id));
             assert_eq!(layout(Some(mask), 1), Some(expected_layout));
         }
     }
 
-    #[test]
-    fn loading_nhk_layouts_preserves_pdf_order_and_channel_signals() {
-        // Literal PDF-convention orders. 22.0 omits LFE (bit 3) and LFE2 (bit 23).
+    fn check_loading_22_x(mask: u32) {
+        // Literal Revision 2 order. Derived 22.0 omits LFE (bit 3) and LFE2 (bit 18).
         let order_22_2 = [
             Id::Left,
             Id::Right,
@@ -328,15 +351,15 @@ pub(crate) mod tests {
             Id::HeightLeft,
             Id::HeightCenter,
             Id::HeightRight,
-            Id::HeightLeftSurround,
-            Id::HeightCenterSurround,
-            Id::HeightRightSurround,
             Id::HeightLeftBack,
+            Id::HeightCenterSurround,
             Id::HeightRightBack,
+            Id::LFE2,
+            Id::HeightLeftSurround,
+            Id::HeightRightSurround,
             Id::BottomLeft,
             Id::BottomCenter,
             Id::BottomRight,
-            Id::LFE2,
         ];
         let order_22_0 = [
             Id::Left,
@@ -353,19 +376,22 @@ pub(crate) mod tests {
             Id::HeightLeft,
             Id::HeightCenter,
             Id::HeightRight,
-            Id::HeightLeftSurround,
-            Id::HeightCenterSurround,
-            Id::HeightRightSurround,
             Id::HeightLeftBack,
+            Id::HeightCenterSurround,
             Id::HeightRightBack,
+            Id::HeightLeftSurround,
+            Id::HeightRightSurround,
             Id::BottomLeft,
             Id::BottomCenter,
             Id::BottomRight,
         ];
-        for (mask, expected, expected_layout) in [
+        for (fixture_mask, expected, expected_layout) in [
             (0xffffff, order_22_2.as_slice(), Layout::LAYOUT_NHK_22_2),
-            (0x7ffff7, order_22_0.as_slice(), Layout::LAYOUT_NHK_22_0),
+            (0xfbfff7, order_22_0.as_slice(), Layout::LAYOUT_NHK_22_0),
         ] {
+            if fixture_mask != mask {
+                continue;
+            }
             let channels = expected.len();
             let config = ReadConfigBytes::new(None, wav_bytes(Some(mask), channels as u16, &[]));
             let loaded = read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap();
@@ -391,15 +417,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn loading_22_2_preserves_pdf_order_and_channel_signals() {
+        check_loading_22_x(0xffffff);
+    }
+
+    #[test]
+    fn loading_22_0_preserves_derived_order_and_channel_signals() {
+        check_loading_22_x(0xfbfff7);
+    }
+
+    #[test]
     fn sparse_pdf_mask_and_selected_channels_keep_wav_indices() {
-        // HLs, HRs, BL, BR, LFE2; skips intermediate bits, including BC.
-        let mask = 0xd28000;
+        // HLs, HRs, LFE2, BL, BR; skips intermediate bits, including BC.
+        let mask = 0xa68000;
         let expected = [
             Id::HeightLeftSurround,
             Id::HeightRightSurround,
+            Id::LFE2,
             Id::BottomLeft,
             Id::BottomRight,
-            Id::LFE2,
         ];
         for (index, id) in expected.into_iter().enumerate() {
             assert_eq!(channel_id(Some(mask), 5, index), Some(id));
@@ -421,8 +457,8 @@ pub(crate) mod tests {
         assert_eq!(file.channels.len(), 3);
         for (index, id) in [
             (1, Id::HeightRightSurround),
-            (3, Id::BottomRight),
-            (4, Id::LFE2),
+            (3, Id::BottomLeft),
+            (4, Id::BottomRight),
         ] {
             let channel = &file.channels[&index];
             assert_eq!(channel.channel_id, Some(id));
@@ -434,10 +470,59 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn sparse_extension_masks_do_not_imply_22_x_context() {
+        // LFE2 and top-side extensions alone do not select the complete 22_x mapping.
+        let mask = 0x9c0000;
+        let expected = [
+            Id::LFE2,
+            Id::HeightLeftSurround,
+            Id::HeightRightSurround,
+            Id::BottomRight,
+        ];
+        for (index, id) in expected.into_iter().enumerate() {
+            assert_eq!(channel_id(Some(mask), 4, index), Some(id));
+        }
+        assert_eq!(
+            layout(Some(mask), 4),
+            Some(Layout::LFE2 | Layout::HEIGHT_SURROUNDS | Layout::BOTTOM_RIGHT)
+        );
+    }
+
+    #[test]
+    fn duplicate_identities_keep_raw_masks_and_samples_without_speaker_metadata() {
+        // Ordinary top-back/top-side aliases collide. Incomplete 22_x masks
+        // (including the memo-era 22.0 mask) must not bypass this rule.
+        for mask in [0x088000u32, 0x120000, 0x1a8000, 0xfffff7, 0x7ffff7] {
+            let channels = mask.count_ones() as usize;
+            assert_eq!(layout(Some(mask), channels), None, "mask {mask:#08x}");
+            for index in 0..channels {
+                assert_eq!(channel_id(Some(mask), channels, index), None);
+            }
+            let config = ReadConfigBytes::new(None, wav_bytes(Some(mask), channels as u16, &[]));
+            let loaded = read_bytes_to_loaded_file_with_sink(&config, 0, None).unwrap();
+            assert_eq!(loaded.channel_mask, Some(mask));
+            assert_eq!(loaded.layout, None);
+            let mut buffers = crate::audio::manager::Buffers::default();
+            let file = loaded.into_file(&mut buffers);
+            assert_eq!(file.channel_mask, Some(mask));
+            assert_eq!(file.layout, None);
+            assert_eq!(file.channels.len(), channels);
+            for index in 0..channels {
+                let channel = &file.channels[&index];
+                assert_eq!(channel.channel_id, None);
+                let BufferE::I16(buffer) = buffers[channel.buffer_id].as_ref() else {
+                    panic!("expected i16 channel samples");
+                };
+                assert_eq!(buffer.data, [index as i16, (index + channels) as i16]);
+            }
+        }
+    }
+
+    #[test]
     fn unsupported_bits_and_count_mismatches_keep_raw_masks_without_assigning_ids() {
         for (mask, channels) in (24..32).map(|bit| (1u32 << bit, 1)).chain([
             (0xffffff, 23),
-            (0x7ffff7, 24),
+            (0xfbfff7, 24),
             (0x040000, 2),
         ]) {
             assert_eq!(layout(Some(mask), channels), None);

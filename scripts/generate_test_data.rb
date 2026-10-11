@@ -78,18 +78,19 @@ module TestData
     end
   end
 
-  # Literal orders from Auro-3D in WAV (2023-03-17); these are WAVEX masks,
-  # independent of the imported internal layout masks and channel ID numbers.
+  # Literal orders from Auro-3D in multi-channel WAV, Revision 2 (2024-04-19).
+  # 22.0 is derived from 22.2 by omitting LFE (bit 3) and LFE2 (bit 18).
+  # WAVEX masks are independent of imported internal layout masks and ID numbers.
   WAVEX_LAYOUTS = [
     ['stereo_2_0', '2.0', 0x000003, %w[L R]],
     ['quad_4_0', '4.0', 0x000603, %w[L R Ls Rs]],
     ['surround_5_1', '5.1', 0x00060f, %w[L R C LFE Ls Rs]],
     ['auro_9_1', 'Auro9.1', 0x02d60f, %w[L R C LFE Ls Rs HL HR HLs HRs]],
     ['auro_13_1', 'Auro13.1', 0x02fe3f, %w[L R C LFE Lb Rb Ls Rs T HL HC HR HLs HRs]],
-    ['nhk_22_0', 'NHK_22.0', 0x7ffff7,
-     %w[L R C Lb Rb LC RC Cs Ls Rs T HL HC HR HLs HCs HRs HLb HRb BL BC BR]],
-    ['nhk_22_2', 'NHK_22.2', 0xffffff,
-     %w[L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLs HCs HRs HLb HRb BL BC BR LFE2]]
+    ['22_0', 'NHK_22.0', 0xfbfff7,
+     %w[L R C Lb Rb LC RC Cs Ls Rs T HL HC HR HLb HCs HRb HLs HRs BL BC BR]],
+    ['22_2', 'NHK_22.2', 0xffffff,
+     %w[L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLb HCs HRb LFE2 HLs HRs BL BC BR]]
   ].freeze
 
   def self.generate_wavex(output_dir: DEFAULT_OUTPUT_DIR, duration: 1.0)
@@ -112,7 +113,8 @@ module TestData
       }
     end
     manifest = {
-      convention: 'Auro-3D in WAV 2023-03-17 (including proposed 22.2 extension)',
+      convention: 'Auro-3D in multi-channel WAV, Revision 2 (2024-04-19); 22.0 derived without LFE/LFE2',
+      source_url: 'https://www.auro-3d.com/wp-content/uploads/2024/04/Auro-3D-in-multi-channel-WAV-White-Paper-20240419.pdf',
       sample_rate: sample_rate, bit_depth: 16, sample_format: 'signed PCM',
       amplitude: 0.5, frames_per_channel: frames, duration_seconds: frames.to_f / sample_rate,
       files: entries

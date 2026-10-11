@@ -36,36 +36,50 @@ For another example, the internal `5.1` mask is `0x3F`, while its side-surround
 WAVEX mask is `0x60F`. Never cast an internal layout mask to a WAVEX mask; convert
 through an independently maintained WAVEX speaker mapping.
 
-The reader recognizes the 18 standard WAVEX bits plus the six extension bits
-proposed in `Auro-3D in WAV 20230317-1.pdf`, adopted as this project's convention.
-Its Auro identities follow that PDF: TopBackLeft (`0x008000`) and TopBackRight
-(`0x020000`) map to HeightLeftSurround and HeightRightSurround.
+The reader follows [Auro-3D in multi-channel WAV, Revision 2, 19 April 2024](https://www.auro-3d.com/wp-content/uploads/2024/04/Auro-3D-in-multi-channel-WAV-White-Paper-20240419.pdf),
+pages 1–2. It recognizes the 18 standard WAVEX bits plus six published Auro
+extension bits. These extensions are an Auro convention, not Microsoft-standard
+positions or FFmpeg's numeric assignments.
+
+TopBackLeft (`0x008000`) and TopBackRight (`0x020000`) depend on the complete
+mask. For 22.2 (`0xFFFFFF`, 24 channels) and 22.0 (`0xFBFFF7`, 22 channels),
+they map to HeightLeftBack and HeightRightBack. Otherwise they map to
+HeightLeftSurround and HeightRightSurround.
 
 | Extension bit | Auro identity |
 |---|---|
-| `0x040000` | HeightLeftBack |
-| `0x080000` | HeightRightBack |
-| `0x100000` | BottomLeft |
-| `0x200000` | BottomCenter |
-| `0x400000` | BottomRight |
-| `0x800000` | LFE2 |
+| `0x040000` | LFE2 |
+| `0x080000` | HeightLeftSurround |
+| `0x100000` | HeightRightSurround |
+| `0x200000` | BottomLeft |
+| `0x400000` | BottomCenter |
+| `0x800000` | BottomRight |
 
 The resulting 22.2 mask is `0xFFFFFF`, with this interleaving order:
 
 ```text
-L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLs HCs HRs HLb HRb BL BC BR LFE2
+L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLb HCs HRb LFE2 HLs HRs BL BC BR
 ```
 
 The PDF labels the bottom channels BtL/BtC/BtR; the imported IDs use BL/BC/BR.
-For 22.0, omit LFE and LFE2, giving mask `0x7FFFF7`. Both layouts resolve to
-their internal catalog definitions, independently of the WAVEX bit numbering.
-Unknown bits (24..31), zero masks, and channel-count mismatches retain their raw
-mask but leave layout and channel IDs unassigned.
+22.0 is a project derivation, not a row supplied by the paper: omit LFE (bit 3)
+and LFE2 (bit 18), giving mask `0xFBFFF7`. Both layouts resolve to their internal
+catalog definitions, independently of the WAVEX bit numbering.
 
-Legacy workplace 22.2 files can have the same `0xFFFFFF` mask with a different
-channel order. The reader consistently uses the selected PDF convention; it
-does not guess a legacy interpretation from that ambiguous mask. Migration
-requires source provenance and explicit sample reordering.
+For sparse masks, project policy is to use ordinary context rather than infer
+22.x from extension bits. Top-side extensions can represent height surrounds,
+but two file channels must not resolve to the same identity. For example,
+`0x088000` combines TopBackLeft and TopSideLeft, both HeightLeftSurround in
+ordinary context, so speaker metadata is unassigned. Unknown bits (24..31), zero
+masks, and channel-count mismatches also retain their raw mask and decoded samples
+but leave layout and all channel IDs unassigned. An absent mask gives no metadata.
+
+The original workplace mapping agrees with the published convention. Earlier
+wavalyze versions followed the provisional March 17, 2023 memo instead, with
+different extension assignments and 22.2 order despite the same `0xFFFFFF` mask.
+Regenerate development fixtures with `rake test_data:wavex`. The reader does not
+infer memo-era provenance or migrate files automatically; conversion of real
+files requires known provenance, sample reordering, and any necessary mask update.
 
 ## Import and regeneration workflow
 
@@ -120,8 +134,8 @@ imported/generated constants are rejected. `NONE` is generated automatically.
 The first generated layouts match the prior handwritten masks except for
 `LAYOUT_NHK_22_0`: the JSON excludes both LFE channels, whereas the handwritten
 definition excluded only `LFE`. Generation corrects this to 22 channels, with
-internal mask `0xEFFFF7`. This is an internal mask, not the PDF WAVEX mask
-`0x7FFFF7`. The catalog also adds 12 previously missing constants, including
+internal mask `0xEFFFF7`. This is an internal mask, distinct from the derived WAVEX mask
+`0xFBFFF7`. The catalog also adds 12 previously missing constants, including
 `LAYOUT_AURO8_1` and `LAYOUT_9_1_5H_2T`.
 
 ## Import guarantees and review

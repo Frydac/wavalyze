@@ -20,8 +20,8 @@ class TestDataGeneratorTest < Minitest::Test
     {
       'stereo_2_0' => [0x000003, 2], 'quad_4_0' => [0x000603, 4],
       'surround_5_1' => [0x00060f, 6], 'auro_9_1' => [0x02d60f, 10],
-      'auro_13_1' => [0x02fe3f, 14], 'nhk_22_0' => [0x7ffff7, 22],
-      'nhk_22_2' => [0xffffff, 24]
+      'auro_13_1' => [0x02fe3f, 14], '22_0' => [0xfbfff7, 22],
+      '22_2' => [0xffffff, 24]
     }.each do |stem, (mask, channels)|
       bytes = File.binread(File.join(@wavex, "wavex_#{stem}.wav"))
       assert_equal 'RIFF', bytes[0, 4]
@@ -39,15 +39,18 @@ class TestDataGeneratorTest < Minitest::Test
     end
   end
 
-  def test_manifest_lists_literal_pdf_nhk_order_and_masks
+  def test_manifest_lists_literal_pdf_22_x_order_and_masks
     manifest = JSON.parse(File.read(File.join(@wavex, 'manifest.json')))
     assert_equal 1440, manifest.fetch('frames_per_channel')
     assert_equal 7, manifest.fetch('files').size
+    assert_includes manifest.fetch('convention'), 'Revision 2 (2024-04-19)'
+    assert_equal 'https://www.auro-3d.com/wp-content/uploads/2024/04/Auro-3D-in-multi-channel-WAV-White-Paper-20240419.pdf', manifest.fetch('source_url')
     {
-      'NHK_22.2' => ['0xFFFFFF', %w[L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLs HCs HRs HLb HRb BL BC BR LFE2]],
-      'NHK_22.0' => ['0x7FFFF7', %w[L R C Lb Rb LC RC Cs Ls Rs T HL HC HR HLs HCs HRs HLb HRb BL BC BR]]
-    }.each do |layout, (mask, ids)|
+      'NHK_22.2' => ['wavex_22_2.wav', '0xFFFFFF', %w[L R C LFE Lb Rb LC RC Cs Ls Rs T HL HC HR HLb HCs HRb LFE2 HLs HRs BL BC BR]],
+      'NHK_22.0' => ['wavex_22_0.wav', '0xFBFFF7', %w[L R C Lb Rb LC RC Cs Ls Rs T HL HC HR HLb HCs HRb HLs HRs BL BC BR]]
+    }.each do |layout, (filename, mask, ids)|
       entry = manifest.fetch('files').find { |file| file.fetch('layout') == layout }
+      assert_equal filename, entry.fetch('file')
       assert_equal mask, entry.fetch('channel_mask')
       assert_equal ids, entry.fetch('channels').map { |channel| channel.fetch('id') }
       assert_equal (0...ids.length).to_a, entry.fetch('channels').map { |channel| channel.fetch('index') }
@@ -55,15 +58,18 @@ class TestDataGeneratorTest < Minitest::Test
   end
 
   def test_payload_contains_distinct_tones_in_serialized_channel_order
-    samples = File.binread(File.join(@wavex, 'wavex_nhk_22_2.wav'))[68..].unpack('s<*')
-    assert_equal [0] * 24, samples.first(24)
-    assert_equal 24, samples[24, 24].uniq.length
-    # Include both sides of the writer's 1024-frame chunk boundary.
-    [1, 17, 127, 1023, 1024, 1439].each do |frame|
-      24.times do |channel|
-        frequency = 440 + channel * 200
-        expected = Math.sin(2 * Math::PI * frequency * frame / 48_000) * 16_383.5
-        assert_in_delta expected, samples[frame * 24 + channel], 0.5
+    { 'stereo_2_0' => 2, 'quad_4_0' => 4, 'surround_5_1' => 6,
+      'auro_9_1' => 10, 'auro_13_1' => 14, '22_0' => 22, '22_2' => 24 }.each do |stem, channels|
+      samples = File.binread(File.join(@wavex, "wavex_#{stem}.wav"))[68..].unpack('s<*')
+      assert_equal [0] * channels, samples.first(channels)
+      assert_equal channels, samples[channels, channels].uniq.length
+      # Include both sides of the writer's 1024-frame chunk boundary.
+      [1, 17, 127, 1023, 1024, 1439].each do |frame|
+        channels.times do |channel|
+          frequency = 440 + channel * 200
+          expected = Math.sin(2 * Math::PI * frequency * frame / 48_000) * 16_383.5
+          assert_in_delta expected, samples[frame * channels + channel], 0.5
+        end
       end
     end
   end
