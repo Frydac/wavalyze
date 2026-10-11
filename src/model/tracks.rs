@@ -370,8 +370,7 @@ impl Tracks {
 
         // ValueDisplayScale transforms each unit interval independently. Convert the magnitude to
         // the corresponding piecewise display coordinate, then leave 5% of each canvas half free.
-        let whole = peak.floor();
-        let display_peak = whole + display_scale.sample_to_display(peak - whole);
+        let display_peak = display_scale.sample_to_axis(peak);
         let extent = display_peak / Self::AUTO_FIT_PEAK_SCREEN_FRACTION;
         if !extent.is_finite() || extent <= 0.0 {
             return false;

@@ -50,8 +50,8 @@ pub fn screen_x_to_sample_ix(
     // sample_ix
 }
 
-// PERF: remove range_len check, this can be in a per sample basis, while the range should be
-// checked per buffer.
+/// The viewport limits are display coordinates. Skew transforms each unit interval
+/// independently, keeping integer anchors fixed while expanding low amplitudes.
 pub fn sample_value_to_screen_y(
     sample_value: f64,
     val_range: sample::ValRange<f64>,
@@ -61,10 +61,11 @@ pub fn sample_value_to_screen_y(
     if val_range.is_empty() {
         return None;
     }
-
-    let segment = build_value_segment_for_sample(sample_value, val_range, screen_rect);
-    let frac = segment.sample_to_frac(sample_value, display_scale)?;
-    Some(segment.frac_to_screen_y(frac))
+    let display_value = display_scale.sample_to_axis(sample_value);
+    let frac = (display_value - val_range.min) / val_range.len();
+    // Convert only the final coordinate to f32. Off-screen integer anchors can be
+    // millions of pixels away at high zoom; interpolating them in f32 loses precision.
+    Some((screen_rect.bottom() as f64 - frac * screen_rect.height() as f64) as f32)
 }
 
 pub fn screen_y_to_sample_value(
@@ -73,154 +74,12 @@ pub fn screen_y_to_sample_value(
     screen_rect: Rect,
     display_scale: ValueDisplayScale,
 ) -> Option<f64> {
-    if val_range.is_empty() {
+    if val_range.is_empty() || screen_rect.height() <= 0.0 {
         return None;
     }
-
-    let segments = build_value_segments(val_range, screen_rect);
-    let segment = segments
-        .iter()
-        .find(|segment| segment.contains_screen_y(screen_y))
-        .or_else(|| segments.last())?;
-    let frac = segment.screen_y_to_frac(screen_y)?;
-    segment.frac_to_sample(frac, display_scale)
-}
-
-fn raw_sample_value_to_screen_y(
-    sample_value: f64,
-    val_range: sample::ValRange<f64>,
-    screen_rect: Rect,
-) -> f32 {
-    let frac = (sample_value - val_range.min) / val_range.len();
-    screen_rect.bottom() - frac as f32 * screen_rect.height()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SegmentKind {
-    Linear,
-    SkewedPositive,
-    SkewedNegative,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct ValueSegment {
-    sample_start: f64,
-    sample_end: f64,
-    screen_y_start: f32,
-    screen_y_end: f32,
-    kind: SegmentKind,
-}
-
-impl ValueSegment {
-    fn contains_screen_y(self, screen_y: f32) -> bool {
-        let min_y = self.screen_y_end.min(self.screen_y_start);
-        let max_y = self.screen_y_end.max(self.screen_y_start);
-        screen_y >= min_y && screen_y <= max_y
-    }
-
-    fn sample_to_frac(self, sample_value: f64, display_scale: ValueDisplayScale) -> Option<f64> {
-        let sample_len = self.sample_end - self.sample_start;
-        if sample_len == 0.0 {
-            return None;
-        }
-
-        match self.kind {
-            SegmentKind::Linear => Some((sample_value - self.sample_start) / sample_len),
-            SegmentKind::SkewedPositive => {
-                let offset = sample_value - self.sample_start;
-                Some(display_scale.sample_to_display(offset / sample_len))
-            }
-            SegmentKind::SkewedNegative => {
-                let offset = self.sample_end - sample_value;
-                Some(1.0 - display_scale.sample_to_display(offset / sample_len))
-            }
-        }
-    }
-
-    fn frac_to_sample(self, frac: f64, display_scale: ValueDisplayScale) -> Option<f64> {
-        let frac = frac.clamp(0.0, 1.0);
-        match self.kind {
-            SegmentKind::Linear => {
-                Some(self.sample_start + frac * (self.sample_end - self.sample_start))
-            }
-            SegmentKind::SkewedPositive => Some(
-                self.sample_start
-                    + display_scale.display_to_sample(frac) * (self.sample_end - self.sample_start),
-            ),
-            SegmentKind::SkewedNegative => Some(
-                self.sample_end
-                    - display_scale.display_to_sample(1.0 - frac)
-                        * (self.sample_end - self.sample_start),
-            ),
-        }
-    }
-
-    fn frac_to_screen_y(self, frac: f64) -> f32 {
-        let frac = frac.clamp(0.0, 1.0) as f32;
-        self.screen_y_start + frac * (self.screen_y_end - self.screen_y_start)
-    }
-
-    fn screen_y_to_frac(self, screen_y: f32) -> Option<f64> {
-        let screen_len = self.screen_y_end - self.screen_y_start;
-        if screen_len == 0.0 {
-            return None;
-        }
-        Some(((screen_y - self.screen_y_start) / screen_len) as f64)
-    }
-}
-
-fn build_value_segments(val_range: sample::ValRange<f64>, screen_rect: Rect) -> Vec<ValueSegment> {
-    let start_anchor = val_range.min.floor() as i64;
-    let end_anchor = val_range.max.ceil() as i64;
-
-    (start_anchor..end_anchor)
-        .map(|anchor| {
-            let sample_start = anchor as f64;
-            let sample_end = sample_start + 1.0;
-
-            let kind = if sample_end <= 0.0 {
-                SegmentKind::SkewedNegative
-            } else if sample_start >= 0.0 {
-                SegmentKind::SkewedPositive
-            } else {
-                SegmentKind::Linear
-            };
-
-            ValueSegment {
-                sample_start,
-                sample_end,
-                screen_y_start: raw_sample_value_to_screen_y(sample_start, val_range, screen_rect),
-                screen_y_end: raw_sample_value_to_screen_y(sample_end, val_range, screen_rect),
-                kind,
-            }
-        })
-        .collect()
-}
-
-fn build_value_segment_for_sample(
-    sample_value: f64,
-    val_range: sample::ValRange<f64>,
-    screen_rect: Rect,
-) -> ValueSegment {
-    let anchor = sample_value.floor() as i64;
-    let sample_start = anchor as f64;
-    let sample_end = sample_start + 1.0;
-
-    let kind = if sample_end <= 0.0 {
-        SegmentKind::SkewedNegative
-    } else if sample_start >= 0.0 {
-        SegmentKind::SkewedPositive
-    } else {
-        SegmentKind::Linear
-    };
-
-    ValueSegment {
-        sample_start,
-        sample_end,
-        screen_y_start: raw_sample_value_to_screen_y(sample_start, val_range, screen_rect),
-        screen_y_end: raw_sample_value_to_screen_y(sample_end, val_range, screen_rect),
-        kind,
-    }
+    let frac = (screen_rect.bottom() as f64 - screen_y as f64) / screen_rect.height() as f64;
+    let display_value = val_range.min + frac * val_range.len();
+    Some(display_scale.axis_to_sample(display_value))
 }
 
 // smallest multiple of m that is >= x
@@ -325,6 +184,29 @@ mod tests {
         let y_back = sample_value_to_screen_y(sample, range, rect, display_scale).unwrap();
 
         assert!((original_y - y_back).abs() < 0.5);
+    }
+
+    #[test]
+    fn narrow_off_zero_screen_round_trip_retains_subpixel_precision() {
+        let rect = Rect::new(10.0, 20.0, 90.0, 370.0);
+        for sign in [-1.0, 1.0] {
+            for skew_factor in [0.0, 1.0, 5.0] {
+                let scale = ValueDisplayScale { skew_factor };
+                let center = sign * scale.sample_to_display(0.5011872336272722);
+                let range = sample::ValRange {
+                    min: center - 1e-8,
+                    max: center + 1e-8,
+                };
+                for y in [20.0, 70.0, 195.0, 320.0, 370.0] {
+                    let value = screen_y_to_sample_value(y, range, rect, scale).unwrap();
+                    let back = sample_value_to_screen_y(value, range, rect, scale).unwrap();
+                    assert!(
+                        (back - y).abs() < 0.01,
+                        "sign={sign}, skew={skew_factor}, y={y}, back={back}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

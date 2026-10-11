@@ -107,8 +107,8 @@ fn visible_tick_range(
     }
 
     sample::ValRange {
-        min: val_range.min.max(-1.0),
-        max: val_range.max.min(1.0),
+        min: display_scale.axis_to_sample(val_range.min).max(-1.0),
+        max: display_scale.axis_to_sample(val_range.max).min(1.0),
     }
 }
 
@@ -232,6 +232,38 @@ fn floor_to_multiple_f64(x: f64, step: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn off_zero_skew_ticks_cover_visible_sample_values() {
+        let screen = rect::Rect::new(0.0, 20.0, 80.0, 370.0);
+        for sign in [-1.0, 1.0] {
+            for skew_factor in [1.0, 3.0, 5.0] {
+                let scale = ValueDisplayScale { skew_factor };
+                let a = sign * scale.sample_to_display(0.4);
+                let b = sign * scale.sample_to_display(0.6);
+                let range = sample::ValRange {
+                    min: a.min(b),
+                    max: a.max(b),
+                };
+                let mut lattice = ValueLattice::default();
+                lattice.compute_ticks(range, screen, 50.0, scale).unwrap();
+                assert!(
+                    lattice
+                        .ticks
+                        .iter()
+                        .any(|tick| (tick.sample_value - sign * 0.5).abs() < 1e-9),
+                    "sign={sign}, skew={skew_factor}: missing midpoint tick"
+                );
+                assert!(lattice.ticks.len() >= 10);
+                assert!(
+                    lattice
+                        .ticks
+                        .iter()
+                        .all(|tick| screen.contains_y(tick.screen_y))
+                );
+            }
+        }
+    }
 
     #[test]
     fn full_scale_range_includes_zero_and_major_ticks() {

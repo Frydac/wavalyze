@@ -35,6 +35,26 @@ impl ValueDisplayScale {
 
         display_value.signum() * display_value.abs().powf(1.0 / self.exponent())
     }
+
+    /// Piecewise display coordinate used by the waveform and rulers. Integer
+    /// sample values stay fixed, including values outside full scale.
+    pub fn sample_to_axis(self, sample_value: f64) -> f64 {
+        if self.skew_factor == 0.0 {
+            return sample_value;
+        }
+        let magnitude = sample_value.abs();
+        let whole = magnitude.floor();
+        sample_value.signum() * (whole + self.sample_to_display(magnitude - whole))
+    }
+
+    pub fn axis_to_sample(self, axis_value: f64) -> f64 {
+        if self.skew_factor == 0.0 {
+            return axis_value;
+        }
+        let magnitude = axis_value.abs();
+        let whole = magnitude.floor();
+        axis_value.signum() * (whole + self.display_to_sample(magnitude - whole))
+    }
 }
 
 #[cfg(test)]
@@ -48,6 +68,26 @@ mod tests {
         assert_eq!(scale.sample_to_display(-1.0), -1.0);
         assert_eq!(scale.sample_to_display(0.0), 0.0);
         assert_eq!(scale.sample_to_display(1.0), 1.0);
+    }
+
+    #[test]
+    fn piecewise_axis_keeps_integer_anchors_and_round_trips_across_intervals() {
+        for skew_factor in [0.0, 1.0, 5.0] {
+            let scale = ValueDisplayScale { skew_factor };
+            for anchor in -3..=3 {
+                let anchor = f64::from(anchor);
+                assert_eq!(scale.sample_to_axis(anchor), anchor);
+                assert_eq!(scale.axis_to_sample(anchor), anchor);
+            }
+            for value in [-2.75, -1.5, -0.001, 0.0, 0.001, 0.5, 1.25, 2.5] {
+                let axis = scale.sample_to_axis(value);
+                assert!((scale.axis_to_sample(axis) - value).abs() < 1e-10);
+                assert!((scale.sample_to_axis(-value) + axis).abs() < 1e-10);
+            }
+        }
+        let scale = ValueDisplayScale { skew_factor: 1.0 };
+        assert!((scale.sample_to_axis(1.5) - 1.75).abs() < 1e-9);
+        assert!((scale.sample_to_axis(-1.5) + 1.75).abs() < 1e-9);
     }
 
     #[test]
