@@ -20,9 +20,9 @@ fn samples_from_block(block_ix: u64, offset: u64, block_size: u64) -> u64 {
         .min(SELECTION_EDITOR_MAX)
 }
 
-fn number_editor(ui: &mut egui::Ui, id: &str, value: &mut u64, max: u64) -> bool {
+fn number_editor(ui: &mut egui::Ui, id: &str, value: &mut u64, max: u64, digits: usize) -> bool {
     DigitwiseNumberEditor::new(id, value)
-        .digits(SELECTION_EDITOR_DIGITS)
+        .digits(digits)
         .digit_width(SELECTION_EDITOR_DIGIT_WIDTH)
         .dim_leading_zeroes(true)
         .max(max)
@@ -100,6 +100,7 @@ pub fn ui_selection_info_toolbar(
     let (mut end_block, mut end_offset) = block_coordinates(end_val, block_size);
     let max_block_ix = SELECTION_EDITOR_MAX / block_size;
     let max_offset = block_size.saturating_sub(1).min(SELECTION_EDITOR_MAX);
+    let offset_digits = max_offset.checked_ilog10().unwrap_or(0) as usize + 1;
 
     ui.group(|ui| {
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
@@ -153,7 +154,7 @@ pub fn ui_selection_info_toolbar(
             egui::Grid::new(ui.id().with("selection_toolbar_grid"))
                 .striped(true)
                 .num_columns(if config.blocks.enabled { 4 } else { 2 })
-                .spacing([8.0, 4.0])
+                .spacing([15.0, 4.0])
                 .show(ui, |ui| {
                     ui.label("");
                     ui.label("samples");
@@ -164,14 +165,20 @@ pub fn ui_selection_info_toolbar(
                     ui.end_row();
 
                     ui.label("start");
-                    let start_sample_changed =
-                        number_editor(ui, "selection_start", &mut start_val, SELECTION_EDITOR_MAX);
+                    let start_sample_changed = number_editor(
+                        ui,
+                        "selection_start",
+                        &mut start_val,
+                        SELECTION_EDITOR_MAX,
+                        SELECTION_EDITOR_DIGITS,
+                    );
                     let start_block_changed = config.blocks.enabled
                         && number_editor(
                             ui,
                             "selection_start_block",
                             &mut start_block,
                             max_block_ix,
+                            SELECTION_EDITOR_DIGITS,
                         );
                     let start_offset_changed = config.blocks.enabled
                         && number_editor(
@@ -179,6 +186,7 @@ pub fn ui_selection_info_toolbar(
                             "selection_start_offset",
                             &mut start_offset,
                             max_offset,
+                            offset_digits,
                         );
                     ui.end_row();
 
@@ -188,6 +196,7 @@ pub fn ui_selection_info_toolbar(
                         "selection_length",
                         &mut length_val,
                         SELECTION_EDITOR_MAX,
+                        SELECTION_EDITOR_DIGITS,
                     );
                     let length_block_changed = config.blocks.enabled
                         && number_editor(
@@ -195,6 +204,7 @@ pub fn ui_selection_info_toolbar(
                             "selection_length_block",
                             &mut length_block,
                             max_block_ix,
+                            SELECTION_EDITOR_DIGITS,
                         );
                     let length_offset_changed = config.blocks.enabled
                         && number_editor(
@@ -202,16 +212,34 @@ pub fn ui_selection_info_toolbar(
                             "selection_length_offset",
                             &mut length_offset,
                             max_offset,
+                            offset_digits,
                         );
                     ui.end_row();
 
                     ui.label("end");
-                    let end_sample_changed =
-                        number_editor(ui, "selection_end", &mut end_val, SELECTION_EDITOR_MAX);
+                    let end_sample_changed = number_editor(
+                        ui,
+                        "selection_end",
+                        &mut end_val,
+                        SELECTION_EDITOR_MAX,
+                        SELECTION_EDITOR_DIGITS,
+                    );
                     let end_block_changed = config.blocks.enabled
-                        && number_editor(ui, "selection_end_block", &mut end_block, max_block_ix);
+                        && number_editor(
+                            ui,
+                            "selection_end_block",
+                            &mut end_block,
+                            max_block_ix,
+                            SELECTION_EDITOR_DIGITS,
+                        );
                     let end_offset_changed = config.blocks.enabled
-                        && number_editor(ui, "selection_end_offset", &mut end_offset, max_offset);
+                        && number_editor(
+                            ui,
+                            "selection_end_offset",
+                            &mut end_offset,
+                            max_offset,
+                            offset_digits,
+                        );
                     ui.end_row();
 
                     let start_changed =
