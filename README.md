@@ -10,10 +10,10 @@
 I started this project to learn about Rust and WebAssembly, and to have a tool that is faster to do
 what I want to do than the freely available alternatives.
 
-![Wavalyze Screenshot](doc/images/wavalyze_001_small.png)
+<!-- ![Wavalyze Screenshot](doc/images/wavalyze_001_small.png) -->
 
 
-## WASM Web application
+## Web Demo WASM build
 
 A WebAssembly build of the Wavalyze application hosted on cloudflare:  
 [wavalyze.emile-vrijdags-github.workers.dev](https://wavalyze.emile-vrijdags-github.workers.dev/)
@@ -35,20 +35,20 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 ## Features
 
 - Multi-file waveform viewing
-- Per-file color pickers in Files, matching track-header and Tracks-panel accents, and optional waveform colors
-  (Settings → Tracks → Use file colors for waveforms; off by default). File colors last for the
-  current session and survive reloads.
 - Fast startup for quick file inspection
 - Zoom and pan over x and y axes with multiple types of controls
    - see [Mouse navigation](doc/mouse_navigation.md)
-- Per-track value overviews with draggable limits and fine vertical zoom adjustment
-- Sample-level hover details
+- Sample-level hover details, get exact sample value for int based formats
   * Configure zoom level for when to show sample-level details
 - Calculate track statistics (dB-RMS, peak) over a selection
   - Visual indication of peak value in selection
-- Diff files/tracks, with offset adjustment
-- Drag file headers or new WAVs onto an open file in Files to choose diff channel pairs
-- WAVEX and Auro ID channel roles, with per-file order and active-layout selection
+- Diff files/tracks, with offset adjustment.
+  To diff 2 fils:
+  * drop 2 files from external file browser at once
+  * drop 1 file from external file browser on file in Files side panel
+  * drag-and-drop file in Files side panel onto another file
+- WAVEX and Auro-3D ID channel roles, with per-file order and active-layout selection
+  * specific to my job.
 - Native file-change notifications with individual or batch reload and automatic diff recomputation
 - Show/hide tracks with auto adjusting track height for filling the screen
 - Native and browser builds
@@ -57,6 +57,9 @@ I don't use this version, so some keymaps and mouse interactions might not work 
   * Snap sample selection to block boundaries
   * Show grid lines for block boundaries
   * Configure block size and start offset
+- Per-file color pickers in Files, matching track-header and Tracks-panel accents, and optional waveform colors
+  (Settings → Tracks → Use file colors for waveforms; off by default). File colors last for the
+  current session and survive reloads.
 
 Non-goals:
 
@@ -165,6 +168,8 @@ nix develop ./dev/nix
 
 ## Generating test audio
 
+There are some scripts to generate some .wav files useful during development.
+
 ```sh
 rake create_test_data      # Basic SoX fixtures plus WAVEX fixtures
 rake test_data:basic       # Basic fixtures only (requires SoX)
@@ -172,15 +177,13 @@ rake test_data:wavex       # WAVEX fixtures only (Ruby, no SoX required)
 ```
 
 The generation code lives in `scripts/generate_test_data.rb`. Basic fixtures keep
-their existing filenames in `data/`. WAVEX fixtures go into `data/wavex/` and cover
-stereo, quad, 5.1, Auro 9.1, Auro 13.1, 22.0, and 22.2. Open these WAVs
-in wavalyze to inspect channel titles and layout metadata.
+their existing filenames in `data/`. WAVEX fixtures go into `data/wavex/`.
 
 Each WAVEX file contains one second of 48 kHz, 16-bit PCM with an explicit
-WAVEFORMATEXTENSIBLE channel mask and PDF-convention interleaving. Every channel
-has a distinct sine frequency (`440 + 200 * channel_index` Hz). The generated
-`manifest.json` lists the layouts, masks, channel IDs in order, and frequencies.
-22.2 uses mask `0xFFFFFF`; 22.0 uses `0xFBFFF7`. Channel order follows
+WAVEFORMATEXTENSIBLE channel mask.
+The generated `manifest.json` lists the layouts, masks, channel IDs in order, and frequencies. 22.2
+uses mask `0xFFFFFF`; 22.0 uses `0xFBFFF7`.   
+Channel order follows  
 [Auro-3D in multi-channel WAV, Revision 2 (2024-04-19)](https://www.auro-3d.com/wp-content/uploads/2024/04/Auro-3D-in-multi-channel-WAV-White-Paper-20240419.pdf),
 pages 1–2; 22.0 is derived by removing both LFE channels. The six extension bits
 are Auro assignments, distinct from FFmpeg's numeric mask convention.
