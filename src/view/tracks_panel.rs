@@ -44,7 +44,8 @@ enum DropResolution {
     },
 }
 
-/// Left-panel "Tracks" tab: lists every track in track order with a visibility checkbox and a
+/// Left-panel "Tracks" tab: global visibility plus per-track visibility, close, and accent controls.
+/// Lists every track in track order with a
 /// hover popup matching the central-panel track header. Track-centric counterpart to the
 /// file-centric [`super::file::ui`].
 ///
@@ -60,6 +61,20 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
         ui.label("No tracks");
         return;
     }
+
+    let visible_count = model.tracks.visible_tracks_len();
+    let mut all_visible = visible_count == model.tracks.tracks_order.len();
+    let partially_visible = visible_count > 0 && !all_visible;
+    if ui
+        .add(egui::Checkbox::new(&mut all_visible, "All tracks").indeterminate(partially_visible))
+        .on_hover_text("Show or hide all tracks")
+        .changed()
+    {
+        for track_id in model.tracks.tracks_order.clone() {
+            model.tracks.set_track_visibility(track_id, all_visible);
+        }
+    }
+    ui.separator();
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         // Clone the small id list so we can mutate the model (toggle visibility) inside the loop.
@@ -98,18 +113,33 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                             ui.allocate_exact_size(egui::vec2(4.0, 14.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 2.0, accent);
                     }
-                    // The label is the drag handle: dragging one row's label onto another reorders
-                    // or opens a diff menu depending on the drop zone (resolved on the row-wide
-                    // response).
-                    let dnd_id = egui::Id::new(("track_row_dnd", track_id));
-                    let dnd_response =
-                        ui.dnd_drag_source(dnd_id, track_id, |ui| add_row_label(ui, label));
-                    let click_response = dnd_response.response.interact(egui::Sense::click());
-                    track::select_track_on_click(ui, &click_response, &mut model.actions, track_id);
-                    let label_response = dnd_response.inner;
-                    if let Some(hover_info) = hover_info {
-                        label_response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
-                    }
+                    // Reserve the close button before the label so long names truncate within
+                    // the remaining width and the button stays at the right edge.
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("×").on_hover_text("Close track").clicked() {
+                            model.actions.push(Action::RemoveTrack(track_id));
+                        }
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            // The label is the drag handle: dragging one row's label onto another reorders
+                            // or opens a diff menu depending on the drop zone (resolved on the row-wide
+                            // response).
+                            let dnd_id = egui::Id::new(("track_row_dnd", track_id));
+                            let dnd_response =
+                                ui.dnd_drag_source(dnd_id, track_id, |ui| add_row_label(ui, label));
+                            let click_response =
+                                dnd_response.response.interact(egui::Sense::click());
+                            track::select_track_on_click(
+                                ui,
+                                &click_response,
+                                &mut model.actions,
+                                track_id,
+                            );
+                            let label_response = dnd_response.inner;
+                            if let Some(hover_info) = hover_info {
+                                label_response.on_hover_ui(move |ui| hover_info.show(ui, track_id));
+                            }
+                        });
+                    });
                 });
             });
 
@@ -238,5 +268,87 @@ pub(crate) fn show_diff_menu(ctx: &egui::Context, model: &mut Model) {
             p.armed = true;
         }
         ctx.request_repaint();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::test_support::{add_buffer, make_file};
+
+    fn frame(ctx: &egui::Context, model: &mut Model, events: Vec<egui::Event>) -> egui::FullOutput {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(240.0, 400.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| super::ui(ui, model));
+            },
+        )
+    }
+
+    fn click_text(ctx: &egui::Context, model: &mut Model, label: &str) {
+        let output = frame(ctx, model, vec![]);
+        let pos = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == label => {
+                    Some(text.pos + text.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+            .expect("visible button text");
+        assert!(pos.x < 240.0, "button must fit in a narrow panel");
+        for pressed in [true, false] {
+            frame(
+                ctx,
+                model,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    },
+                ],
+            );
+        }
+        model.process_actions().unwrap();
+    }
+
+    #[test]
+    fn global_visibility_and_close_work_with_long_track_names() {
+        let mut model = Model::new();
+        let buffers = [add_buffer(&mut model), add_buffer(&mut model)];
+        let mut file = make_file(&buffers);
+        file.path =
+            Some("a_very_long_filename_that_must_leave_room_for_the_close_button.wav".into());
+        model
+            .tracks
+            .add_tracks_from_file(&file, &model.user_config.track)
+            .unwrap();
+        let file_id = model.files.insert(file);
+        let tracks = model.tracks.tracks_order.clone();
+        let ctx = egui::Context::default();
+        frame(&ctx, &mut model, vec![]);
+        click_text(&ctx, &mut model, "All tracks");
+        assert_eq!(model.tracks.visible_tracks_len(), 0);
+        click_text(&ctx, &mut model, "All tracks");
+        assert_eq!(model.tracks.visible_tracks_len(), 2);
+        model.tracks.set_track_visibility(tracks[0], false);
+        click_text(&ctx, &mut model, "All tracks");
+        assert_eq!(model.tracks.visible_tracks_len(), 2);
+        click_text(&ctx, &mut model, "×");
+        assert!(model.tracks.get_track(tracks[0]).is_none());
+        assert!(model.tracks.get_track(tracks[1]).is_some());
+        assert_eq!(model.files[file_id].channels.len(), 2);
+        assert!(model.audio.get_buffer(buffers[0]).is_ok());
     }
 }
