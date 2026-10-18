@@ -226,6 +226,15 @@ fn ui_waveform(
         .and_then(|track| model.audio.stats.get(track.single.buffer_id))
         .and_then(|stats| stats.peak)
         .map(|peak| peak.global_ix);
+    let mut waveform_colors = theme_colors.clone();
+    if model.user_config.use_file_colors_for_waveforms
+        && let Some(color) = model
+            .tracks
+            .get_track(track_id)
+            .and_then(|track| model.files.color_for_buffer(track.single.buffer_id))
+    {
+        waveform_colors.waveform = color;
+    }
     let track = model
         .tracks
         .get_track_mut(track_id)
@@ -250,8 +259,6 @@ fn ui_waveform(
     track.update(&mut model.audio)?;
     let sample_view = track.single.get_sample_view()?;
 
-    let color = theme_colors.waveform;
-    let line_color = color.linear_multiply(0.7);
     let screen_rect = track
         .screen_rect
         .ok_or_else(|| anyhow::anyhow!("screen_rect is missing"))?;
@@ -269,7 +276,7 @@ fn ui_waveform(
             display_scale,
             round_minmax_to_pixel_center,
             hover_info: &hover_info,
-            theme_colors,
+            theme_colors: &waveform_colors,
         },
     );
 

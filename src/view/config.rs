@@ -148,6 +148,12 @@ pub fn show_config(ui: &mut egui::Ui, config: &mut model::Config) {
                     &mut config.track.equal_height_layout_by_default,
                     "Start with even track heights",
                 );
+                if ui.checkbox(
+                    &mut config.use_file_colors_for_waveforms,
+                    "Use file colors for waveforms",
+                ).on_hover_text("Match waveforms to the color swatches in Files. Diff waveforms keep the theme color.").changed() {
+                    config.save_to_storage();
+                }
                 ui.checkbox(&mut config.show_amplitude_ruler, "Show amplitude ruler");
                 ui.checkbox(&mut config.show_db_ruler, "Show dB ruler");
                 ui.horizontal(|ui| {

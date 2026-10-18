@@ -35,6 +35,9 @@ I don't use this version, so some keymaps and mouse interactions might not work 
 ## Features
 
 - Multi-file waveform viewing
+- Per-file color pickers in Files, matching track-header and Tracks-panel accents, and optional waveform colors
+  (Settings → Tracks → Use file colors for waveforms; off by default). File colors last for the
+  current session and survive reloads.
 - Fast startup for quick file inspection
 - Zoom and pan over x and y axes with multiple types of controls
    - see [Mouse navigation](doc/mouse_navigation.md)

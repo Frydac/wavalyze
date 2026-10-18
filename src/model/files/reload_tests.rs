@@ -195,6 +195,9 @@ fn batch_reloads_shared_and_chained_diffs_preserving_workspace() {
     write(&b_path, 1, 48000, &[1, 1]);
     let a = open(&mut model, &a_path);
     let b = open(&mut model, &b_path);
+    let accent = egui::Color32::from_rgb(80, 160, 220);
+    model.files.set_color(a, accent);
+    let b_accent = model.files.color(b);
     let a_buffer = buffer(&model, a);
     let b_buffer = buffer(&model, b);
     let source_track = model.find_track_id_for_buffer(a_buffer).unwrap();
@@ -226,6 +229,11 @@ fn batch_reloads_shared_and_chained_diffs_preserving_workspace() {
     );
     finish(&mut model, req);
     assert!(model.files.changed_ids().is_empty());
+    assert_eq!(
+        model.files.color_for_buffer(buffer(&model, a)),
+        Some(accent)
+    );
+    assert_eq!(model.files.color_for_buffer(buffer(&model, b)), b_accent);
     assert_eq!(model.tracks.tracks_order, order);
     assert_eq!(model.tracks.selection_info, selection);
     let track = model.tracks.get_track(source_track).unwrap();

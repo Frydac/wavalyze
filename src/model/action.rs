@@ -37,6 +37,10 @@ pub enum Action {
     CloseFile {
         file_id: FileId,
     },
+    SetFileColor {
+        file_id: FileId,
+        color: egui::Color32,
+    },
     /// Change speaker interpretation without changing samples or channel indices.
     SetFileChannelInterpretation {
         file_id: FileId,
@@ -418,6 +422,9 @@ impl Action {
             Action::SetBlockSize(block_size) => {
                 model.set_block_size(block_size);
             }
+            Action::SetFileColor { file_id, color } => {
+                model.files.set_color(file_id, color);
+            }
             Action::SetFileChannelInterpretation {
                 file_id,
                 interpretation,
@@ -726,6 +733,7 @@ impl Action {
             | Action::ZoomY { .. }
             | Action::SetHoverInfo(_)
             | Action::SetSelection(_)
+            | Action::SetFileColor { .. }
             | Action::SetFileSampleIxOffset { .. }
             | Action::SetTrackSampleIxOffset { .. }
             | Action::SetTrackHeight { .. }

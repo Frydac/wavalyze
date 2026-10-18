@@ -162,6 +162,21 @@ pub(crate) fn header_hover_info(model: &Model, track_id: TrackId) -> Option<Head
     }
 }
 
+/// File accents in source order; diff tracks can have two source files.
+pub(crate) fn accent_colors(model: &Model, track_id: TrackId) -> [Option<egui::Color32>; 2] {
+    let Some(track) = model.tracks.get_track(track_id) else {
+        return [None, None];
+    };
+    if let Some(diff) = &track.diff {
+        [
+            model.files.color_for_buffer(diff.buffer_id_a),
+            model.files.color_for_buffer(diff.buffer_id_b),
+        ]
+    } else {
+        [model.files.color_for_buffer(track.single.buffer_id), None]
+    }
+}
+
 /// One-line label for a track, matching the central-panel header text:
 /// `"N ID <basename>"` for single tracks, `"Diff"` for diff tracks.
 pub(crate) fn track_label(model: &Model, track_id: TrackId) -> String {
@@ -738,8 +753,17 @@ pub fn ui_header(
     }
 
     let label_right = (button_rect.left() - item_spacing).max(header_rect.left());
+    let mut label_left = header_rect.left();
+    for accent in accent_colors(model, track_id).into_iter().flatten() {
+        let marker = egui::Rect::from_center_size(
+            egui::pos2(label_left + 7.0, header_rect.center().y),
+            egui::vec2(4.0, (header_rect.height() - 6.0).clamp(0.0, 14.0)),
+        );
+        ui.painter().rect_filled(marker, 2.0, accent);
+        label_left = (label_left + 12.0).min(label_right);
+    }
     let label_rect = egui::Rect::from_min_max(
-        header_rect.left_top(),
+        egui::pos2(label_left, header_rect.top()),
         egui::pos2(label_right, header_rect.bottom()),
     );
     if let Some((path, index, role)) = file_title {

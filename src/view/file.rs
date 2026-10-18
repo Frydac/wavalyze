@@ -22,6 +22,7 @@ pub(super) fn take_external_drop_target(ctx: &egui::Context) -> Option<FileId> {
 struct FileRow {
     file_id: FileId,
     title: String,
+    color: egui::Color32,
     hover_text: String,
     visibility: FileVisibilityState,
     sample_ix_offset: crate::audio::sample::Ix,
@@ -64,6 +65,7 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
             .map(|(file_id, file)| FileRow {
                 file_id,
                 title: file_title(file),
+                color: model.files.color(file_id).unwrap_or_default(),
                 hover_text: format!("{file}"),
                 visibility: model
                     .file_visibility_state_for(file_id)
@@ -95,6 +97,13 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                     if response.changed() {
                         let make_visible = row.visibility != FileVisibilityState::AllVisible;
                         model.set_file_visible_for(row.file_id, make_visible);
+                    }
+                    let mut color = row.color;
+                    if egui::color_picker::color_edit_button_srgba(ui, &mut color, egui::color_picker::Alpha::Opaque)
+                        .on_hover_text("File color — click to change")
+                        .changed()
+                    {
+                        model.actions.push(Action::SetFileColor { file_id: row.file_id, color });
                     }
                     let drag = ui.dnd_drag_source(ui.id().with("file_drag"), row.file_id, |ui| {
                         add_row_label(ui, &row.title)

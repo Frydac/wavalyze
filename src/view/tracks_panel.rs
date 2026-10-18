@@ -93,6 +93,11 @@ pub fn ui(ui: &mut egui::Ui, model: &mut Model) {
                     if response.changed() {
                         model.tracks.set_track_visibility(track_id, checked);
                     }
+                    for accent in track::accent_colors(model, track_id).into_iter().flatten() {
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(4.0, 14.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 2.0, accent);
+                    }
                     // The label is the drag handle: dragging one row's label onto another reorders
                     // or opens a diff menu depending on the drop zone (resolved on the row-wide
                     // response).

@@ -26,6 +26,9 @@ pub struct Config {
     /// zoom levels, but raw positions behave better on fractional display scaling.
     #[serde(default)]
     pub round_minmax_waveform_to_pixel_center: bool,
+    /// Draw file-backed waveforms using their file accent instead of the theme color.
+    #[serde(default)]
+    pub use_file_colors_for_waveforms: bool,
     /// Show the hovered sample's value in value rulers below this samples-per-pixel level.
     /// Higher values make the readout appear earlier while zooming in; zero disables it.
     pub sample_value_ruler_max_samples_per_pixel: f32,
@@ -256,6 +259,7 @@ impl Default for Config {
             show_amplitude_ruler: true,
             show_db_ruler: false,
             round_minmax_waveform_to_pixel_center: true,
+            use_file_colors_for_waveforms: false,
             sample_value_ruler_max_samples_per_pixel: 1.0,
             value_display_scale: ValueDisplayScale::default(),
             shortcuts: ShortcutConfig::default(),
@@ -356,6 +360,16 @@ mod tests {
         shortcuts::{ShortcutAction, ShortcutScope},
     };
     use egui::Color32;
+
+    #[test]
+    fn waveform_file_colors_default_off_and_persist_when_enabled() {
+        assert!(!Config::default().use_file_colors_for_waveforms);
+        let mut config: Config = toml::from_str("[track]\nmin_height = 25.0\n").unwrap();
+        assert!(!config.use_file_colors_for_waveforms);
+        config.use_file_colors_for_waveforms = true;
+        let restored: Config = toml::from_str(&toml::to_string(&config).unwrap()).unwrap();
+        assert!(restored.use_file_colors_for_waveforms);
+    }
 
     #[test]
     fn default_config_has_shortcuts() {

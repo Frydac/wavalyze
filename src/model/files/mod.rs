@@ -4,6 +4,7 @@
 //! and generated audio too; only monitoring and reload state are native-only. Operations that
 //! also change audio or tracks remain small `Model` coordinators in the child modules.
 
+mod colors;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod disk;
 mod loading;
@@ -18,7 +19,7 @@ use crate::{
     wav::{self, file::FileId},
 };
 pub use operations::FileVisibilityState;
-use slotmap::SlotMap;
+use slotmap::{SecondaryMap, SlotMap};
 
 /// Own file records and their display order so callers cannot update one without the other.
 /// Native monitoring is shared by disk path; reload state tracks the single active update batch.
@@ -26,6 +27,8 @@ use slotmap::SlotMap;
 pub struct Files {
     entries: SlotMap<FileId, wav::file::File>,
     order: Vec<FileId>,
+    colors: SecondaryMap<FileId, egui::Color32>,
+    next_color: usize,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) changes: monitoring::FileChanges,
     #[cfg(not(target_arch = "wasm32"))]
@@ -40,6 +43,9 @@ impl Files {
             self.changes.watch(&source.filepath);
         }
         let id = self.entries.insert(file);
+        self.colors
+            .insert(id, colors::automatic_color(self.next_color));
+        self.next_color += 1;
         self.order.push(id);
         id
     }
@@ -48,6 +54,7 @@ impl Files {
     pub(crate) fn remove(&mut self, id: FileId) -> Option<wav::file::File> {
         let file = self.entries.remove(id)?;
         self.order.retain(|entry| *entry != id);
+        self.colors.remove(id);
         Some(file)
     }
 
@@ -55,6 +62,25 @@ impl Files {
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
         self.order.clear();
+        self.colors.clear();
+        self.next_color = 0;
+    }
+
+    /// Session accent stays attached to the file ID across reloads and channel changes.
+    pub fn color(&self, id: FileId) -> Option<egui::Color32> {
+        self.colors.get(id).copied()
+    }
+
+    pub fn set_color(&mut self, id: FileId, color: egui::Color32) {
+        if let Some(current) = self.colors.get_mut(id) {
+            *current = egui::Color32::from_rgb(color.r(), color.g(), color.b());
+        }
+    }
+
+    pub fn color_for_buffer(&self, buffer_id: audio::BufferId) -> Option<egui::Color32> {
+        self.iter()
+            .find(|(_, file)| file.get_channel(buffer_id).is_some())
+            .and_then(|(id, _)| self.color(id))
     }
 
     /// Stable file IDs in their sidebar order; callers cannot mutate the order independently.
@@ -192,6 +218,39 @@ impl std::ops::Index<FileId> for Files {
 mod tests {
     use super::*;
     use crate::model::test_support::make_file;
+
+    #[test]
+    fn file_colors_follow_buffers_and_reject_closed_file_ids() {
+        let mut model = crate::model::Model::new();
+        let buffers = [
+            crate::model::test_support::add_buffer(&mut model),
+            crate::model::test_support::add_buffer(&mut model),
+        ];
+        let first = model.files.insert(make_file(&buffers));
+        let second = model.files.insert(make_file(&[]));
+        assert_ne!(model.files.color(first), model.files.color(second));
+        let custom = egui::Color32::from_rgb(64, 160, 220);
+        crate::model::Action::SetFileColor {
+            file_id: first,
+            color: custom,
+        }
+        .process(&mut model)
+        .unwrap();
+        for buffer in buffers {
+            assert_eq!(model.files.color_for_buffer(buffer), Some(custom));
+        }
+        let second_color = model.files.color(second);
+        model.files.remove(first);
+        let replacement = model.files.insert(make_file(&[]));
+        model.files.set_color(first, custom);
+        assert_eq!(model.files.color(first), None);
+        assert_ne!(model.files.color(replacement), Some(custom));
+        assert_eq!(model.files.color(second), second_color);
+        model.files.clear();
+        assert_eq!(model.files.color(second), None);
+        let fresh = model.files.insert(make_file(&[]));
+        assert_eq!(model.files.color(fresh), Some(colors::automatic_color(0)));
+    }
 
     #[test]
     fn replacing_a_removed_entry_keeps_new_file_at_end_and_rejects_old_id() {
