@@ -1,5 +1,17 @@
 ## Ideas
 
+* channel mono files from parsing the filename?
+    Fast_Channel_Identification-Auro9_1-48k-C.wav
+    Fast_Channel_Identification-Auro9_1-48k-HL.wav
+    Fast_Channel_Identification-Auro9_1-48k-HLs.wav
+    Fast_Channel_Identification-Auro9_1-48k-HR.wav
+    Fast_Channel_Identification-Auro9_1-48k-HRs.wav
+    Fast_Channel_Identification-Auro9_1-48k-L.wav
+    Fast_Channel_Identification-Auro9_1-48k-LFE.wav
+    Fast_Channel_Identification-Auro9_1-48k-Ls.wav
+    Fast_Channel_Identification-Auro9_1-48k-R.wav
+    Fast_Channel_Identification-Auro9_1-48k-Rs.wav
+
 * installer/package for `wavalyze-app`
   * provide a stable executable path so integrations do not depend on `target/release`
   * decide later between a small install script, `cargo install --path`, or system packaging
